@@ -148,7 +148,7 @@ export const FirmaLotesView: React.FC = () => {
         codigoLote,
         jobId: `BULL-JOB-${Math.floor(1000 + Math.random() * 9000)}`,
         total: seleccionados.length,
-        mensaje: 'Orquestación asíncrona completada con sellado RFC 3161 TSA y almacenamiento en MinIO S3.',
+        mensaje: 'Los documentos han sido firmados exitosamente.',
         timestamp: new Date().toLocaleTimeString(),
       });
 
@@ -176,19 +176,11 @@ export const FirmaLotesView: React.FC = () => {
         <Card className="lg:col-span-8 border-border/80 bg-card/90">
           <CardHeader className="p-5 pb-3 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <Badge variant="outline" className="font-mono text-[9px]">
-                  [ BULLMQ // REDIS ENGINE ]
-                </Badge>
-                <Badge variant="secondary" className="font-mono text-[9px]">
-                  CONCURRENCY: 4 WORKERS
-                </Badge>
-              </div>
               <CardTitle className="text-base font-bold text-foreground">
                 Orquestador Masivo de Firma en Lotes
               </CardTitle>
               <CardDescription className="text-xs text-muted-foreground mt-0.5">
-                Procesamiento paralelo sin bloqueo de interfaz. Despacha jobs a colas Redis con estampado TSA.
+                Procesamiento paralelo sin bloqueo de interfaz.
               </CardDescription>
             </div>
 
@@ -211,47 +203,43 @@ export const FirmaLotesView: React.FC = () => {
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div
-                  className={`p-2.5 rounded border text-[11px] font-mono transition-colors ${
-                    pipelineStep >= 1
-                      ? 'border-primary bg-primary/10 text-foreground font-semibold'
-                      : 'border-border/60 bg-muted/30 text-muted-foreground'
-                  }`}
+                  className={`p-2.5 rounded border text-[11px] font-mono transition-colors ${pipelineStep >= 1
+                    ? 'border-primary bg-primary/10 text-foreground font-semibold'
+                    : 'border-border/60 bg-muted/30 text-muted-foreground'
+                    }`}
                 >
-                  <div className="text-[9px] text-muted-foreground">[ 01 // INGESTA ]</div>
-                  <div className="truncate">Cálculo SHA-256</div>
+                  <div className="text-[9px] text-muted-foreground">[ 01 ]</div>
+                  <div className="truncate">Cálculo</div>
                 </div>
 
                 <div
-                  className={`p-2.5 rounded border text-[11px] font-mono transition-colors ${
-                    pipelineStep >= 2
-                      ? 'border-primary bg-primary/10 text-foreground font-semibold'
-                      : 'border-border/60 bg-muted/30 text-muted-foreground'
-                  }`}
+                  className={`p-2.5 rounded border text-[11px] font-mono transition-colors ${pipelineStep >= 2
+                    ? 'border-primary bg-primary/10 text-foreground font-semibold'
+                    : 'border-border/60 bg-muted/30 text-muted-foreground'
+                    }`}
                 >
-                  <div className="text-[9px] text-muted-foreground">[ 02 // HARDWARE ]</div>
-                  <div className="truncate">Worker SafeNet</div>
+                  <div className="text-[9px] text-muted-foreground">[ 02 ]</div>
+                  <div className="truncate">Validación de Estructura</div>
                 </div>
 
                 <div
-                  className={`p-2.5 rounded border text-[11px] font-mono transition-colors ${
-                    pipelineStep >= 3
-                      ? 'border-primary bg-primary/10 text-foreground font-semibold'
-                      : 'border-border/60 bg-muted/30 text-muted-foreground'
-                  }`}
+                  className={`p-2.5 rounded border text-[11px] font-mono transition-colors ${pipelineStep >= 3
+                    ? 'border-primary bg-primary/10 text-foreground font-semibold'
+                    : 'border-border/60 bg-muted/30 text-muted-foreground'
+                    }`}
                 >
-                  <div className="text-[9px] text-muted-foreground">[ 03 // TSA RFC 3161 ]</div>
-                  <div className="truncate">Timestamp CGR</div>
+                  <div className="text-[9px] text-muted-foreground">[ 03 ]</div>
+                  <div className="truncate">Sello</div>
                 </div>
 
                 <div
-                  className={`p-2.5 rounded border text-[11px] font-mono transition-colors ${
-                    pipelineStep >= 4
-                      ? 'border-emerald-500 bg-emerald-500/10 text-foreground font-semibold'
-                      : 'border-border/60 bg-muted/30 text-muted-foreground'
-                  }`}
+                  className={`p-2.5 rounded border text-[11px] font-mono transition-colors ${pipelineStep >= 4
+                    ? 'border-emerald-500 bg-emerald-500/10 text-foreground font-semibold'
+                    : 'border-border/60 bg-muted/30 text-muted-foreground'
+                    }`}
                 >
-                  <div className="text-[9px] text-muted-foreground">[ 04 // STORAGE ]</div>
-                  <div className="truncate">MinIO S3 Commit</div>
+                  <div className="text-[9px] text-muted-foreground">[ 04 ]</div>
+                  <div className="truncate">Almacenamiento</div>
                 </div>
               </div>
             </div>
@@ -261,7 +249,7 @@ export const FirmaLotesView: React.FC = () => {
               <div className="p-3.5 rounded-lg border border-emerald-500/40 bg-emerald-500/5 space-y-1.5 text-xs">
                 <div className="flex items-center justify-between">
                   <Badge variant="success" className="text-[10px] font-mono">
-                    LOTE DESPACHADO CON ÉXITO
+                    LOTE FIRMADO CON ÉXITO
                   </Badge>
                   <span className="text-[10px] font-mono text-muted-foreground">
                     {resultadoLote.timestamp}
@@ -282,10 +270,10 @@ export const FirmaLotesView: React.FC = () => {
         <Card className="lg:col-span-4 border-border/80 bg-card/90 flex flex-col justify-between">
           <CardHeader className="p-5 pb-3 border-b">
             <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-              TELEMETRÍA DE COLAS
+              LISTA DE PENDIENTES
             </span>
             <CardTitle className="text-sm font-bold text-foreground">
-              Capacidad de Cómputo
+              Información
             </CardTitle>
           </CardHeader>
 
@@ -309,11 +297,6 @@ export const FirmaLotesView: React.FC = () => {
               </Badge>
             </div>
           </CardContent>
-
-          <CardFooter className="p-4 border-t bg-muted/20 text-[10px] font-mono text-muted-foreground flex justify-between">
-            <span>MEMORIA REDIS: 14.2 MB</span>
-            <span>UPTIME: 99.98%</span>
-          </CardFooter>
         </Card>
       </div>
 
@@ -374,9 +357,8 @@ export const FirmaLotesView: React.FC = () => {
                         disabled={isFirmada}
                         checked={isChecked}
                         onChange={() => toggleSeleccion(sol.id)}
-                        className={`rounded border-input ${
-                          isFirmada ? 'cursor-not-allowed opacity-20' : 'cursor-pointer text-primary focus:ring-ring'
-                        }`}
+                        className={`rounded border-input ${isFirmada ? 'cursor-not-allowed opacity-20' : 'cursor-pointer text-primary focus:ring-ring'
+                          }`}
                       />
                     </TableCell>
                     <TableCell>

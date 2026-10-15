@@ -12,24 +12,29 @@ interface TopHeaderProps {
   onOpenMobileSidebar: () => void;
   onGoToLanding: () => void;
   onOpenLogin?: () => void;
+  onSelectTab?: (tab: NavTab) => void;
 }
 
 const TAB_TITLES: Record<NavTab, { title: string; subtitle: string }> = {
   LANDING: {
-    title: 'Portal Institucional',
-    subtitle: 'Bienvenido a la plataforma de gestión de firmas y documentos oficiales',
+    title: 'Portada de Bienvenida Institucional',
+    subtitle: 'Plataforma oficial de gestión de firmas electrónicas avanzadas (FEA) de Coquimbo',
   },
-  PORTAL_CIUDADANO: {
-    title: 'Portal Ciudadano y Trámites Digitales',
-    subtitle: 'Validación de documentos, certificados y atención para vecinos de Coquimbo',
+  MIS_DOCUMENTOS: {
+    title: 'Bandeja de Documentos Asignados',
+    subtitle: 'Gestión personal y firma digital de decretos, resoluciones y memorándums',
+  },
+  FE_PUBLICA: {
+    title: 'Despacho de Decretos y Fe Pública Municipal',
+    subtitle: 'Sección Exclusiva: Toma de razón, visación legal y estampillado ministerial',
   },
   DASHBOARD: {
-    title: 'Dashboard de Supervisión de Telemetría USB',
+    title: 'Dashboard de Supervisión de Telemetría de Tokens',
     subtitle: 'Monitoreo en tiempo real de estaciones de trabajo y tokens criptográficos físicos',
   },
   FIRMAS: {
     title: 'Orquestación de Firma Masiva por Lotes',
-    subtitle: 'Procesamiento asíncrono en segundo plano mediante BullMQ y Redis',
+    subtitle: 'Procesamiento paralelo asíncrono en segundo plano',
   },
   CHECKSIGN: {
     title: 'Portal de Verificación Documental Checksign',
@@ -43,6 +48,10 @@ const TAB_TITLES: Record<NavTab, { title: string; subtitle: string }> = {
     title: 'Registro de Auditoría Forense ANCI',
     subtitle: 'Trazabilidad inalterable de eventos y mutaciones según Ley N° 21.663',
   },
+  CONFIGURACION: {
+    title: 'Configuración del Sistema y Parámetros de Red',
+    subtitle: 'Gestión técnica de topología, puertos y directivas criptográficas',
+  },
 };
 
 export const TopHeader: React.FC<TopHeaderProps> = ({
@@ -50,15 +59,24 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onOpenMobileSidebar,
   onGoToLanding,
   onOpenLogin,
+  onSelectTab,
 }) => {
   const { wsConectado, cargarEstaciones } = useTelemetriaStore();
-  const { usuario, isAutenticado, logout } = useAuthStore();
+  const { usuario, isAutenticado, logout, vistaGeneralActiva, setVistaGeneralActiva } = useAuthStore();
   const current = TAB_TITLES[tabActiva] || TAB_TITLES.DASHBOARD;
-  const esCiudadano = usuario.rol === 'CIUDADANO';
+  const puedeAlternarVistas = usuario.rol === 'ADMIN' || usuario.rol === 'SUPERVISOR';
+
+  const alternarVista = () => {
+    const nuevaVista = vistaGeneralActiva === 'ADMIN' ? 'FUNCIONARIO' : 'ADMIN';
+    setVistaGeneralActiva(nuevaVista);
+    if (onSelectTab) {
+      onSelectTab(nuevaVista === 'ADMIN' ? 'DASHBOARD' : 'MIS_DOCUMENTOS');
+    }
+  };
 
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b bg-background/95 backdrop-blur-md px-4 sm:px-6">
-      {/* Botón Menú Móvil, Espacio para Logo Municipal y Títulos */}
+      {/* Botón Menú Móvil, Logo Municipal y Títulos */}
       <div className="flex items-center space-x-3">
         <Button
           variant="outline"
@@ -70,8 +88,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           Menú
         </Button>
 
-        {/* Espacio para Foto/Logo de la Municipalidad en el Header */}
-        <div className="cursor-pointer" onClick={onGoToLanding} title="Ir a la portada">
+        <div className="cursor-pointer" onClick={onGoToLanding} title="Ir a la portada de bienvenida">
           <LogoMunicipalidad variant="header" />
         </div>
 
@@ -80,8 +97,11 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             <h1 className="text-xs sm:text-sm font-bold tracking-tight text-foreground">
               {current.title}
             </h1>
-            <Badge variant="outline" className="text-[9px] font-mono py-0 h-4">
-              {esCiudadano ? 'VISTA VECINO' : 'VISTA GESTOR'}
+            <Badge variant="outline" className="text-[9px] font-mono py-0 h-4 border-amber-500/40 text-amber-600 dark:text-amber-400">
+              ROL: {usuario.rol}
+            </Badge>
+            <Badge variant="secondary" className="text-[9px] font-mono py-0 h-4">
+              {vistaGeneralActiva === 'ADMIN' ? 'VISTA ADMIN' : 'VISTA FUNCIONARIO'}
             </Badge>
           </div>
           <p className="text-[10px] text-muted-foreground truncate max-w-md">
@@ -90,10 +110,21 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         </div>
       </div>
 
-      {/* Acciones Superiores: Conexión WS (solo gestor), Login y Tema */}
+      {/* Acciones Superiores: Conmutador de Vista General, Conexión WS, Login y Tema */}
       <div className="flex items-center space-x-2">
-        {/* Solo mostrar badge técnico WS a gestores */}
-        {!esCiudadano && (
+        {puedeAlternarVistas && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={alternarVista}
+            className="text-xs h-8 px-2.5 font-semibold hidden md:inline-flex"
+            title="Alternar entre la Vista de Administrador y la Vista de Funcionario"
+          >
+            {vistaGeneralActiva === 'ADMIN' ? '👤 Ver como Funcionario' : '🏢 Ver como Admin'}
+          </Button>
+        )}
+
+        {vistaGeneralActiva === 'ADMIN' && (
           <>
             <Badge
               variant={wsConectado ? 'success' : 'danger'}
@@ -104,7 +135,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                   wsConectado ? 'bg-emerald-500 live-indicator' : 'bg-rose-500'
                 }`}
               />
-              <span className="hidden md:inline">
+              <span className="hidden lg:inline">
                 {wsConectado ? 'WS ONLINE' : 'WS OFFLINE'}
               </span>
             </Badge>
@@ -113,7 +144,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
               variant="outline"
               size="sm"
               onClick={() => cargarEstaciones()}
-              className="text-xs h-8 px-2.5 font-medium hidden sm:inline-flex"
+              className="text-xs h-8 px-2 font-medium hidden xl:inline-flex"
               title="Actualizar datos de telemetría"
             >
               Recargar
@@ -121,21 +152,47 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
           </>
         )}
 
-        {/* Botón de Login / Roles */}
+        {isAutenticado && (
+          <div className="hidden 2xl:flex flex-col text-right text-[11px] px-2 border-r border-border">
+            <span className="font-semibold text-foreground truncate max-w-[180px]">
+              {usuario.nombre}
+            </span>
+            <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[180px]">
+              {usuario.cargo}
+            </span>
+          </div>
+        )}
+
+        <ThemeToggle />
+
         {onOpenLogin && (
           <Button
             variant="outline"
             size="sm"
             onClick={onOpenLogin}
-            className="text-xs h-8 px-3 font-semibold text-primary"
+            className="text-xs h-8 px-2.5 font-mono text-muted-foreground hover:text-foreground"
+            title="Cambiar credenciales o simular otro rol de backend"
           >
-            {isAutenticado ? `Rol: ${usuario.rol}` : 'Iniciar Sesión'}
+            Cambiar Rol
           </Button>
         )}
 
-        {/* Alternador de Modo Claro/Oscuro */}
-        <ThemeToggle />
+        {isAutenticado && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              logout();
+              onGoToLanding();
+            }}
+            className="text-xs h-8 px-2.5 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
+            title="Cerrar sesión institucional"
+          >
+            Salir
+          </Button>
+        )}
       </div>
     </header>
   );
 };
+export default TopHeader;

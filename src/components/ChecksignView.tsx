@@ -97,17 +97,14 @@ export const ChecksignView: React.FC = () => {
           <CardHeader className="p-5 pb-3 border-b">
             <div className="flex items-center gap-2 mb-1">
               <Badge variant="outline" className="font-mono text-[9px]">
-                [ CHECKSIGN // LEY 19.799 ]
-              </Badge>
-              <Badge variant="secondary" className="font-mono text-[9px]">
-                ACCESO PÚBLICO
+                [ Checkeo de Firmas ]
               </Badge>
             </div>
             <CardTitle className="text-base font-bold text-foreground">
-              Portal de Verificación Criptográfica
+              Portal de Verificación
             </CardTitle>
             <CardDescription className="text-xs text-muted-foreground mt-0.5">
-              Validador de firma electrónica avanzada (FEA) y sellado cronológico RFC 3161 para decretos municipales.
+              Validador de firma electrónica avanzada y sellado cronológico para decretos municipales.
             </CardDescription>
           </CardHeader>
 
@@ -115,7 +112,7 @@ export const ChecksignView: React.FC = () => {
             <form onSubmit={verificarDocumento} className="space-y-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-foreground">
-                  Código de Documento, Hash SHA-256 o URL:
+                  Código de Documento:
                 </label>
                 <div className="flex gap-2">
                   <Input
@@ -165,11 +162,6 @@ export const ChecksignView: React.FC = () => {
               </p>
             </div>
           </CardContent>
-
-          <CardFooter className="p-4 border-t bg-muted/20 text-[10px] font-mono text-muted-foreground flex justify-between">
-            <span>MOTOR: WEB CRYPTO API</span>
-            <span>ALGORITMO: SHA-256 / RSA-4096</span>
-          </CardFooter>
         </Card>
 
         {/* Columna Derecha (Span 5): Árbol de Inspección Criptográfica ANCI */}
