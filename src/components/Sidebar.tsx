@@ -5,13 +5,14 @@ import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { LogoMunicipalidad } from './LogoMunicipalidad';
 
-export type NavTab = 'LANDING' | 'DASHBOARD' | 'FIRMAS' | 'CHECKSIGN' | 'ALERTAS' | 'AUDITORIA';
+export type NavTab = 'LANDING' | 'PORTAL_CIUDADANO' | 'DASHBOARD' | 'FIRMAS' | 'CHECKSIGN' | 'ALERTAS' | 'AUDITORIA';
 
 interface SidebarProps {
   tabActiva: NavTab;
   onSelectTab: (tab: NavTab) => void;
   isOpenMobile?: boolean;
   onCloseMobile?: () => void;
+  onOpenLogin?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -19,15 +20,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectTab,
   isOpenMobile,
   onCloseMobile,
+  onOpenLogin,
 }) => {
   const { estaciones, wsConectado } = useTelemetriaStore();
-  const { usuario } = useAuthStore();
+  const { usuario, isAutenticado, logout } = useAuthStore();
 
   const total = estaciones.length;
   const conectados = estaciones.filter((e) => e.estadoEnVivo === 'CONECTADO').length;
   const firmando = estaciones.filter((e) => e.estadoEnVivo === 'FIRMANDO').length;
   const desconectados = estaciones.filter((e) => e.estadoEnVivo === 'DESCONECTADO').length;
 
+  const esCiudadano = usuario.rol === 'CIUDADANO';
+
+  // Navegación diferenciada según vista/rol
   const navItems: Array<{
     id: NavTab;
     tag: string;
@@ -35,47 +40,63 @@ export const Sidebar: React.FC<SidebarProps> = ({
     badge?: string;
     badgeVariant?: 'default' | 'secondary' | 'warning' | 'outline' | 'success' | 'danger';
     description: string;
+    soloGestor?: boolean;
   }> = [
-    {
-      id: 'DASHBOARD',
-      tag: '01',
-      label: 'Dashboard Telemetría',
-      badge: `${conectados + firmando}/${total}`,
-      description: 'Estado de hardware USB en tiempo real',
-    },
-    {
-      id: 'FIRMAS',
-      tag: '02',
-      label: 'Firma por Lotes',
-      description: 'Motor asíncrono BullMQ',
-    },
-    {
-      id: 'CHECKSIGN',
-      tag: '03',
-      label: 'Portal Checksign',
-      description: 'Verificador Ley N° 19.799',
-    },
-    {
-      id: 'ALERTAS',
-      tag: '04',
-      label: 'Alertas de Certificados',
-      badge: '3',
-      badgeVariant: 'warning',
-      description: 'Vigencia a 60, 30 y 15 días',
-    },
-    {
-      id: 'AUDITORIA',
-      tag: '05',
-      label: 'Auditoría Forense ANCI',
-      description: 'Trazabilidad Ley N° 21.663',
-    },
     {
       id: 'LANDING',
       tag: '00',
-      label: 'Inicio / Portal Público',
-      description: 'Volver a la portada institucional',
+      label: 'Inicio / Portada',
+      description: 'Página de inicio institucional',
+    },
+    {
+      id: 'PORTAL_CIUDADANO',
+      tag: '01',
+      label: 'Portal Ciudadano',
+      description: 'Trámites y validación para el vecino',
+    },
+    {
+      id: 'CHECKSIGN',
+      tag: '02',
+      label: 'Verificador Checksign',
+      description: 'Comprobación Ley N° 19.799',
+    },
+    {
+      id: 'DASHBOARD',
+      tag: '03',
+      label: 'Dashboard Telemetría',
+      badge: `${conectados + firmando}/${total}`,
+      description: 'Estado de hardware en vivo',
+      soloGestor: true,
+    },
+    {
+      id: 'FIRMAS',
+      tag: '04',
+      label: 'Firma por Lotes',
+      description: 'Motor asíncrono BullMQ',
+      soloGestor: true,
+    },
+    {
+      id: 'ALERTAS',
+      tag: '05',
+      label: 'Alertas Certificados',
+      badge: '3',
+      badgeVariant: 'warning',
+      description: 'Vigencia a 60, 30 y 15 días',
+      soloGestor: true,
+    },
+    {
+      id: 'AUDITORIA',
+      tag: '06',
+      label: 'Auditoría Forense ANCI',
+      description: 'Trazabilidad Ley N° 21.663',
+      soloGestor: true,
     },
   ];
+
+  const filteredItems = navItems.filter((item) => {
+    if (esCiudadano && item.soloGestor) return false;
+    return true;
+  });
 
   const handleNavClick = (tab: NavTab) => {
     onSelectTab(tab);
@@ -105,48 +126,53 @@ export const Sidebar: React.FC<SidebarProps> = ({
               Muni Coquimbo
             </span>
             <span className="text-xs font-semibold text-sidebar-foreground truncate">
-              Gestión de Firmas
+              {esCiudadano ? 'Portal Ciudadano' : 'Gestión de Firmas'}
             </span>
           </div>
         </div>
 
-        {/* Resumen Operacional de Telemetría (Semáforo de Hardware) */}
-        <div className="p-3 mx-3 my-3 rounded-lg bg-sidebar-accent/50 border border-sidebar-border/80">
-          <div className="flex items-center justify-between text-xs mb-2">
-            <span className="font-semibold text-sidebar-foreground/90 flex items-center gap-1.5">
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  wsConectado ? 'bg-emerald-400 live-indicator' : 'bg-rose-400'
-                }`}
-              />
-              {wsConectado ? 'Telemetría en Vivo' : 'Desconectado'}
-            </span>
-            <span className="text-[10px] font-mono text-muted-foreground">{total} Estaciones</span>
-          </div>
+        {/* Solo mostrar semáforo de hardware en vista Gestor */}
+        {!esCiudadano && (
+          <div className="p-3 mx-3 my-3 rounded-lg bg-sidebar-accent/50 border border-sidebar-border/80">
+            <div className="flex items-center justify-between text-xs mb-2">
+              <span className="font-semibold text-sidebar-foreground/90 flex items-center gap-1.5">
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    wsConectado ? 'bg-emerald-400 live-indicator' : 'bg-rose-400'
+                  }`}
+                />
+                {wsConectado ? 'Telemetría en Vivo' : 'Desconectado'}
+              </span>
+              <span className="text-[10px] font-mono text-muted-foreground">{total} Estaciones</span>
+            </div>
 
-          <div className="grid grid-cols-3 gap-1.5 text-center text-[10px]">
-            <div className="p-1 rounded bg-sidebar-background/60 border border-sidebar-border">
-              <div className="font-bold text-emerald-400">{firmando}</div>
-              <div className="text-muted-foreground text-[8px] uppercase">Firmando</div>
-            </div>
-            <div className="p-1 rounded bg-sidebar-background/60 border border-sidebar-border">
-              <div className="font-bold text-amber-400">{conectados}</div>
-              <div className="text-muted-foreground text-[8px] uppercase">Conectados</div>
-            </div>
-            <div className="p-1 rounded bg-sidebar-background/60 border border-sidebar-border">
-              <div className="font-bold text-rose-400">{desconectados}</div>
-              <div className="text-muted-foreground text-[8px] uppercase">Offline</div>
+            <div className="grid grid-cols-3 gap-1.5 text-center text-[10px]">
+              <div className="p-1 rounded bg-sidebar-background/60 border border-sidebar-border">
+                <div className="font-bold text-emerald-400">{firmando}</div>
+                <div className="text-muted-foreground text-[8px] uppercase">Firmando</div>
+              </div>
+              <div className="p-1 rounded bg-sidebar-background/60 border border-sidebar-border">
+                <div className="font-bold text-amber-400">{conectados}</div>
+                <div className="text-muted-foreground text-[8px] uppercase">Conectados</div>
+              </div>
+              <div className="p-1 rounded bg-sidebar-background/60 border border-sidebar-border">
+                <div className="font-bold text-rose-400">{desconectados}</div>
+                <div className="text-muted-foreground text-[8px] uppercase">Offline</div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Menú de Navegación (Sin iconos, tipografía pura) */}
+        {/* Menú de Navegación */}
         <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1">
-          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Módulos del Sistema
+          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex justify-between items-center">
+            <span>{esCiudadano ? 'Menú Ciudadano' : 'Módulos Operacionales'}</span>
+            <Badge variant="outline" className="text-[8px] font-mono">
+              {esCiudadano ? 'VISTA VECINO' : 'VISTA GESTOR'}
+            </Badge>
           </div>
 
-          {navItems.map((item) => {
+          {filteredItems.map((item) => {
             const isSelected = tabActiva === item.id;
 
             return (
@@ -194,8 +220,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <Separator className="bg-sidebar-border" />
 
-        {/* Perfil del Funcionario Municipal */}
-        <div className="p-3 bg-sidebar-accent/30 m-3 rounded-lg border border-sidebar-border">
+        {/* Perfil del Usuario / Vecino / Funcionario */}
+        <div className="p-3 bg-sidebar-accent/30 m-3 rounded-lg border border-sidebar-border space-y-2">
           <div className="text-left">
             <div className="flex items-center justify-between mb-0.5">
               <span className="text-xs font-semibold text-sidebar-foreground truncate">
@@ -209,8 +235,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
               RUT: {usuario.rut}
             </p>
             <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
-              {usuario.unidad}
+              {usuario.cargo}
             </p>
+          </div>
+
+          <div className="flex items-center justify-between pt-1 border-t border-sidebar-border/60">
+            {onOpenLogin && (
+              <button
+                type="button"
+                onClick={onOpenLogin}
+                className="text-[10px] text-amber-400 hover:underline font-mono"
+              >
+                Cambiar Rol / Login
+              </button>
+            )}
+            {isAutenticado && (
+              <button
+                type="button"
+                onClick={logout}
+                className="text-[10px] text-rose-400 hover:underline font-mono"
+              >
+                Cerrar Sesión
+              </button>
+            )}
           </div>
         </div>
 

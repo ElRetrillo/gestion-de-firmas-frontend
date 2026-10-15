@@ -1,21 +1,51 @@
 import { create } from 'zustand';
 
+export type UserRole = 'CIUDADANO' | 'FUNCIONARIO' | 'SUPERVISOR' | 'ADMIN' | 'MINISTRO_DE_FE';
+
 export interface UserProfile {
   rut: string;
   nombre: string;
   email: string;
   cargo: string;
   unidad: string;
-  rol: 'ADMIN' | 'SUPERVISOR' | 'FUNCIONARIO' | 'MINISTRO_DE_FE';
+  rol: UserRole;
+  isAutenticado: boolean;
 }
 
 interface AuthState {
   usuario: UserProfile;
-  cambiarRol: (rol: 'ADMIN' | 'SUPERVISOR' | 'FUNCIONARIO' | 'MINISTRO_DE_FE') => void;
+  isAutenticado: boolean;
+  login: (rol: UserRole, customData?: Partial<UserProfile>) => void;
+  logout: () => void;
+  cambiarRol: (rol: UserRole) => void;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
-  usuario: {
+const DEFAULT_USERS: Record<UserRole, Omit<UserProfile, 'isAutenticado'>> = {
+  CIUDADANO: {
+    rut: '18.452.109-K',
+    nombre: 'Constanza Valenzuela Soto',
+    email: 'c.valenzuela@gmail.com',
+    cargo: 'Vecina / Contribuyente',
+    unidad: 'Atención Ciudadana Coquimbo',
+    rol: 'CIUDADANO',
+  },
+  FUNCIONARIO: {
+    rut: '16.782.341-2',
+    nombre: 'Rodrigo Araya Campos',
+    email: 'raraya@municoquimbo.cl',
+    cargo: 'Analista de Gestión Documental',
+    unidad: 'Dirección de Administración y Finanzas (DAF)',
+    rol: 'FUNCIONARIO',
+  },
+  SUPERVISOR: {
+    rut: '14.120.932-5',
+    nombre: 'Marcela Vega Contreras',
+    email: 'mvega@municoquimbo.cl',
+    cargo: 'Jefa de Oficina de Partes y Archivo',
+    unidad: 'Secretaría Municipal',
+    rol: 'SUPERVISOR',
+  },
+  ADMIN: {
     rut: '12.894.120-3',
     nombre: 'Patricio Reyes Morales',
     email: 'preyes@municoquimbo.cl',
@@ -23,8 +53,51 @@ export const useAuthStore = create<AuthState>((set) => ({
     unidad: 'Secretaría Municipal',
     rol: 'ADMIN',
   },
-  cambiarRol: (rol) =>
+  MINISTRO_DE_FE: {
+    rut: '11.554.218-1',
+    nombre: 'Eugenio Gómez Díaz',
+    email: 'egomez@municoquimbo.cl',
+    cargo: 'Ministro de Fe Suplente',
+    unidad: 'Asesoría Jurídica',
+    rol: 'MINISTRO_DE_FE',
+  },
+};
+
+export const useAuthStore = create<AuthState>((set) => ({
+  usuario: {
+    ...DEFAULT_USERS.ADMIN,
+    isAutenticado: false,
+  },
+  isAutenticado: false,
+  login: (rol, customData) => {
+    const base = DEFAULT_USERS[rol] || DEFAULT_USERS.ADMIN;
+    set({
+      isAutenticado: true,
+      usuario: {
+        ...base,
+        ...customData,
+        rol,
+        isAutenticado: true,
+      },
+    });
+  },
+  logout: () => {
     set((state) => ({
-      usuario: { ...state.usuario, rol },
-    })),
+      isAutenticado: false,
+      usuario: {
+        ...state.usuario,
+        isAutenticado: false,
+      },
+    }));
+  },
+  cambiarRol: (rol) => {
+    const base = DEFAULT_USERS[rol] || DEFAULT_USERS.ADMIN;
+    set((state) => ({
+      usuario: {
+        ...base,
+        isAutenticado: state.isAutenticado,
+        rol,
+      },
+    }));
+  },
 }));
