@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -6,11 +6,16 @@ import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 
 export const ChecksignView: React.FC = () => {
-  const [codigoHash, setCodigoHash] = useState('DEC-ALCALDIA-2026-904');
+  const [codigoHash, setCodigoHash] = useState('');
   const [verificando, setVerificando] = useState(false);
+  const [nombreArchivoLocal, setNombreArchivoLocal] = useState<string | null>(null);
+  const [mensajeError, setMensajeError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const [resultado, setResultado] = useState<{
     valido: boolean;
     codigo: string;
+    tituloDocumento?: string;
     hashSha256Calculado: string;
     algoritmo: string;
     tsaTimestamp: string;
@@ -21,90 +26,99 @@ export const ChecksignView: React.FC = () => {
     normativa: string;
     ocspEstado: string;
     numeroSerie: string;
-  } | null>({
-    valido: true,
-    codigo: 'DEC-ALCALDIA-2026-904',
-    hashSha256Calculado: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-    algoritmo: 'SHA-256 con RSA-4096 (FEA Avanzada)',
-    tsaTimestamp: '2026-10-15T09:42:18Z',
-    emisorCertificado: 'ESIGN Chile S.A. - Entidad Acreditada Ministerio de Economía',
-    firmante: 'Patricio Reyes Morales',
-    cargo: 'Secretario Municipal (Ministro de Fe)',
-    rutFirmante: '12.894.120-3',
-    normativa: 'Conforme a Ley N° 19.799, Ley N° 21.180 y Ley N° 21.663',
-    ocspEstado: 'VÁLIDO (Revocación Verificada)',
-    numeroSerie: '0x4F9B882103AC55E1',
-  });
+    urlDescargaDocumento?: string;
+    urlCertificadoVerificacion?: string;
+  } | null>(null);
 
-  const verificarDocumento = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!codigoHash.trim()) return;
-
+  const ejecutarConsultaChecksign = async (valorConsulta: string) => {
+    if (!valorConsulta.trim()) return;
     setVerificando(true);
+    setMensajeError(null);
+    setResultado(null);
 
     try {
       const res = await fetch('/api/v1/firmas/checksign/verificar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hashOTexto: codigoHash }),
+        body: JSON.stringify({ hashOTexto: valorConsulta.trim() }),
       });
 
       if (res.ok) {
         const data = await res.json();
-        setResultado({
-          valido: true,
-          codigo: codigoHash,
-          hashSha256Calculado: data.hashSha256Calculado || 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-          algoritmo: 'SHA-256 con RSA-4096 (FEA Avanzada)',
-          tsaTimestamp: new Date().toISOString(),
-          emisorCertificado: 'ESIGN Chile S.A. - Entidad Acreditada Ministerio de Economía',
-          firmante: data.firmante || 'Patricio Reyes Morales',
-          cargo: data.cargo || 'Secretario Municipal (Ministro de Fe)',
-          rutFirmante: data.rutFirmante || '12.894.120-3',
-          normativa: 'Conforme a Ley N° 19.799, Ley N° 21.180 y Ley N° 21.663',
-          ocspEstado: 'VÁLIDO (Sin revocación)',
-          numeroSerie: '0x4F9B882103AC55E1',
-        });
+        if (data.valido === false) {
+          setMensajeError(data.mensaje || 'Documento no verificado o revocado según registros.');
+        } else {
+          setResultado({
+            valido: data.valido ?? true,
+            codigo: data.codigoVerificacion || data.codigoDocumento || valorConsulta,
+            tituloDocumento: data.tituloDocumento,
+            hashSha256Calculado:
+              data.hashSha256Calculado || valorConsulta,
+            algoritmo: data.algoritmo || 'SHA-256 con RSA-4096 (FEA Avanzada)',
+            tsaTimestamp: data.tsaTimestamp || new Date().toISOString(),
+            emisorCertificado:
+              data.emisorCertificado || 'ESIGN Chile S.A. - Entidad Acreditada',
+            firmante: data.firmanteTitular?.nombre || data.firmante || 'Ministro de Fe',
+            cargo: data.firmanteTitular?.cargo || data.cargo || 'Funcionario Autorizado',
+            rutFirmante: data.firmanteTitular?.rut || data.rutFirmante || 'Sin RUT',
+            normativa: data.normativa || 'Conforme a Ley N° 19.799, Ley N° 21.180 y Ley N° 21.663',
+            ocspEstado: 'VÁLIDO (Sin revocación OCSP)',
+            numeroSerie: data.serialCertificado || '0x4F9B882103AC55E1',
+            urlDescargaDocumento: data.urlDescargaDocumento,
+            urlCertificadoVerificacion:
+              data.urlCertificadoVerificacion ||
+              `/api/v1/firmas/checksign/${encodeURIComponent(valorConsulta.trim())}/certificado-pdf`,
+          });
+        }
       } else {
-        throw new Error('Fallback local');
+        setMensajeError('No se encontró ningún documento con el código o hash indicado en el repositorio municipal.');
       }
     } catch {
-      setResultado({
-        valido: true,
-        codigo: codigoHash,
-        hashSha256Calculado: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-        algoritmo: 'SHA-256 con RSA-4096 (FEA Avanzada)',
-        tsaTimestamp: new Date().toISOString(),
-        emisorCertificado: 'ESIGN Chile S.A. - Entidad Acreditada Ministerio de Economía',
-        firmante: 'Patricio Reyes Morales',
-        cargo: 'Secretario Municipal (Ministro de Fe)',
-        rutFirmante: '12.894.120-3',
-        normativa: 'Conforme a Ley N° 19.799, Ley N° 21.180 y Ley N° 21.663',
-        ocspEstado: 'VÁLIDO (Sin revocación)',
-        numeroSerie: '0x4F9B882103AC55E1',
-      });
+      setMensajeError('Error al contactar el servicio de validación de firma Checksign.');
     } finally {
       setVerificando(false);
     }
   };
 
+  const verificarDocumento = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setNombreArchivoLocal(null);
+    await ejecutarConsultaChecksign(codigoHash);
+  };
+
+  const procesarArchivoClienteSha256 = async (file: File) => {
+    setNombreArchivoLocal(`${file.name} (${Math.round(file.size / 1024)} KB)`);
+    const buffer = await file.arrayBuffer();
+    const hashBuffer = await window.crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+    setCodigoHash(hashHex);
+    await ejecutarConsultaChecksign(hashHex);
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      await procesarArchivoClienteSha256(file);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      {/* 1. Bento Asimétrico: Terminal de Consulta y Verificación Criptográfica */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Columna Izquierda (Span 7): Terminal de Consulta */}
         <Card className="lg:col-span-7 border-border/80 bg-card">
           <CardHeader className="p-5 pb-3 border-b">
             <div className="flex items-center gap-2 mb-1">
               <Badge variant="outline" className="font-mono text-[9px]">
-                [ Checkeo de Firmas ]
+                [ Checkeo de Firmas // Web Crypto API ]
               </Badge>
             </div>
             <CardTitle className="text-base font-bold text-foreground">
-              Portal de Verificación
+              Portal de Verificación Criptográfica Checksign
             </CardTitle>
             <CardDescription className="text-xs text-muted-foreground mt-0.5">
-              Validador de firma electrónica avanzada y sellado cronológico para decretos municipales.
+              Validador oficial de firma electrónica avanzada, código de verificación y huella SHA-256 para documentos municipales.
             </CardDescription>
           </CardHeader>
 
@@ -112,14 +126,14 @@ export const ChecksignView: React.FC = () => {
             <form onSubmit={verificarDocumento} className="space-y-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-foreground">
-                  Código de Documento:
+                  Código de Documento, Código Checksign o Hash SHA-256:
                 </label>
                 <div className="flex gap-2">
                   <Input
                     type="text"
                     value={codigoHash}
                     onChange={(e) => setCodigoHash(e.target.value)}
-                    placeholder="Ej: DEC-ALCALDIA-2026-904"
+                    placeholder="Ej: DEC-ALC-2026-0904 o VERIF-CQBO-904-2026"
                     className="text-xs font-mono"
                   />
                   <Button
@@ -132,39 +146,59 @@ export const ChecksignView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Chips Rápidos de Demostración */}
               <div className="flex items-center gap-2 pt-1">
                 <span className="text-[10px] font-mono text-muted-foreground uppercase">
-                  Ejemplos rápidos:
+                  Ejemplos en BD:
                 </span>
                 <div className="flex flex-wrap gap-1.5">
-                  {['DEC-ALCALDIA-2026-904', 'RES-DOM-88', 'CONTRATO-HON-402'].map((ej) => (
-                    <button
-                      key={ej}
-                      type="button"
-                      onClick={() => setCodigoHash(ej)}
-                      className="text-[10px] font-mono px-2 py-0.5 rounded border border-border/80 bg-muted/40 hover:bg-muted text-foreground transition-colors"
-                    >
-                      {ej}
-                    </button>
-                  ))}
+                  {['DEC-ALC-2026-0904', 'VERIF-CQBO-904-2026', 'CON-HON-2026-0412', 'PERM-DOM-2026-0088'].map(
+                    (ej) => (
+                      <button
+                        key={ej}
+                        type="button"
+                        onClick={() => {
+                          setCodigoHash(ej);
+                          ejecutarConsultaChecksign(ej);
+                        }}
+                        className="text-[10px] font-mono px-2 py-0.5 rounded border border-border/80 bg-muted/40 hover:bg-muted text-foreground transition-colors"
+                      >
+                        {ej}
+                      </button>
+                    ),
+                  )}
                 </div>
               </div>
             </form>
 
-            {/* Zona Interactiva de Arrastre de Archivos */}
-            <div className="p-5 border-2 border-dashed border-border/70 rounded-lg text-center space-y-2 bg-muted/10 hover:bg-muted/20 transition-colors cursor-pointer">
+            {/* Zona Interactiva de Arrastre de Archivos con Web Crypto API */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              accept=".pdf,.doc,.docx,.xml,.txt"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) procesarArchivoClienteSha256(f);
+              }}
+            />
+            <div
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className="p-5 border-2 border-dashed border-border/70 rounded-lg text-center space-y-2 bg-muted/10 hover:bg-muted/20 transition-colors cursor-pointer"
+            >
               <span className="font-mono text-xs font-semibold text-foreground block">
-                Arrastre un archivo PDF aquí para calcular su digest SHA-256
+                {nombreArchivoLocal
+                  ? `✓ Archivo procesado localmente: ${nombreArchivoLocal}`
+                  : 'Arrastre un archivo PDF aquí (o haga clic) para calcular su digest SHA-256'}
               </span>
               <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
-                El hash se genera en su navegador de forma confidencial. El documento no abandona la red local.
+                El hash criptográfico se calcula en su navegador mediante Web Crypto API (`crypto.subtle.digest`). El documento no abandona su estación.
               </p>
             </div>
           </CardContent>
         </Card>
 
-        {/* Columna Derecha (Span 5): Árbol de Inspección Criptográfica ANCI */}
         <Card className="lg:col-span-5 border-border/80 bg-card flex flex-col justify-between">
           <CardHeader className="p-5 pb-3 border-b">
             <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
@@ -176,7 +210,6 @@ export const ChecksignView: React.FC = () => {
           </CardHeader>
 
           <CardContent className="p-5 space-y-3 text-xs">
-            {/* Lista de Comprobaciones Criptográficas */}
             <div className="space-y-2.5">
               <div className="flex items-center justify-between p-2.5 rounded bg-muted/30 border">
                 <div>
@@ -227,7 +260,19 @@ export const ChecksignView: React.FC = () => {
         </Card>
       </div>
 
-      {/* 2. Tarjeta Detallada de Resultado Criptográfico */}
+      {mensajeError && (
+        <Card className="border-rose-500/40 bg-rose-500/10 p-5">
+          <div className="flex items-center gap-3">
+            <Badge variant="danger" className="font-mono text-[9px] uppercase font-bold">
+              ERROR DE VERIFICACIÓN
+            </Badge>
+            <span className="text-xs font-mono text-foreground font-medium">
+              {mensajeError}
+            </span>
+          </div>
+        </Card>
+      )}
+
       {resultado && (
         <Card className="border-emerald-500/40 bg-card shadow-sm">
           <CardHeader className="p-5 pb-3 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -241,18 +286,33 @@ export const ChecksignView: React.FC = () => {
                 </span>
               </div>
               <CardTitle className="text-base font-bold text-foreground">
-                Dictamen de Autenticidad Conforme a Derecho
+                {resultado.tituloDocumento || 'Dictamen de Autenticidad Conforme a Derecho'}
               </CardTitle>
             </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => alert('Certificado de Verificación Criptográfica descargado en formato PDF.')}
-              className="text-xs font-semibold h-8"
-            >
-              Descargar Acta de Verificación
-            </Button>
+            <div className="flex items-center gap-2">
+              {resultado.urlDescargaDocumento && (
+                <a
+                  href={resultado.urlDescargaDocumento}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center rounded-md border border-primary/50 bg-primary/10 px-3 h-8 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
+                >
+                  Descargar Documento PDF
+                </a>
+              )}
+              <a
+                href={
+                  resultado.urlCertificadoVerificacion ||
+                  `/api/v1/firmas/checksign/${encodeURIComponent(resultado.codigo)}/certificado-pdf`
+                }
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center rounded-md border border-input bg-background px-3 h-8 text-xs font-semibold hover:bg-muted transition-colors"
+              >
+                Descargar Acta de Verificación PDF
+              </a>
+            </div>
           </CardHeader>
 
           <CardContent className="p-5 space-y-4 text-xs">
@@ -271,18 +331,19 @@ export const ChecksignView: React.FC = () => {
 
               <div className="p-3 rounded-lg border bg-muted/20 space-y-1">
                 <div className="text-[10px] font-mono uppercase text-muted-foreground">PRESTADOR ACREDITADO</div>
-                <div className="font-bold text-foreground text-xs">ESIGN Chile S.A.</div>
+                <div className="font-bold text-foreground text-xs truncate" title={resultado.emisorCertificado}>
+                  {resultado.emisorCertificado}
+                </div>
                 <div className="text-[10px] font-mono text-muted-foreground">SN: {resultado.numeroSerie}</div>
               </div>
 
               <div className="p-3 rounded-lg border bg-muted/20 space-y-1">
-                <div className="text-[10px] font-mono uppercase text-muted-foreground">FECHA & TSA</div>
-                <div className="font-bold text-foreground text-xs font-mono">{resultado.tsaTimestamp}</div>
+                <div className="text-[10px] font-mono uppercase text-muted-foreground">FECHA &amp; TSA</div>
+                <div className="font-bold text-foreground text-xs font-mono truncate">{resultado.tsaTimestamp}</div>
                 <div className="text-[10px] text-muted-foreground">Estampado RFC 3161 Certificado</div>
               </div>
             </div>
 
-            {/* Hash Forense */}
             <div className="p-3 rounded border bg-muted/40 font-mono text-[11px] space-y-1">
               <div className="text-[10px] text-muted-foreground uppercase">
                 DIGEST CRIPTOGRÁFICO SHA-256 DEL ARCHIVO:

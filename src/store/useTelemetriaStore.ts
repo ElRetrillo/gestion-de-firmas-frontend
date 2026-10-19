@@ -35,88 +35,42 @@ interface TelemetriaState {
   actualizarEstadoEstacion: (payload: {
     codigoPc: string;
     estadoHardware: EstadoHardwareType;
-    timestamp: string;
+    timestamp?: string;
+    serialNumber?: string;
+    vendorId?: string;
+    marca?: string;
+    modelo?: string;
+    ipAsignada?: string;
+    dependenciaFisica?: string;
     tokenInfo?: any;
+    metadatos?: any;
   }) => void;
   cargarEstaciones: () => Promise<void>;
   simularEventoHardware: (codigoPc: string, nuevoEstado: EstadoHardwareType) => Promise<void>;
+  limpiarMalla: () => void;
 }
-
-const ESTACIONES_INICIALES: EstacionTrabajo[] = [
-  {
-    codigoPc: 'PC-SECMUN-01',
-    ipAsignada: '10.20.1.10',
-    dependenciaFisica: 'Secretaría Municipal - Piso 2',
-    estadoEnVivo: 'CONECTADO',
-    ultimoPing: new Date().toISOString(),
-    tokenInfo: { serialNumber: 'SN-SAF-98214', vendorId: '0x04B9 (SafeNet/Gemalto)', marca: 'SafeNet', modelo: 'eToken 5110' },
-  },
-  {
-    codigoPc: 'PC-SECMUN-02',
-    ipAsignada: '10.20.1.12',
-    dependenciaFisica: 'Secretaría Municipal - Actas y Decretos',
-    estadoEnVivo: 'DESCONECTADO',
-    ultimoPing: new Date(Date.now() - 3600000).toISOString(),
-  },
-  {
-    codigoPc: 'PC-DOM-05',
-    ipAsignada: '10.20.2.45',
-    dependenciaFisica: 'Dirección de Obras Municipales',
-    estadoEnVivo: 'FIRMANDO',
-    ultimoPing: new Date().toISOString(),
-    tokenInfo: { serialNumber: 'SN-EPASS-4011', vendorId: '0x096E (ePass2003)', marca: 'Feitian', modelo: 'ePass2003 Auto' },
-  },
-  {
-    codigoPc: 'PC-ALCALDIA-01',
-    ipAsignada: '10.20.0.5',
-    dependenciaFisica: 'Despacho Alcaldía',
-    estadoEnVivo: 'CONECTADO',
-    ultimoPing: new Date().toISOString(),
-    tokenInfo: { serialNumber: 'SN-ATH-1092', vendorId: '0x076B (Athena)', marca: 'Athena', modelo: 'ASECard Crypto' },
-  },
-  {
-    codigoPc: 'PC-TRANSITO-03',
-    ipAsignada: '10.20.3.18',
-    dependenciaFisica: 'Dirección de Tránsito - Licencias',
-    estadoEnVivo: 'DESCONECTADO',
-    ultimoPing: new Date(Date.now() - 7200000).toISOString(),
-  },
-  {
-    codigoPc: 'PC-DAF-02',
-    ipAsignada: '10.20.1.88',
-    dependenciaFisica: 'Administración y Finanzas - Adquisiciones',
-    estadoEnVivo: 'CONECTADO',
-    ultimoPing: new Date().toISOString(),
-    tokenInfo: { serialNumber: 'SN-SAF-55410', vendorId: '0x04B9 (SafeNet/Gemalto)', marca: 'SafeNet', modelo: 'eToken 5110' },
-  },
-];
 
 export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
   socket: null,
   wsConectado: false,
-  estaciones: ESTACIONES_INICIALES,
-  historialEventos: [
-    {
-      id: 'log-1',
-      codigoPc: 'PC-DOM-05',
-      estado: 'FIRMANDO',
-      timestamp: new Date().toLocaleTimeString('es-CL'),
-      serialNumber: 'SN-EPASS-4011',
-    },
-    {
-      id: 'log-2',
-      codigoPc: 'PC-SECMUN-01',
-      estado: 'CONECTADO',
-      timestamp: new Date(Date.now() - 120000).toLocaleTimeString('es-CL'),
-      serialNumber: 'SN-SAF-98214',
-    },
-  ],
+  estaciones: [],
+  historialEventos: [],
+
+  limpiarMalla: async () => {
+    set({ estaciones: [], historialEventos: [] });
+    try {
+      await fetch('/api/v1/telemetria/limpiar', { method: 'POST' });
+    } catch {
+      // Ignorar si falla limpieza remota
+    }
+  },
 
   inicializarSocket: () => {
     if (get().socket) return;
 
-    // Conexión dinámica con WebSocket en la ruta relativa /socket.io
-    const socket = io('/', {
+    // Conexión dinámica con WebSocket usando variable de entorno o proxy relativo
+    const wsUrl = import.meta.env.VITE_WS_URL || '/';
+    const socket = io(wsUrl, {
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
@@ -125,6 +79,7 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
     socket.on('connect', () => {
       set({ wsConectado: true });
       socket.emit('unirse_dashboard');
+      get().cargarEstaciones();
     });
 
     socket.on('disconnect', () => {
@@ -135,12 +90,32 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
       get().actualizarEstadoEstacion(payload);
     });
 
+    socket.on('telemetria_malla_limpiada', () => {
+      set({ estaciones: [], historialEventos: [] });
+    });
+
     set({ socket });
   },
 
   actualizarEstadoEstacion: (payload) => {
     set((state) => {
-      const existe = state.estaciones.some((e) => e.codigoPc === payload.codigoPc);
+      const isDesconectado = payload.estadoHardware === 'DESCONECTADO';
+      const estacionPrevia = state.estaciones.find((e) => e.codigoPc === payload.codigoPc);
+      const existe = Boolean(estacionPrevia);
+
+      // Determinar info del token recibida (se limpia inmediatamente al desconectar el USB)
+      const tokenRecibido = isDesconectado
+        ? undefined
+        : payload.tokenInfo ||
+          (payload.serialNumber
+            ? {
+                serialNumber: payload.serialNumber,
+                vendorId: payload.vendorId,
+                marca: payload.marca,
+                modelo: payload.modelo,
+              }
+            : undefined);
+
       let nuevasEstaciones: EstacionTrabajo[];
 
       if (existe) {
@@ -150,7 +125,9 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
               ...est,
               estadoEnVivo: payload.estadoHardware,
               ultimoPing: payload.timestamp || new Date().toISOString(),
-              tokenInfo: payload.tokenInfo || est.tokenInfo,
+              tokenInfo: isDesconectado ? undefined : (tokenRecibido || est.tokenInfo),
+              ipAsignada: payload.ipAsignada || est.ipAsignada,
+              dependenciaFisica: payload.dependenciaFisica || est.dependenciaFisica,
             };
           }
           return est;
@@ -160,21 +137,34 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
           ...state.estaciones,
           {
             codigoPc: payload.codigoPc,
-            ipAsignada: '10.20.x.x',
-            dependenciaFisica: 'Estación Municipal Detectada',
+            ipAsignada: payload.ipAsignada || payload.metadatos?.ip || '127.0.0.1',
+            dependenciaFisica: payload.dependenciaFisica || payload.metadatos?.dependenciaFisica || 'Estación Local',
             estadoEnVivo: payload.estadoHardware,
             ultimoPing: payload.timestamp || new Date().toISOString(),
-            tokenInfo: payload.tokenInfo,
+            tokenInfo: isDesconectado ? undefined : tokenRecibido,
           },
         ];
       }
+
+      // Evitar duplicar eventos en el feed si es solo un heartbeat periódico sin cambio de estado
+      const isHeartbeat = payload.metadatos?.isHeartbeat === true && payload.metadatos?.stateChanged === false;
+      const mismoEstado = estacionPrevia && estacionPrevia.estadoEnVivo === payload.estadoHardware;
+      if (isHeartbeat && mismoEstado) {
+        return {
+          estaciones: nuevasEstaciones,
+        };
+      }
+
+      const serialFinal = isDesconectado
+        ? payload.metadatos?.previousSerialNumber || estacionPrevia?.tokenInfo?.serialNumber || undefined
+        : tokenRecibido?.serialNumber || payload.serialNumber || payload.tokenInfo?.serialNumber;
 
       const nuevoLog: TelemetriaLog = {
         id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         codigoPc: payload.codigoPc,
         estado: payload.estadoHardware,
         timestamp: new Date(payload.timestamp || Date.now()).toLocaleTimeString('es-CL'),
-        serialNumber: payload.tokenInfo?.serialNumber,
+        serialNumber: serialFinal,
       };
 
       return {
@@ -186,24 +176,103 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
 
   cargarEstaciones: async () => {
     try {
-      const res = await fetch('/api/v1/telemetria/estaciones');
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) {
-          set({
-            estaciones: data.map((d: any) => ({
-              codigoPc: d.codigoPc,
-              ipAsignada: d.ipAsignada || '10.20.0.1',
-              dependenciaFisica: d.dependenciaFisica || 'Municipalidad de Coquimbo',
-              estadoEnVivo: d.estadoEnVivo || d.estadoHardware || 'DESCONECTADO',
-              ultimoPing: d.ultimoPing,
-              tokenInfo: d.tokenInfo,
-            })),
+      const [resEst, resEventos] = await Promise.all([
+        fetch('/api/v1/telemetria/estaciones'),
+        fetch('/api/v1/telemetria/eventos-recientes'),
+      ]);
+
+      let eventosLogs: TelemetriaLog[] = [];
+      const mapaUltimoToken: Record<string, any> = {};
+      const pcYaProcesado: Record<string, boolean> = {};
+
+      if (resEventos.ok) {
+        const evData = await resEventos.json();
+        if (Array.isArray(evData)) {
+          eventosLogs = evData.map((ev: any) => {
+            const tokenObj = ev.token
+              ? {
+                  serialNumber: ev.token.serialNumber,
+                  vendorId: ev.token.vendorId,
+                  marca: ev.token.marca,
+                  modelo: ev.token.modelo,
+                }
+              : undefined;
+
+            // Solo usar el evento más reciente de cada PC; si el más reciente es DESCONECTADO, no asociar token
+            if (!pcYaProcesado[ev.codigoPc]) {
+              pcYaProcesado[ev.codigoPc] = true;
+              if (tokenObj && ev.evento !== 'DESCONECTADO') {
+                mapaUltimoToken[ev.codigoPc] = tokenObj;
+              }
+            }
+
+            return {
+              id: ev.id,
+              codigoPc: ev.codigoPc,
+              estado: ev.evento || ev.estadoHardware || 'DESCONECTADO',
+              timestamp: new Date(ev.timestamp).toLocaleTimeString('es-CL'),
+              serialNumber:
+                ev.token?.serialNumber ||
+                ev.metadatosJsonb?.previousSerialNumber ||
+                ev.metadatosJsonb?.serialNumber ||
+                ev.serialNumber,
+            };
           });
         }
       }
-    } catch {
-      // Fallback a iniciales
+
+      if (resEst.ok) {
+        const data = await resEst.json();
+        if (Array.isArray(data)) {
+          const mappedEstaciones = data.map((d: any) => {
+            const estadoActual = d.estadoEnVivo || d.estadoHardware || 'DESCONECTADO';
+            const isDesconectado = estadoActual === 'DESCONECTADO';
+            let tokenInfo = isDesconectado ? undefined : (d.tokenInfo || undefined);
+
+            if (!tokenInfo && !isDesconectado) {
+              if (d.token) {
+                tokenInfo = {
+                  serialNumber: d.token.serialNumber,
+                  vendorId: d.token.vendorId,
+                  marca: d.token.marca,
+                  modelo: d.token.modelo,
+                };
+              } else if (mapaUltimoToken[d.codigoPc]) {
+                tokenInfo = mapaUltimoToken[d.codigoPc];
+              } else if (d.serialTokenActivo) {
+                tokenInfo = {
+                  serialNumber: d.serialTokenActivo,
+                  vendorId: d.vendorId || 'USB',
+                  marca: d.marca || 'Token Criptográfico',
+                  modelo: d.modelo || 'Hardware PKCS#11',
+                };
+              }
+            }
+
+            return {
+              id: d.id,
+              codigoPc: d.codigoPc,
+              ipAsignada: d.ipAsignada || '127.0.0.1',
+              dependenciaFisica: d.dependenciaFisica || 'Estación Local',
+              estadoEnVivo: estadoActual,
+              ultimoPing: d.ultimoPing || new Date().toISOString(),
+              tokenInfo: isDesconectado ? undefined : tokenInfo,
+            };
+          });
+
+          set({
+            estaciones: mappedEstaciones,
+            historialEventos: eventosLogs,
+          });
+          return;
+        }
+      }
+
+      if (eventosLogs.length > 0) {
+        set({ historialEventos: eventosLogs });
+      }
+    } catch (err) {
+      console.warn('Error al cargar datos reales de telemetría:', err);
     }
   },
 
@@ -211,12 +280,7 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
     const payload = {
       codigoPc,
       estadoHardware: nuevoEstado,
-      serialNumber: nuevoEstado === 'DESCONECTADO' ? undefined : `SN-SIM-${codigoPc}`,
-      vendorId: '0x04B9 (SafeNet)',
-      marca: 'SafeNet eToken',
-      modelo: '5110 FIPS',
       timestamp: new Date().toISOString(),
-      metadatos: { simuladoPor: 'Supervisor UI', timestampLocal: Date.now() },
     };
 
     try {
@@ -226,7 +290,6 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
         body: JSON.stringify(payload),
       });
     } catch {
-      // Si el backend no responde, aplicar cambio en frontend inmediatamente
       get().actualizarEstadoEstacion(payload);
     }
   },

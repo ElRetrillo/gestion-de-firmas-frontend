@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './ui/card';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from './ui/table';
 import { Badge } from './ui/badge';
@@ -9,7 +9,7 @@ interface EventoAuditoria {
   id: string;
   tablaAfectada: string;
   registroId: string;
-  accion: 'INSERT' | 'UPDATE' | 'DELETE' | 'FIRMA_EJECUTADA' | 'TELEMETRIA_PING';
+  accion: string;
   usuario: string;
   ip: string;
   timestamp: string;
@@ -20,82 +20,35 @@ export const AuditoriaView: React.FC = () => {
   const [filtro, setFiltro] = useState('');
   const [filtroAccion, setFiltroAccion] = useState<string>('TODOS');
   const [eventoSeleccionado, setEventoSeleccionado] = useState<EventoAuditoria | null>(null);
+  const [eventos, setEventos] = useState<EventoAuditoria[]>([]);
+  const [cargando, setCargando] = useState(true);
 
-  const eventos: EventoAuditoria[] = [
-    {
-      id: 'AUD-8821',
-      tablaAfectada: 'telemetria_eventos',
-      registroId: 'PC-DOM-05',
-      accion: 'FIRMA_EJECUTADA',
-      usuario: 'mgomez@municoquimbo.cl',
-      ip: '10.20.2.45',
-      timestamp: '2026-10-15 10:25:12',
-      diffJson: {
-        hardware: 'Feitian ePass2003 Auto',
-        estado: 'FIRMANDO',
-        loteId: 'BATCH-2026-DOM',
-        sha256Digest: 'a1f938c9284bd09831a2...74e2',
-        tsaToken: 'RFC3161_VERIFIED',
-      },
-    },
-    {
-      id: 'AUD-8820',
-      tablaAfectada: 'estaciones_trabajo',
-      registroId: 'PC-SECMUN-01',
-      accion: 'UPDATE',
-      usuario: 'ghost-app-agent',
-      ip: '10.20.1.10',
-      timestamp: '2026-10-15 10:24:45',
-      diffJson: {
-        estadoHardware: 'CONECTADO',
-        vendorId: '0x04B9',
-        productId: '0x5110',
-        serialNumber: 'SN-SAF-98214',
-      },
-    },
-    {
-      id: 'AUD-8819',
-      tablaAfectada: 'solicitudes_firma',
-      registroId: 'SOL-1004',
-      accion: 'UPDATE',
-      usuario: 'preyes@municoquimbo.cl',
-      ip: '10.20.0.5',
-      timestamp: '2026-10-15 10:15:00',
-      diffJson: {
-        estadoAprobacion: 'FIRMADA',
-        documentoFirmadoUrl: 's3://firmados/pago-23.pdf',
-        firmanteRut: '12.894.120-3',
-      },
-    },
-    {
-      id: 'AUD-8818',
-      tablaAfectada: 'usuarios',
-      registroId: '16.541.228-9',
-      accion: 'UPDATE',
-      usuario: 'admin-rrhh',
-      ip: '10.20.1.88',
-      timestamp: '2026-10-15 09:30:10',
-      diffJson: {
-        estado: 'ACTIVO',
-        rol: 'SUPERVISOR',
-        unidad: 'Dirección de Adm. y Finanzas',
-      },
-    },
-    {
-      id: 'AUD-8817',
-      tablaAfectada: 'telemetria_eventos',
-      registroId: 'PC-DAF-02',
-      accion: 'TELEMETRIA_PING',
-      usuario: 'agent-heartbeat',
-      ip: '10.20.1.12',
-      timestamp: '2026-10-15 09:00:00',
-      diffJson: {
-        latenciaMs: 14,
-        ttlRedis: 3600,
-        estado: 'HEARTBEAT_OK',
-      },
-    },
-  ];
+  useEffect(() => {
+    setCargando(true);
+    fetch('/api/v1/auditoria')
+      .then((res) => res.json())
+      .then((data) => {
+        const lista = Array.isArray(data) ? data : data?.historialCambios;
+        if (Array.isArray(lista)) {
+          setEventos(
+            lista.map((item: any, idx: number) => ({
+              id: item.id?.substring(0, 8).toUpperCase() || `AUD-${8900 - idx}`,
+              tablaAfectada: item.tablaAfectada || 'historial_cambios',
+              registroId: item.registroId || 'N/A',
+              accion: item.accion || 'UPDATE',
+              usuario: item.usuarioEmail || item.usuario?.email || 'sistema',
+              ip: item.ipOrigen || '-',
+              timestamp: item.createdAt
+                ? new Date(item.createdAt).toLocaleString('es-CL')
+                : new Date().toLocaleString('es-CL'),
+              diffJson: item.diffJsonb || {},
+            })),
+          );
+        }
+      })
+      .catch(() => {})
+      .finally(() => setCargando(false));
+  }, []);
 
   const eventosFiltrados = eventos.filter((e) => {
     const matchesTexto =
@@ -253,8 +206,21 @@ export const AuditoriaView: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {eventosFiltrados.map((ev) => {
-                  const isSelected = eventoSeleccionado?.id === ev.id;
+                {cargando ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-24 text-center font-mono text-xs text-muted-foreground">
+                      Consultando bitácora de auditoría inalterable en PostgreSQL...
+                    </TableCell>
+                  </TableRow>
+                ) : eventosFiltrados.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-24 text-center font-mono text-xs text-muted-foreground">
+                      No se encontraron registros de auditoría forense con los criterios seleccionados.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  eventosFiltrados.map((ev) => {
+                    const isSelected = eventoSeleccionado?.id === ev.id;
 
                   return (
                     <TableRow
@@ -295,7 +261,8 @@ export const AuditoriaView: React.FC = () => {
                       </TableCell>
                     </TableRow>
                   );
-                })}
+                })
+              )}
               </TableBody>
             </Table>
           </CardContent>

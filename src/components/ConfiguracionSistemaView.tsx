@@ -112,9 +112,9 @@ export const ConfiguracionSistemaView: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Políticas de Seguridad ANCI */}
+          {/* Políticas de Seguridad ANCI y Pruebas de Integración */}
           <Card className="border-border/80 bg-card p-5 space-y-3">
-            <h3 className="text-sm font-bold text-foreground">Políticas Criptográficas Activas</h3>
+            <h3 className="text-sm font-bold text-foreground">Políticas Criptográficas &amp; Entorno Testing</h3>
             <div className="space-y-2 text-xs">
               <div className="flex items-center justify-between p-2 rounded bg-muted/30 border">
                 <span>Algoritmo de Hash Primario</span>
@@ -126,8 +126,43 @@ export const ConfiguracionSistemaView: React.FC = () => {
               </div>
               <div className="flex items-center justify-between p-2 rounded bg-muted/30 border">
                 <span>Sellado de Tiempo Oficial</span>
-                <Badge variant="outline" className="font-mono text-[10px]">RFC 3161 TSA (CONTRALORÍA)</Badge>
+                <Badge variant="outline" className="font-mono text-[10px]">RFC 3161 TSA (ESIGN)</Badge>
               </div>
+            </div>
+
+            <div className="pt-2 border-t flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  const res = await fetch('/api/v1/integraciones/webhooks/FIRMAGOB', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      evento: 'CERTIFICADO_VALIDADO_OCSP',
+                      codigoDocumento: 'DEC-ALC-2026-0904',
+                    }),
+                  });
+                  if (res.ok) setGuardado(true);
+                }}
+                className="text-xs font-mono h-8"
+              >
+                Probar Webhook HMAC-SHA256
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  const res = await fetch('/api/v1/auth/seed-reset', { method: 'POST' });
+                  if (res.ok) setGuardado(true);
+                }}
+                className="text-xs font-mono h-8 border-amber-500/50 text-amber-500"
+              >
+                Restaurar Base de Datos Semilla
+              </Button>
             </div>
           </Card>
         </div>
@@ -164,7 +199,13 @@ export const ConfiguracionSistemaView: React.FC = () => {
                       </TableCell>
                       <TableCell className="text-right">
                         <Badge
-                          variant={est.estadoEnVivo === 'CONECTADO' ? 'success' : est.estadoEnVivo === 'FIRMANDO' ? 'warning' : 'outline'}
+                          variant={
+                            est.estadoEnVivo === 'FIRMANDO'
+                              ? 'success'
+                              : est.estadoEnVivo === 'CONECTADO'
+                              ? 'warning'
+                              : 'danger'
+                          }
                           className="text-[9px] font-mono"
                         >
                           {est.estadoEnVivo}

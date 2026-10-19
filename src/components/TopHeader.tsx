@@ -36,6 +36,10 @@ const TAB_TITLES: Record<NavTab, { title: string; subtitle: string }> = {
     title: 'Orquestación de Firma Masiva por Lotes',
     subtitle: 'Procesamiento paralelo asíncrono en segundo plano',
   },
+  USUARIOS_CUSTODIA: {
+    title: 'Gobernanza de Funcionarios, Protocolo RRHH (<48h) y Custodia USB',
+    subtitle: 'Revocación automática de certificados, desbloqueo PUK y actas digitales PDF de entrega',
+  },
   CHECKSIGN: {
     title: 'Portal de Verificación Documental Checksign',
     subtitle: 'Comprobación de autenticidad criptográfica e integridad (Ley N° 19.799)',
@@ -120,7 +124,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             className="text-xs h-8 px-2.5 font-semibold hidden md:inline-flex"
             title="Alternar entre la Vista de Administrador y la Vista de Funcionario"
           >
-            {vistaGeneralActiva === 'ADMIN' ? '👤 Ver como Funcionario' : '🏢 Ver como Admin'}
+            {vistaGeneralActiva === 'ADMIN' ? 'Ver como Funcionario' : 'Ver como Admin'}
           </Button>
         )}
 

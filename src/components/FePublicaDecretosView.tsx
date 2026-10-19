@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -18,61 +18,61 @@ interface DecretoFePublica {
 
 export const FePublicaDecretosView: React.FC = () => {
   const { usuario } = useAuthStore();
-
-  const [decretos, setDecretos] = useState<DecretoFePublica[]>([
-    {
-      id: 'DEC-01',
-      numeroDecreto: 'Decreto Alcaldicio Exento N° 1.482',
-      materia: 'Aprueba convenio de cooperación con Servicio de Salud Coquimbo para operativos rurales',
-      unidadSolicitante: 'Dirección de Salud Municipal',
-      alcaldeFirmante: 'Alcalde Titular de Coquimbo',
-      fechaEmision: '15/10/2026 09:00',
-      estadoFePublica: 'PENDIENTE_VISACION',
-    },
-    {
-      id: 'DEC-02',
-      numeroDecreto: 'Decreto Alcaldicio Exento N° 1.483',
-      materia: 'Adjudicación de licitación pública ID 2489-12-LR26 para adquisición de luminarias solares',
-      unidadSolicitante: 'SECPLAN / Alumbrado Público',
-      alcaldeFirmante: 'Alcalde Titular de Coquimbo',
-      fechaEmision: '15/10/2026 10:30',
-      estadoFePublica: 'PENDIENTE_VISACION',
-    },
-    {
-      id: 'DEC-03',
-      numeroDecreto: 'Decreto Alcaldicio N° 1.480',
-      materia: 'Promulgación de Ordenanza Comunal sobre Gestión Integral de Residuos Domiciliarios',
-      unidadSolicitante: 'Dirección de Medio Ambiente (DIMAO)',
-      alcaldeFirmante: 'Alcalde Titular de Coquimbo',
-      fechaEmision: '14/10/2026 15:00',
-      estadoFePublica: 'FE_PUBLICA_OTORGADA',
-      codigoRegistroNotarial: 'REG-FE-SECMUN-8841-2026',
-    },
-  ]);
-
+  const [decretos, setDecretos] = useState<DecretoFePublica[]>([]);
   const [procesandoId, setProcesandoId] = useState<string | null>(null);
 
-  const darFePublica = (id: string) => {
+  const cargarDecretos = async () => {
+    try {
+      const res = await fetch('/api/v1/firmas/solicitudes?requiereFePublica=true');
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setDecretos(
+            data.map((d: any) => ({
+              id: d.id,
+              numeroDecreto: d.codigoDocumento || d.id,
+              materia: d.titulo || d.tituloDocumento || d.tipoTramite,
+              unidadSolicitante: d.usuarioSolicitante?.unidad || 'Secretaría Municipal',
+              alcaldeFirmante: d.usuarioSolicitante?.nombre || 'Alcaldía de Coquimbo',
+              fechaEmision: new Date(d.createdAt).toLocaleString('es-CL'),
+              estadoFePublica:
+                d.estadoFePublica === 'ATESTADO' ? 'FE_PUBLICA_OTORGADA' : 'PENDIENTE_VISACION',
+              codigoRegistroNotarial: d.codigoRegistroNotarial,
+            })),
+          );
+          return;
+        }
+      }
+    } catch {
+      // Fallback
+    }
+  };
+
+  useEffect(() => {
+    cargarDecretos();
+  }, []);
+
+  const darFePublica = async (id: string) => {
     setProcesandoId(id);
-    setTimeout(() => {
-      setDecretos((prev) =>
-        prev.map((d) =>
-          d.id === id
-            ? {
-                ...d,
-                estadoFePublica: 'FE_PUBLICA_OTORGADA',
-                codigoRegistroNotarial: `REG-FE-SECMUN-${Math.floor(1000 + Math.random() * 9000)}-2026`,
-              }
-            : d
-        )
-      );
+    try {
+      const res = await fetch(`/api/v1/firmas/solicitudes/${id}/fe-publica`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rutMinistro: usuario.rut,
+          pin: usuario.pinToken || '1234',
+        }),
+      });
+      if (res.ok) {
+        await cargarDecretos();
+      }
+    } finally {
       setProcesandoId(null);
-    }, 600);
+    }
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
-      {/* Encabezado Exclusivo del Rol */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4">
         <div>
           <div className="flex items-center gap-2">
@@ -80,19 +80,18 @@ export const FePublicaDecretosView: React.FC = () => {
               [ SECCIÓN EXCLUSIVA // MINISTRO DE FE MUNICIPAL ]
             </span>
             <Badge variant="outline" className="text-[9px] font-mono border-amber-500/50 text-amber-500">
-              LEY N° 19.799 ART. 4
+              LEY N° 18.695 ART. 20 &amp; LEY N° 19.799
             </Badge>
           </div>
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground mt-0.5">
-            Despacho de Decretos y Fe Pública
+            Despacho de Decretos y Atestación de Fe Pública
           </h2>
           <p className="text-xs text-muted-foreground">
-            Entorno reservado para el Ministro de Fe ({usuario.nombre} • {usuario.cargo}) para toma de razón, atestación y certificación legal de actos administrativos.
+            Entorno reservado para el Ministro de Fe ({usuario.nombre} • {usuario.cargo}) para toma de razón, atestación y certificación legal de Decretos Alcaldicios.
           </p>
         </div>
       </div>
 
-      {/* Tarjetas de Estadísticas Notariales */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="border-border/80 bg-card p-4">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -107,7 +106,7 @@ export const FePublicaDecretosView: React.FC = () => {
 
         <Card className="border-border/80 bg-card p-4">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Actos Promulgados Hoy</span>
+            <span>Actos Promulgados</span>
             <span className="text-emerald-500">✓</span>
           </div>
           <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
@@ -130,12 +129,11 @@ export const FePublicaDecretosView: React.FC = () => {
         </Card>
       </div>
 
-      {/* Tabla de Decretos para Toma de Razón */}
       <Card className="border-border/80 bg-card overflow-hidden">
         <CardHeader className="p-4 pb-2 border-b bg-muted/20">
           <CardTitle className="text-sm font-bold">Actos Administrativos para Certificación Notarial</CardTitle>
           <CardDescription className="text-xs">
-            Revisión de legalidad y estampillado de fe pública ministerial
+            Revisión de legalidad y estampillado de fe pública ministerial en PostgreSQL
           </CardDescription>
         </CardHeader>
 
@@ -143,11 +141,11 @@ export const FePublicaDecretosView: React.FC = () => {
           <Table>
             <TableHeader className="bg-muted/40 text-[11px]">
               <TableRow>
-                <TableHead className="w-52">Decreto / Resolución</TableHead>
+                <TableHead className="w-52">Decreto / Expediente</TableHead>
                 <TableHead>Materia</TableHead>
                 <TableHead className="w-44">Unidad Emisora</TableHead>
                 <TableHead className="w-36 text-center">Estado</TableHead>
-                <TableHead className="w-48 text-right">Acción Notarial</TableHead>
+                <TableHead className="w-56 text-right">Acción Notarial / PDF</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="text-xs">
@@ -156,7 +154,7 @@ export const FePublicaDecretosView: React.FC = () => {
 
                 return (
                   <TableRow key={dec.id} className="hover:bg-muted/30">
-                    <TableCell className="font-semibold text-foreground">
+                    <TableCell className="font-semibold text-foreground font-mono">
                       {dec.numeroDecreto}
                       <div className="text-[10px] text-muted-foreground font-mono">
                         {dec.fechaEmision}
@@ -165,7 +163,7 @@ export const FePublicaDecretosView: React.FC = () => {
                     <TableCell>
                       <div className="text-foreground">{dec.materia}</div>
                       <div className="text-[10px] text-muted-foreground">
-                        Firmado por: <strong>{dec.alcaldeFirmante}</strong>
+                        Responsable: <strong>{dec.alcaldeFirmante}</strong>
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-[11px]">
@@ -181,8 +179,18 @@ export const FePublicaDecretosView: React.FC = () => {
                     </TableCell>
                     <TableCell className="text-right">
                       {isOtorgado ? (
-                        <div className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
-                          ✓ {dec.codigoRegistroNotarial}
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
+                            ✓ {dec.codigoRegistroNotarial}
+                          </span>
+                          <a
+                            href={`/api/v1/firmas/solicitudes/${dec.id}/pdf`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[10px] font-mono text-primary hover:underline font-bold"
+                          >
+                            Descargar Decreto PDF
+                          </a>
                         </div>
                       ) : (
                         <Button
@@ -191,7 +199,7 @@ export const FePublicaDecretosView: React.FC = () => {
                           onClick={() => darFePublica(dec.id)}
                           className="text-xs h-8 px-3 font-semibold"
                         >
-                          {procesandoId === dec.id ? 'Certificando...' : 'Dar Fe Pública ✒️'}
+                          {procesandoId === dec.id ? 'Certificando...' : 'Dar Fe Pública'}
                         </Button>
                       )}
                     </TableCell>

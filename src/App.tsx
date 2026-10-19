@@ -10,6 +10,7 @@ import { ChecksignView } from './components/ChecksignView';
 import { AlertasCertificadosView } from './components/AlertasCertificadosView';
 import { AuditoriaView } from './components/AuditoriaView';
 import { ConfiguracionSistemaView } from './components/ConfiguracionSistemaView';
+import { GestionUsuariosEquipamientoView } from './components/GestionUsuariosEquipamientoView';
 import { LoginModal } from './components/LoginModal';
 import { useTelemetriaStore } from './store/useTelemetriaStore';
 import { useAuthStore, UserRole } from './store/useAuthStore';
@@ -21,6 +22,7 @@ const ROLE_ALLOWED_TABS: Record<UserRole, NavTab[]> = {
   ADMIN: [
     'DASHBOARD',
     'FIRMAS',
+    'USUARIOS_CUSTODIA',
     'CHECKSIGN',
     'ALERTAS',
     'AUDITORIA',
@@ -32,6 +34,7 @@ const ROLE_ALLOWED_TABS: Record<UserRole, NavTab[]> = {
   SUPERVISOR: [
     'DASHBOARD',
     'FIRMAS',
+    'USUARIOS_CUSTODIA',
     'CHECKSIGN',
     'ALERTAS',
     'MIS_DOCUMENTOS',
@@ -177,6 +180,7 @@ export const App: React.FC = () => {
                 {/* Vistas de Administrador */}
                 {tabActiva === 'DASHBOARD' && <DashboardSupervisores />}
                 {tabActiva === 'FIRMAS' && <FirmaLotesView />}
+                {tabActiva === 'USUARIOS_CUSTODIA' && <GestionUsuariosEquipamientoView />}
                 {tabActiva === 'ALERTAS' && <AlertasCertificadosView />}
                 {tabActiva === 'AUDITORIA' && <AuditoriaView />}
                 {tabActiva === 'CONFIGURACION' && <ConfiguracionSistemaView />}

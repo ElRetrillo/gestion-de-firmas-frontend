@@ -1,4 +1,5 @@
 # Frontend - Sistema de Gestión de Firmas y Telemetría USB
+
 ### Ilustre Municipalidad de Coquimbo
 
 Frontend institucional para la supervisión en tiempo real de tokens criptográficos físicos (SafeNet, ePass2003) y orquestación de firmas masivas de decretos (FirmaGob / ESIGN), construido con **React 18 + TypeScript + Vite + Tailwind CSS** y componentes de **[ui.shadcn.com](https://ui.shadcn.com)**.
@@ -16,23 +17,28 @@ Frontend institucional para la supervisión en tiempo real de tokens criptográf
 ## 🛠️ Instalación y Puesta en Marcha
 
 1. **Instalar dependencias:**
+
    ```bash
    npm install
    ```
 
 2. **Configurar variables de entorno (Opcional):**
+
    ```bash
    copy .env.example .env
    ```
 
 3. **Iniciar servidor de desarrollo (Vite):**
+
    ```bash
    npm run dev
    ```
+
    * La aplicación estará disponible en: `http://localhost:3000`
    * Vite está configurado con proxy inverso local automático para redirigir `/api` y `/socket.io` directamente hacia `http://localhost:3001` sin conflictos de CORS.
 
 4. **Compilar para producción:**
+
    ```bash
    npm run build
    ```
@@ -64,7 +70,8 @@ gestion-de-firmas-frontend/
 
 ---
 
-## ⚖️ Cumplimiento Normativo
+## Cumplimiento Normativo
+
 * **Ley N° 19.799**: Sobre Documentos Electrónicos, Firma Electrónica y Servicios de Certificación.
 * **Ley N° 21.180**: Transformación Digital del Estado.
 * **Ley N° 21.663**: Ley Marco de Ciberseguridad e Infraestructura Crítica de la Información (ANCI).

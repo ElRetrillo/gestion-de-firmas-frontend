@@ -11,6 +11,7 @@ export type NavTab =
   | 'FE_PUBLICA'
   | 'DASHBOARD'
   | 'FIRMAS'
+  | 'USUARIOS_CUSTODIA'
   | 'CHECKSIGN'
   | 'ALERTAS'
   | 'AUDITORIA'
@@ -70,24 +71,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
       rolesPermitidos: ['ADMIN', 'SUPERVISOR'],
     },
     {
-      id: 'ALERTAS',
+      id: 'USUARIOS_CUSTODIA',
       tag: '03',
+      label: 'RRHH & Actas Custodia',
+      badge: '<48h',
+      badgeVariant: 'default',
+      description: 'Revocación RRHH, desbloqueo PUK y actas PDF',
+      rolesPermitidos: ['ADMIN', 'SUPERVISOR'],
+    },
+    {
+      id: 'ALERTAS',
+      tag: '04',
       label: 'Alertas Certificados',
-      badge: '3',
-      badgeVariant: 'warning',
-      description: 'Vigencia preventiva municipal',
+      description: 'Vigencia preventiva municipal (60/30/15 días)',
       rolesPermitidos: ['ADMIN', 'SUPERVISOR'],
     },
     {
       id: 'CHECKSIGN',
-      tag: '04',
+      tag: '05',
       label: 'Verificador Checksign',
       description: 'Comprobación técnica y legal Ley 19.799',
       rolesPermitidos: ['ADMIN', 'SUPERVISOR'],
     },
     {
       id: 'AUDITORIA',
-      tag: '05',
+      tag: '06',
       label: 'Auditoría Forense ANCI',
       description: 'Trazabilidad inalterable Ley N° 21.663',
       exclusivoRol: 'ADMIN',
@@ -95,7 +103,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       id: 'CONFIGURACION',
-      tag: '06',
+      tag: '07',
       label: 'Configuración y Red',
       description: 'Directivas técnicas y topología',
       exclusivoRol: 'ADMIN',
@@ -109,8 +117,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'MIS_DOCUMENTOS',
       tag: '01',
       label: 'Mis Documentos y Firma',
-      badge: '3',
-      badgeVariant: 'warning',
       description: 'Bandeja personal de decretos asignados',
       rolesPermitidos: ['FUNCIONARIO', 'MINISTRO_DE_FE', 'SUPERVISOR', 'ADMIN'],
     },
@@ -125,8 +131,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'FE_PUBLICA',
       tag: '03',
       label: 'Decretos y Fe Pública',
-      badge: '2',
-      badgeVariant: 'default',
       description: 'Visación y atestación de fe pública ministerial',
       exclusivoRol: 'MINISTRO_FE',
       rolesPermitidos: ['MINISTRO_DE_FE', 'ADMIN'],
@@ -208,7 +212,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     : 'text-muted-foreground hover:text-sidebar-foreground'
                 }`}
               >
-                🏢 Admin
+                Admin
               </button>
               <button
                 type="button"
@@ -219,12 +223,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     : 'text-muted-foreground hover:text-sidebar-foreground'
                 }`}
               >
-                👤 Funcionario
+                Funcionario
               </button>
             </div>
           ) : (
             <div className="py-1 px-2 rounded bg-sidebar-background text-xs font-semibold text-sidebar-foreground border border-sidebar-border flex items-center justify-between">
-              <span>{vistaGeneralActiva === 'ADMIN' ? '🏢 Vista Administrador' : '👤 Vista Funcionario'}</span>
+              <span>{vistaGeneralActiva === 'ADMIN' ? 'Vista Administrador' : 'Vista Funcionario'}</span>
               <span className="text-[9px] font-mono text-muted-foreground">ASIGNADA</span>
             </div>
           )}

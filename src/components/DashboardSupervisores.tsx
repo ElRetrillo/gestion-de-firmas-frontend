@@ -7,7 +7,7 @@ import { Input } from './ui/input';
 import { Separator } from './ui/separator';
 
 export const DashboardSupervisores: React.FC = () => {
-  const { estaciones, historialEventos, simularEventoHardware, wsConectado } = useTelemetriaStore();
+  const { estaciones, historialEventos, wsConectado, cargarEstaciones, limpiarMalla } = useTelemetriaStore();
   const [filtroTexto, setFiltroTexto] = useState('');
   const [filtroEstado, setFiltroEstado] = useState<string>('TODOS');
 
@@ -96,12 +96,14 @@ export const DashboardSupervisores: React.FC = () => {
           </CardHeader>
           <CardContent className="p-4 pt-1">
             <p className="text-[11px] text-muted-foreground">
-              100% de agentes en línea reportando ping
+              {total > 0
+                ? `${conectados + firmando} de ${total} estación(es) reportando actividad`
+                : 'Esperando telemetría de estaciones'}
             </p>
           </CardContent>
         </Card>
 
-        {/* 🟡 Conectados (Reposo) */}
+        {/* Conectados (Reposo) */}
         <Card className="border-amber-500/30 bg-amber-500/5 hover:border-amber-500/50 transition-colors">
           <CardHeader className="p-4 pb-1">
             <div className="flex items-center justify-between">
@@ -123,7 +125,7 @@ export const DashboardSupervisores: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* 🟢 Firmando (Activo) */}
+        {/* Firmando (Activo) */}
         <Card className="border-emerald-500/30 bg-emerald-500/5 hover:border-emerald-500/50 transition-colors">
           <CardHeader className="p-4 pb-1">
             <div className="flex items-center justify-between">
@@ -145,7 +147,7 @@ export const DashboardSupervisores: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* 🔴 Desconectados (Offline) */}
+        {/* Desconectados (Offline) */}
         <Card className="border-rose-500/30 bg-rose-500/5 hover:border-rose-500/50 transition-colors">
           <CardHeader className="p-4 pb-1">
             <div className="flex items-center justify-between">
@@ -229,13 +231,45 @@ export const DashboardSupervisores: React.FC = () => {
             <h2 className="text-xs font-bold uppercase tracking-wider text-foreground font-mono">
               ESTACIONES DETECTADAS ({estacionesFiltradas.length})
             </h2>
-            <span className="text-[10px] text-muted-foreground font-mono">
-              PROTOCOLO: WEBHID API
-            </span>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => cargarEstaciones()}
+                className="h-7 px-2 text-[10px] font-mono"
+                title="Sincronizar telemetría con el backend central"
+              >
+                ↻ Sincronizar
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => limpiarMalla()}
+                className="h-7 px-2 text-[10px] font-mono text-muted-foreground hover:text-destructive"
+                title="Limpiar telemetría de pantalla para iniciar prueba limpia"
+              >
+                Limpiar Vista
+              </Button>
+              <span className="text-[10px] text-muted-foreground font-mono hidden sm:inline">
+                PROTOCOLO: WEBHID / USB
+              </span>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {estacionesFiltradas.map((est) => {
+          {estacionesFiltradas.length === 0 ? (
+            <Card className="p-8 text-center border-dashed bg-card/40">
+              <div className="space-y-2">
+                <div className="font-mono text-sm font-semibold text-foreground">
+                  [ NINGUNA ESTACIÓN REGISTRADA EN VIVO ]
+                </div>
+                <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                  No hay estaciones de trabajo emitiendo telemetría en este momento. Ejecute el agente Ghost App o envíe un evento POST a `/api/v1/telemetria/usb` para que aparezca en la malla ANCI.
+                </p>
+              </div>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {estacionesFiltradas.map((est) => {
               const isConectado = est.estadoEnVivo === 'CONECTADO';
               const isFirmando = est.estadoEnVivo === 'FIRMANDO';
               const isDesconectado = est.estadoEnVivo === 'DESCONECTADO';
@@ -248,7 +282,7 @@ export const DashboardSupervisores: React.FC = () => {
                       ? 'border-emerald-500/50 bg-emerald-500/5'
                       : isConectado
                       ? 'border-amber-500/40'
-                      : 'border-border'
+                      : 'border-rose-500/30 bg-rose-500/5'
                   }`}
                 >
                   <CardHeader className="p-4 pb-2">
@@ -290,7 +324,7 @@ export const DashboardSupervisores: React.FC = () => {
 
                   <CardContent className="p-4 pt-1 text-xs space-y-3">
                     {/* Visualización de Hardware USB */}
-                    {est.tokenInfo?.serialNumber ? (
+                    {!isDesconectado && est.tokenInfo?.serialNumber ? (
                       <div className="bg-muted/40 p-2.5 rounded-md border space-y-1 text-[11px] font-mono">
                         <div className="flex justify-between">
                           <span className="text-muted-foreground">TOKEN:</span>
@@ -308,47 +342,35 @@ export const DashboardSupervisores: React.FC = () => {
                         </div>
                       </div>
                     ) : (
-                      <div className="bg-muted/20 p-2.5 rounded-md border border-dashed text-muted-foreground text-center italic text-[11px] font-mono">
-                        [ SIN TOKEN INSERTADO EN RANURA ]
+                      <div className="bg-rose-500/5 p-2.5 rounded-md border border-dashed border-rose-500/30 text-rose-600 dark:text-rose-400 text-center italic text-[11px] font-mono">
+                        [ TOKEN USB EXTRAÍDO / SIN DISPOSITIVO EN RANURA ]
                       </div>
                     )}
 
                     <Separator />
 
-                    {/* Acciones de Simulación y Ping */}
+                    {/* Estado en Vivo y Ping */}
                     <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5">
                       <span className="font-mono text-[10px]">
                         PING: {new Date(est.ultimoPing).toLocaleTimeString('es-CL')}
                       </span>
 
-                      <div className="flex items-center space-x-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => simularEventoHardware(est.codigoPc, 'CONECTADO')}
-                          className="h-6 px-1.5 text-[10px] font-mono text-amber-600 dark:text-amber-400 font-medium"
-                          title="Simular Conexión"
+                      <div className="flex items-center space-x-1.5">
+                        <span
+                          className={`text-[10px] font-mono px-2 py-0.5 rounded border font-medium ${
+                            isFirmando
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                              : isConectado
+                              ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                              : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30'
+                          }`}
                         >
-                          Conectar
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => simularEventoHardware(est.codigoPc, 'FIRMANDO')}
-                          className="h-6 px-1.5 text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-medium"
-                          title="Simular Firma Activa"
-                        >
-                          Firmar
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => simularEventoHardware(est.codigoPc, 'DESCONECTADO')}
-                          className="h-6 px-1.5 text-[10px] font-mono text-rose-600 dark:text-rose-400 font-medium"
-                          title="Simular Retiro"
-                        >
-                          Retirar
-                        </Button>
+                          {isFirmando
+                            ? 'FIRMANDO'
+                            : isConectado
+                            ? 'TOKEN ACTIVO'
+                            : 'DESCONECTADO'}
+                        </span>
                       </div>
                     </div>
                   </CardContent>
@@ -356,6 +378,7 @@ export const DashboardSupervisores: React.FC = () => {
               );
             })}
           </div>
+          )}
         </div>
 
         {/* Columna Derecha (Span 4): Terminal de Auditoría y Eventos en Vivo (Zig.ai Activity Feed) */}
@@ -421,7 +444,10 @@ export const DashboardSupervisores: React.FC = () => {
                         >
                           {log.estado}
                         </span>
-                        {log.serialNumber && ` • SN: ${log.serialNumber}`}
+                        {log.serialNumber &&
+                          (log.estado === 'DESCONECTADO'
+                            ? ` • Extraído: ${log.serialNumber}`
+                            : ` • SN: ${log.serialNumber}`)}
                       </p>
                     </div>
                   </div>
