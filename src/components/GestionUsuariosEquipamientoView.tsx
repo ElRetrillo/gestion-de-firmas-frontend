@@ -81,6 +81,15 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
   const [nuevoCargo, setNuevoCargo] = useState('');
   const [nuevaUnidad, setNuevaUnidad] = useState('Secretaría Municipal');
   const [nuevoRol, setNuevoRol] = useState('FUNCIONARIO');
+  const [nuevaPassword, setNuevaPassword] = useState('');
+
+  // Credencial recién creada para mostrar
+  const [credencialGenerada, setCredencialGenerada] = useState<{
+    rut: string;
+    nombre: string;
+    passwordTemporal?: string;
+    pinTemporal?: string;
+  } | null>(null);
 
   // Formulario nueva acta de custodia
   const [actaTokenSerial, setActaTokenSerial] = useState('');
@@ -197,9 +206,13 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
     if (!nuevoRut.trim() || !nuevoNombre.trim()) return;
     const rutFinal = formatRut(nuevoRut.trim()) || nuevoRut.trim();
 
+    const token = localStorage.getItem('access_token') || '';
     const res = await fetch('/api/v1/usuarios', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify({
         rut: rutFinal,
         nombre: nuevoNombre.trim(),
@@ -207,13 +220,22 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
         cargo: nuevoCargo.trim() || 'Profesional Municipal',
         unidad: nuevaUnidad,
         rol: nuevoRol,
+        ...(nuevaPassword.trim() ? { password: nuevaPassword.trim() } : {}),
       }),
     });
     if (res.ok) {
+      const data = await res.json();
       setNuevoRut('');
       setNuevoNombre('');
       setNuevoCargo('');
-      setMensajeOperacion(`Nuevo funcionario (${rutFinal}) enrolado exitosamente en el directorio institucional.`);
+      setNuevaPassword('');
+      setCredencialGenerada({
+        rut: rutFinal,
+        nombre: data.nombre || nuevoNombre,
+        passwordTemporal: data.passwordTemporal || (nuevaPassword.trim() ? nuevaPassword.trim() : 'Definida'),
+        pinTemporal: data.pinTemporal,
+      });
+      setMensajeOperacion(`Usuario (${rutFinal}) creado con rol ${nuevoRol} exitosamente.`);
       await cargarDatos();
     } else {
       const err = await res.json();
@@ -352,6 +374,41 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
           >
             [Cerrar]
           </button>
+        </div>
+      )}
+
+      {/* Modal / Alerta de Credenciales Generadas para Entrega Segura */}
+      {credencialGenerada && (
+        <div className="p-4 rounded-xl border-2 border-amber-500/60 bg-amber-500/10 shadow-lg space-y-2">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+              <span className="text-amber-500 font-mono text-base">🔑</span>
+              Credenciales de Acceso para {credencialGenerada.nombre}
+            </h3>
+            <button
+              onClick={() => setCredencialGenerada(null)}
+              className="text-xs text-muted-foreground hover:text-foreground font-bold"
+            >
+              ✕ Cerrar
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Entrega estas credenciales a la funcionaria. En su primer inicio de sesión se le solicitará actualizar su contraseña.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-background/80 p-3 rounded-lg border border-border text-xs font-mono">
+            <div>
+              <span className="text-muted-foreground text-[10px] block">RUT de Ingreso:</span>
+              <span className="font-bold text-foreground">{credencialGenerada.rut}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground text-[10px] block">Contraseña de Inicio:</span>
+              <span className="font-bold text-amber-600 dark:text-amber-400">{credencialGenerada.passwordTemporal}</span>
+            </div>
+            <div>
+              <span className="text-muted-foreground text-[10px] block">PIN Inicial Token USB:</span>
+              <span className="font-bold text-foreground">{credencialGenerada.pinTemporal || '1234'}</span>
+            </div>
+          </div>
         </div>
       )}
 
@@ -599,6 +656,19 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
                     value={nuevaUnidad}
                     onChange={(e) => setNuevaUnidad(e.target.value)}
                     className="h-8 text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-semibold flex items-center justify-between">
+                    <span>Contraseña (Opcional):</span>
+                    <span className="text-[10px] text-muted-foreground">Si se omite, se genera aleatoria</span>
+                  </label>
+                  <Input
+                    type="password"
+                    value={nuevaPassword}
+                    onChange={(e) => setNuevaPassword(e.target.value)}
+                    placeholder="Mínimo 10 car. o dejar en blanco"
+                    className="h-8 text-xs font-mono"
                   />
                 </div>
                 <div className="space-y-1">
