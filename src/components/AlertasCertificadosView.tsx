@@ -40,7 +40,7 @@ export const AlertasCertificadosView: React.FC = () => {
                 id: item.id || item.numeroSerie || 'CERT',
                 tipo: `${item.tipo || 'FEA'} (${item.numeroSerie || 'X.509'})`,
                 custodia: item.custodia || 'TOKEN_FISICO',
-                hardwareModelo: item.tokenHardware?.modelo || item.tokenHardware?.marca || 'Dispositivo USB PKCS#11',
+                hardwareModelo: item.tokenHardware?.modelo || item.tokenHardware?.marca || 'Dispositivo de firma USB',
                 diasRestantes: dias,
                 severidad: item.severidad || (dias <= 15 ? 'ALTA' : dias <= 30 ? 'MEDIA' : 'BAJA'),
                 fechaExpiracion: item.validoHasta
@@ -87,68 +87,71 @@ export const AlertasCertificadosView: React.FC = () => {
   const criticosCount = alertas.filter((a) => a.severidad === 'ALTA').length;
   const mediosCount = alertas.filter((a) => a.severidad === 'MEDIA').length;
   const preventivosCount = alertas.filter((a) => a.severidad === 'BAJA').length;
+  const tokensFisicosCount = alertas.filter((a) => a.custodia === 'TOKEN_FISICO').length;
+  const certificadosCloudCount = alertas.filter((a) => a.custodia !== 'TOKEN_FISICO').length;
 
   return (
     <div className="space-y-6">
       {/* 1. Bento Asimétrico: Monitor de Ciclo de Vida & Resumen de Custodia */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Columna Izquierda (Span 8): Monitor de Vigencia Criptográfica */}
+        {/* Columna Izquierda: Monitor de Vigencia */}
         <Card className="lg:col-span-8 border-border/80 bg-card">
           <CardHeader className="p-5 pb-3 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <Badge variant="outline" className="font-mono text-[9px]">
-                  [ CRON // LIFECYCLE MONITOR ]
+                <Badge variant="outline" className="text-[10px]">
+                  Vencimientos
                 </Badge>
-                <Badge variant="secondary" className="font-mono text-[9px]">
-                  ESCALAS: 60, 30 Y 15 DÍAS
+                <Badge variant="secondary" className="text-[10px]">
+                  Avisos a 60, 30 y 15 días
                 </Badge>
               </div>
               <CardTitle className="text-base font-bold text-foreground">
-                Vigilancia Proactiva de Certificados Digitales
+                Vigilancia de Certificados Digitales
               </CardTitle>
               <CardDescription className="text-xs text-muted-foreground mt-0.5">
-                Previene la paralización de firmas de decretos y resoluciones mediante alertas automáticas a funcionarios.
+                Monitoreo preventivo del estado y vencimiento de certificados digitales de funcionarios.
               </CardDescription>
             </div>
 
             <Button
               onClick={handleDespachoMasivo}
               size="sm"
+              disabled={alertas.length === 0}
               className="font-bold text-xs h-9 px-4 shrink-0 shadow-xs"
             >
-              Despachar Alertas Masivas
+              Enviar Notificaciones
             </Button>
           </CardHeader>
 
           <CardContent className="p-5 space-y-4">
-            {/* Niveles de Severidad y Radar */}
+            {/* Niveles de Severidad */}
             <div className="grid grid-cols-3 gap-3">
               <div className="p-3 rounded-lg border border-rose-500/30 bg-rose-500/5 space-y-1">
-                <div className="text-[10px] font-mono uppercase text-rose-500 font-bold">
-                  [ CRÍTICO &lt; 15 DÍAS ]
+                <div className="text-[10px] uppercase text-rose-500 font-bold">
+                  Menos de 15 días
                 </div>
-                <div className="font-mono font-bold text-xl text-rose-600 dark:text-rose-400">
+                <div className="font-bold text-xl text-rose-600 dark:text-rose-400">
                   {criticosCount}
                 </div>
                 <div className="text-[10px] text-muted-foreground">Requiere gestión inmediata</div>
               </div>
 
               <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/5 space-y-1">
-                <div className="text-[10px] font-mono uppercase text-amber-500 font-bold">
-                  [ ALERTA &lt; 30 DÍAS ]
+                <div className="text-[10px] uppercase text-amber-500 font-bold">
+                  Menos de 30 días
                 </div>
-                <div className="font-mono font-bold text-xl text-amber-600 dark:text-amber-400">
+                <div className="font-bold text-xl text-amber-600 dark:text-amber-400">
                   {mediosCount}
                 </div>
                 <div className="text-[10px] text-muted-foreground">Proceso de renovación abierto</div>
               </div>
 
               <div className="p-3 rounded-lg border border-blue-500/30 bg-blue-500/5 space-y-1">
-                <div className="text-[10px] font-mono uppercase text-blue-500 font-bold">
-                  [ PREVENTIVO &lt; 60 DÍAS ]
+                <div className="text-[10px] uppercase text-blue-500 font-bold">
+                  Menos de 60 días
                 </div>
-                <div className="font-mono font-bold text-xl text-foreground">
+                <div className="font-bold text-xl text-foreground">
                   {preventivosCount}
                 </div>
                 <div className="text-[10px] text-muted-foreground">Monitoreo programado</div>
@@ -156,79 +159,59 @@ export const AlertasCertificadosView: React.FC = () => {
             </div>
 
             {despachoMasivoExitoso && (
-              <div className="p-3 rounded border border-emerald-500/40 bg-emerald-500/10 text-xs text-foreground font-mono">
-                [OK] Alertas transmitidas vía SMTP institucional y notificadas a los agentes WebHID de las estaciones activas.
+              <div className="p-3 rounded border border-emerald-500/40 bg-emerald-500/10 text-xs text-foreground">
+                ✓ Alertas transmitidas exitosamente por correo institucional a los funcionarios respectivos.
               </div>
             )}
           </CardContent>
-
-          <CardFooter className="p-4 border-t bg-muted/20 text-[10px] font-mono text-muted-foreground flex justify-between">
-            <span>EJECUCIÓN CRON: DIARIA 08:00 CLT</span>
-            <span>INTEGRACIÓN: ACTIVE DIRECTORY / GPO</span>
-          </CardFooter>
         </Card>
 
-        {/* Columna Derecha (Span 4): Resumen de Cripto-Hardware */}
+        {/* Columna Derecha: Resumen de Dispositivos */}
         <Card className="lg:col-span-4 border-border/80 bg-card flex flex-col justify-between">
           <CardHeader className="p-5 pb-3 border-b">
-            <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-              DISTRIBUCIÓN DE CUSTODIA
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+              TIPO DE DISPOSITIVOS
             </span>
             <CardTitle className="text-sm font-bold text-foreground">
-              Inventario de Llaves Privadas
+              Inventario de Certificados
             </CardTitle>
           </CardHeader>
 
           <CardContent className="p-5 space-y-3 text-xs">
             <div className="flex items-center justify-between p-2.5 rounded bg-muted/30 border">
               <div>
-                <div className="font-semibold text-foreground text-[11px]">Tokens Físicos USB</div>
-                <div className="text-[10px] text-muted-foreground font-mono">SafeNet / ePass2003</div>
+                <div className="font-semibold text-foreground text-[11px]">Dispositivos Físicos (USB)</div>
+                <div className="text-[10px] text-muted-foreground">Pendrives criptográficos de firma</div>
               </div>
-              <span className="font-mono font-bold text-foreground">3 unidades</span>
+              <span className="font-bold text-foreground">{tokensFisicosCount} {tokensFisicosCount === 1 ? 'unidad' : 'unidades'}</span>
             </div>
 
             <div className="flex items-center justify-between p-2.5 rounded bg-muted/30 border">
               <div>
-                <div className="font-semibold text-foreground text-[11px]">Firma Centralizada Cloud</div>
-                <div className="text-[10px] text-muted-foreground font-mono">FIPS 140-2 Level 3 HSM</div>
+                <div className="font-semibold text-foreground text-[11px]">Firma Centralizada</div>
+                <div className="text-[10px] text-muted-foreground">Custodiados en servidor municipal</div>
               </div>
-              <span className="font-mono font-bold text-foreground">1 certificado</span>
-            </div>
-
-            <div className="flex items-center justify-between p-2.5 rounded bg-muted/30 border">
-              <div>
-                <div className="font-semibold text-foreground text-[11px]">Entidad Acreditadora</div>
-                <div className="text-[10px] text-muted-foreground font-mono">SEGPRES / ESIGN</div>
-              </div>
-              <Badge variant="outline" className="font-mono text-[9px]">
-                OFICIAL
-              </Badge>
+              <span className="font-bold text-foreground">{certificadosCloudCount} {certificadosCloudCount === 1 ? 'certificado' : 'certificados'}</span>
             </div>
           </CardContent>
-
-          <CardFooter className="p-4 border-t bg-muted/20 text-[10px] font-mono text-muted-foreground flex justify-between">
-            <span>AUDITORÍA: ANCI 2026</span>
-            <span>CUMPLIMIENTO: 100%</span>
-          </CardFooter>
         </Card>
       </div>
 
       {/* 2. Grid de Certificados con Vencimiento Monitoreado */}
       {cargando ? (
         <Card className="p-8 text-center border-dashed">
-          <p className="text-sm font-mono text-muted-foreground animate-pulse">
-            Consultando registros de certificados y vigencias en PostgreSQL...
+          <p className="text-sm text-muted-foreground animate-pulse">
+            Consultando registros de certificados y vigencias...
           </p>
         </Card>
       ) : alertas.length === 0 ? (
         <Card className="p-8 text-center border-dashed bg-card/50">
           <div className="space-y-2">
-            <div className="font-mono text-sm font-semibold text-foreground">
-              [ SIN CERTIFICADOS PRÓXIMOS A VENCER ]
+            <div className="text-sm font-semibold text-foreground">
+              Sin certificados próximos a vencer
             </div>
             <p className="text-xs text-muted-foreground max-w-md mx-auto">
-              Todos los certificados X.509 de funcionarios y ministros de fe en la base de datos se encuentran con vigencia superior a los umbrales de alerta (60, 30 y 15 días).
+              Todos los certificados de firma de los funcionarios se encuentran al día con vigencia suficiente.
             </p>
           </div>
         </Card>
@@ -255,7 +238,7 @@ export const AlertasCertificadosView: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <Badge
                         variant={isAlta ? 'danger' : isMedia ? 'warning' : 'info'}
-                        className="text-[9px] uppercase font-mono font-bold tracking-wider py-0"
+                        className="text-[10px] uppercase font-bold py-0"
                       >
                         {alerta.diasRestantes} DÍAS RESTANTES
                       </Badge>
@@ -276,18 +259,18 @@ export const AlertasCertificadosView: React.FC = () => {
               </CardHeader>
 
               <CardContent className="p-4 space-y-3 text-xs">
-                <div className="bg-muted/40 p-2.5 rounded-md border border-border/60 space-y-1.5 text-[11px] font-mono">
+                <div className="bg-muted/40 p-2.5 rounded-md border border-border/60 space-y-1.5 text-[11px]">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Certificado:</span>
                     <span className="font-medium text-foreground">{alerta.tipo}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Dispositivo Físico:</span>
+                    <span className="text-muted-foreground">Dispositivo:</span>
                     <span className="text-foreground">{alerta.hardwareModelo}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">RUT Funcionario:</span>
-                    <span className="text-foreground">{alerta.usuario.rut}</span>
+                    <span className="text-foreground font-mono">{alerta.usuario.rut}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Correo Notificación:</span>
@@ -298,8 +281,8 @@ export const AlertasCertificadosView: React.FC = () => {
                 </div>
 
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-[10px] font-mono text-muted-foreground">
-                    CUSTODIA: {alerta.custodia}
+                  <span className="text-[10px] text-muted-foreground">
+                    TIPO: {alerta.custodia === 'TOKEN_FISICO' ? 'Dispositivo Físico' : 'Centralizado'}
                   </span>
 
                   <Button
@@ -309,7 +292,7 @@ export const AlertasCertificadosView: React.FC = () => {
                     onClick={() => handleNotificar(alerta.id, alerta.usuario.email)}
                     className="text-xs font-semibold h-8"
                   >
-                    {notificando === alerta.id ? 'Despachando...' : 'Notificar Renovación'}
+                    {notificando === alerta.id ? 'Enviando aviso...' : 'Enviar Aviso'}
                   </Button>
                 </div>
               </CardContent>

@@ -1,9 +1,23 @@
 import React from 'react';
+import {
+  Monitor,
+  Files,
+  Users,
+  BellRing,
+  History,
+  Settings,
+  FileText,
+  ShieldCheck,
+  CheckCircle2,
+  Home,
+  LucideIcon,
+} from 'lucide-react';
 import { useTelemetriaStore } from '../store/useTelemetriaStore';
-import { useAuthStore, UserRole, VistaGeneral } from '../store/useAuthStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { Badge } from './ui/badge';
 import { Separator } from './ui/separator';
 import { LogoMunicipalidad } from './LogoMunicipalidad';
+import { Button } from './ui/button';
 
 export type NavTab =
   | 'LANDING'
@@ -22,18 +36,15 @@ interface SidebarProps {
   onSelectTab: (tab: NavTab) => void;
   isOpenMobile?: boolean;
   onCloseMobile?: () => void;
-  onOpenLogin?: () => void;
 }
 
 interface NavItemConfig {
   id: NavTab;
-  tag: string;
   label: string;
+  icon: LucideIcon;
   badge?: string;
   badgeVariant?: 'default' | 'secondary' | 'warning' | 'outline' | 'success' | 'danger';
   description: string;
-  exclusivoRol?: string;
-  rolesPermitidos: UserRole[];
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -41,201 +52,150 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectTab,
   isOpenMobile,
   onCloseMobile,
-  onOpenLogin,
 }) => {
   const { estaciones, wsConectado } = useTelemetriaStore();
-  const { usuario, isAutenticado, logout, vistaGeneralActiva, setVistaGeneralActiva } = useAuthStore();
+  const { usuario, logout } = useAuthStore();
 
   const total = estaciones.length;
   const conectados = estaciones.filter((e) => e.estadoEnVivo === 'CONECTADO').length;
   const firmando = estaciones.filter((e) => e.estadoEnVivo === 'FIRMANDO').length;
   const desconectados = estaciones.filter((e) => e.estadoEnVivo === 'DESCONECTADO').length;
 
-  const puedeAlternarVistas = usuario.rol === 'ADMIN' || usuario.rol === 'SUPERVISOR';
+  const rol = usuario?.rol || 'FUNCIONARIO';
+  const esAdmin = rol === 'ADMIN';
+  const esSupervisor = rol === 'SUPERVISOR';
+  const esMinistro = rol === 'MINISTRO_DE_FE';
+  const tieneAccesoGestion = esAdmin || esSupervisor;
 
-  // 1. Módulos de la Vista Administrador
-  const navItemsAdmin: NavItemConfig[] = [
+  // Módulos según el Rol Institucional Real
+  const itemsGestion: NavItemConfig[] = [
     {
       id: 'DASHBOARD',
-      tag: '01',
-      label: 'Telemetría de Tokens',
-      badge: `${conectados + firmando}/${total}`,
-      description: 'Monitoreo en vivo de hardware criptográfico',
-      rolesPermitidos: ['ADMIN', 'SUPERVISOR'],
+      icon: Monitor,
+      label: 'Dispositivos Conectados',
+      badge: total > 0 ? `${conectados + firmando}/${total}` : undefined,
+      description: 'Estado y conexión de dispositivos de firma',
     },
     {
       id: 'FIRMAS',
-      tag: '02',
-      label: 'Orquestador de Lotes',
-      description: 'Supervisión de colas asíncronas de firma',
-      rolesPermitidos: ['ADMIN', 'SUPERVISOR'],
+      icon: Files,
+      label: 'Firma Masiva',
+      description: 'Envío y procesamiento masivo de firmas',
     },
     {
       id: 'USUARIOS_CUSTODIA',
-      tag: '03',
-      label: 'RRHH & Actas Custodia',
-      badge: '<48h',
-      badgeVariant: 'default',
-      description: 'Revocación RRHH, desbloqueo PUK y actas PDF',
-      rolesPermitidos: ['ADMIN', 'SUPERVISOR'],
+      icon: Users,
+      label: 'Funcionarios y Custodia',
+      description: 'Asignación y entrega de dispositivos',
     },
     {
       id: 'ALERTAS',
-      tag: '04',
-      label: 'Alertas Certificados',
-      description: 'Vigencia preventiva municipal (60/30/15 días)',
-      rolesPermitidos: ['ADMIN', 'SUPERVISOR'],
-    },
-    {
-      id: 'CHECKSIGN',
-      tag: '05',
-      label: 'Verificador Checksign',
-      description: 'Comprobación técnica y legal Ley 19.799',
-      rolesPermitidos: ['ADMIN', 'SUPERVISOR'],
+      icon: BellRing,
+      label: 'Alertas y Vencimientos',
+      description: 'Avisos de vigencia de certificados',
     },
     {
       id: 'AUDITORIA',
-      tag: '06',
-      label: 'Auditoría Forense ANCI',
-      description: 'Trazabilidad inalterable Ley N° 21.663',
-      exclusivoRol: 'ADMIN',
-      rolesPermitidos: ['ADMIN'],
+      icon: History,
+      label: 'Historial de Actividad',
+      description: 'Registro de operaciones del sistema',
     },
     {
       id: 'CONFIGURACION',
-      tag: '07',
-      label: 'Configuración y Red',
-      description: 'Directivas técnicas y topología',
-      exclusivoRol: 'ADMIN',
-      rolesPermitidos: ['ADMIN'],
+      icon: Settings,
+      label: 'Configuración del Sistema',
+      description: 'Parámetros generales de la plataforma',
     },
   ];
 
-  // 2. Módulos de la Vista Funcionario
-  const navItemsFuncionario: NavItemConfig[] = [
+  const itemsPersonales: NavItemConfig[] = [
     {
       id: 'MIS_DOCUMENTOS',
-      tag: '01',
-      label: 'Mis Documentos y Firma',
-      description: 'Bandeja personal de decretos asignados',
-      rolesPermitidos: ['FUNCIONARIO', 'MINISTRO_DE_FE', 'SUPERVISOR', 'ADMIN'],
+      icon: FileText,
+      label: 'Mis Documentos',
+      description: 'Documentos pendientes y firmados',
     },
+    ...(esAdmin || esMinistro
+      ? [
+          {
+            id: 'FE_PUBLICA' as NavTab,
+            icon: ShieldCheck,
+            label: 'Fe Pública y Decretos',
+            description: 'Revisión y validación oficial',
+          },
+        ]
+      : []),
     {
       id: 'CHECKSIGN',
-      tag: '02',
+      icon: CheckCircle2,
       label: 'Verificar Documento',
-      description: 'Checkeo de firmas y validez',
-      rolesPermitidos: ['FUNCIONARIO', 'MINISTRO_DE_FE', 'SUPERVISOR', 'ADMIN'],
-    },
-    {
-      id: 'FE_PUBLICA',
-      tag: '03',
-      label: 'Decretos y Fe Pública',
-      description: 'Visación y atestación de fe pública ministerial',
-      exclusivoRol: 'MINISTRO_FE',
-      rolesPermitidos: ['MINISTRO_DE_FE', 'ADMIN'],
-    },
-    {
-      id: 'ALERTAS',
-      tag: '04',
-      label: 'Mi Certificado Digital',
-      description: 'Vigencia de firma personal',
-      exclusivoRol: 'MINISTRO_FE',
-      rolesPermitidos: ['MINISTRO_DE_FE'],
+      description: 'Validar autenticidad de un documento',
     },
   ];
 
-  const currentNavItems = vistaGeneralActiva === 'ADMIN' ? navItemsAdmin : navItemsFuncionario;
-  const filteredItems = currentNavItems.filter((item) =>
-    item.rolesPermitidos.includes(usuario.rol)
-  );
-
-  const handleNavClick = (tab: NavTab) => {
-    onSelectTab(tab);
+  const handleNavClick = (id: NavTab) => {
+    onSelectTab(id);
     if (onCloseMobile) onCloseMobile();
-  };
-
-  const handleToggleVista = (nuevaVista: VistaGeneral) => {
-    setVistaGeneralActiva(nuevaVista);
-    if (nuevaVista === 'ADMIN') {
-      onSelectTab('DASHBOARD');
-    } else {
-      onSelectTab('MIS_DOCUMENTOS');
-    }
   };
 
   return (
     <>
-      {/* Overlay para móviles */}
+      {/* Fondo semitransparente para móvil */}
       {isOpenMobile && (
         <div
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs lg:hidden"
           onClick={onCloseMobile}
         />
       )}
 
+      {/* Barra Lateral Principal */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 flex w-72 flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border transition-transform duration-300 ease-in-out lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r bg-sidebar text-sidebar-foreground transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 ${
           isOpenMobile ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        {/* Identidad Institucional Municipal */}
-        <div className="flex h-16 items-center px-4 border-b border-sidebar-border bg-sidebar gap-3">
-          <LogoMunicipalidad variant="sidebar" />
-          <div className="flex flex-col min-w-0">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 truncate">
-              Muni Coquimbo
-            </span>
-            <span className="text-xs font-semibold text-sidebar-foreground truncate">
-              Gestión de Firmas Electrónicas
-            </span>
+        {/* Encabezado del Menú */}
+        <div className="flex h-16 items-center px-4 border-b border-sidebar-border bg-sidebar-accent/20">
+          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => handleNavClick('LANDING')}>
+            <LogoMunicipalidad variant="sidebar" className="h-9 w-9 shrink-0" />
+            <div className="flex flex-col text-left">
+              <span className="font-bold text-xs tracking-tight text-sidebar-foreground truncate max-w-[170px]">
+                Muni Coquimbo
+              </span>
+              <span className="text-[10px] text-muted-foreground font-mono">
+                Gestión de Firmas FEA
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Selector de las 2 Vistas Generales */}
-        <div className="p-3 mx-3 mt-3 rounded-lg bg-sidebar-accent/50 border border-sidebar-border/80 space-y-2">
+        {/* Información del Rol del Usuario */}
+        <div className="p-3 mx-3 mt-3 rounded-lg bg-sidebar-accent/50 border border-sidebar-border/80 space-y-1">
           <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground">
-            <span>VISTA GENERAL:</span>
-            <Badge variant="outline" className="text-[8px] font-mono border-amber-400/40 text-amber-300">
-              ROL: {usuario.rol}
+            <span>PERFIL INSTITUCIONAL:</span>
+            <Badge
+              variant="outline"
+              className={`text-[9px] font-mono font-bold ${
+                esAdmin
+                  ? 'border-amber-400 text-amber-400 bg-amber-400/10'
+                  : esSupervisor
+                  ? 'border-blue-400 text-blue-400 bg-blue-400/10'
+                  : 'border-emerald-400 text-emerald-400 bg-emerald-400/10'
+              }`}
+            >
+              {rol}
             </Badge>
           </div>
-
-          {puedeAlternarVistas ? (
-            <div className="grid grid-cols-2 gap-1 p-0.5 bg-sidebar-background rounded-md border border-sidebar-border text-[11px]">
-              <button
-                type="button"
-                onClick={() => handleToggleVista('ADMIN')}
-                className={`py-1.5 px-2 rounded font-semibold transition-all text-center truncate ${
-                  vistaGeneralActiva === 'ADMIN'
-                    ? 'bg-amber-500/20 text-amber-300 font-bold shadow-xs'
-                    : 'text-muted-foreground hover:text-sidebar-foreground'
-                }`}
-              >
-                Admin
-              </button>
-              <button
-                type="button"
-                onClick={() => handleToggleVista('FUNCIONARIO')}
-                className={`py-1.5 px-2 rounded font-semibold transition-all text-center truncate ${
-                  vistaGeneralActiva === 'FUNCIONARIO'
-                    ? 'bg-amber-500/20 text-amber-300 font-bold shadow-xs'
-                    : 'text-muted-foreground hover:text-sidebar-foreground'
-                }`}
-              >
-                Funcionario
-              </button>
-            </div>
-          ) : (
-            <div className="py-1 px-2 rounded bg-sidebar-background text-xs font-semibold text-sidebar-foreground border border-sidebar-border flex items-center justify-between">
-              <span>{vistaGeneralActiva === 'ADMIN' ? 'Vista Administrador' : 'Vista Funcionario'}</span>
-              <span className="text-[9px] font-mono text-muted-foreground">ASIGNADA</span>
-            </div>
-          )}
+          <div className="text-xs font-semibold text-sidebar-foreground truncate">
+            {usuario?.nombre || 'Usuario Municipal'}
+          </div>
+          <div className="text-[10px] font-mono text-muted-foreground">
+            RUT: {usuario?.rut || 'Sin RUT'}
+          </div>
         </div>
 
-        {/* Semáforo de hardware USB en Vista Administrador */}
-        {vistaGeneralActiva === 'ADMIN' && (
+        {/* Semáforo de hardware USB para Administradores y Supervisores */}
+        {tieneAccesoGestion && (
           <div className="px-3 py-2 mx-3 mt-2 rounded-lg bg-sidebar-accent/30 border border-sidebar-border/60">
             <div className="flex items-center justify-between text-xs mb-1.5">
               <span className="font-semibold text-sidebar-foreground/90 flex items-center gap-1.5 text-[11px]">
@@ -244,9 +204,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     wsConectado ? 'bg-emerald-400 live-indicator' : 'bg-rose-400'
                   }`}
                 />
-                {wsConectado ? 'Telemetría Tokens' : 'Offline'}
+                {wsConectado ? 'Dispositivos' : 'Sin conexión'}
               </span>
-              <span className="text-[9px] font-mono text-muted-foreground">{total} Estaciones</span>
+              <span className="text-[9px] text-muted-foreground">{total} Equipos</span>
             </div>
 
             <div className="grid grid-cols-3 gap-1 text-center text-[10px]">
@@ -256,87 +216,106 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
               <div className="p-1 rounded bg-sidebar-background/60 border border-sidebar-border">
                 <div className="font-bold text-amber-400">{conectados}</div>
-                <div className="text-muted-foreground text-[8px] uppercase">Online</div>
+                <div className="text-muted-foreground text-[8px] uppercase">Conectados</div>
               </div>
               <div className="p-1 rounded bg-sidebar-background/60 border border-sidebar-border">
                 <div className="font-bold text-rose-400">{desconectados}</div>
-                <div className="text-muted-foreground text-[8px] uppercase">Offline</div>
+                <div className="text-muted-foreground text-[8px] uppercase">Desconectados</div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Menú de Navegación según Vista General y Secciones Exclusivas de Rol */}
-        <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1 mt-1">
-          <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex justify-between items-center">
-            <span>
-              {vistaGeneralActiva === 'ADMIN' ? 'Módulos de Gestión' : 'Módulos de Trabajo'}
-            </span>
-            <span className="text-[9px] font-mono text-amber-400/80">
-              {filteredItems.length} Secciones
-            </span>
-          </div>
-
-          {filteredItems.map((item) => {
-            const isSelected = tabActiva === item.id;
-
-            return (
-              <button
-                key={item.id}
-                onClick={() => handleNavClick(item.id)}
-                className={`group flex w-full items-center justify-between rounded-md px-3 py-2 text-xs font-medium transition-all ${
-                  isSelected
-                    ? 'bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-xs'
-                    : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'
-                }`}
-              >
-                <div className="flex items-center space-x-2.5 truncate">
-                  <span
-                    className={`font-mono text-[10px] px-1 py-0.5 rounded border ${
+        {/* Menú de Navegación */}
+        <div className="flex-1 overflow-y-auto px-3 py-2 space-y-3 mt-1">
+          {/* Sección de Gestión para Administradores */}
+          {tieneAccesoGestion && (
+            <div className="space-y-1">
+              <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex justify-between items-center">
+                <span>Módulos de Administración</span>
+                <span className="text-[9px] font-mono text-amber-400/80">{itemsGestion.length}</span>
+              </div>
+              {itemsGestion.map((item) => {
+                const isSelected = tabActiva === item.id;
+                const IconComponent = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleNavClick(item.id)}
+                    className={`group flex w-full items-center justify-between rounded-md px-3 py-2 text-xs font-medium transition-all ${
                       isSelected
-                        ? 'border-amber-400/40 text-amber-400 bg-amber-400/10'
-                        : 'border-sidebar-border text-muted-foreground'
+                        ? 'bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-xs'
+                        : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'
                     }`}
                   >
-                    {item.tag}
-                  </span>
-                  <div className="flex flex-col text-left truncate">
-                    <span className="truncate">{item.label}</span>
-                    {item.exclusivoRol && (
-                      <span className="text-[8px] font-mono text-amber-400/80 uppercase">
-                        ★ Exclusivo {item.exclusivoRol}
+                    <div className="flex items-center space-x-2.5 truncate">
+                      <span
+                        className={`flex items-center justify-center w-6 h-6 rounded border shrink-0 ${
+                          isSelected
+                            ? 'border-amber-400/40 text-amber-400 bg-amber-400/10'
+                            : 'border-sidebar-border text-muted-foreground group-hover:text-sidebar-foreground'
+                        }`}
+                      >
+                        <IconComponent className="h-3.5 w-3.5" />
                       </span>
+                      <span className="truncate">{item.label}</span>
+                    </div>
+                    {item.badge && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-mono">
+                        {item.badge}
+                      </Badge>
                     )}
-                  </div>
-                </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
-                <div className="flex items-center space-x-1.5 shrink-0">
-                  {item.badge && (
-                    <Badge
-                      variant={item.badgeVariant || (isSelected ? 'default' : 'secondary')}
-                      className="text-[10px] px-1.5 py-0 h-4 font-mono"
+          {/* Sección Personal y Documental */}
+          <div className="space-y-1">
+            <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <span>{tieneAccesoGestion ? 'Bandeja Personal' : 'Módulos del Funcionario'}</span>
+            </div>
+            {itemsPersonales.map((item) => {
+              const isSelected = tabActiva === item.id;
+              const IconComponent = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleNavClick(item.id)}
+                  className={`group flex w-full items-center justify-between rounded-md px-3 py-2 text-xs font-medium transition-all ${
+                    isSelected
+                      ? 'bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-xs'
+                      : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2.5 truncate">
+                    <span
+                      className={`flex items-center justify-center w-6 h-6 rounded border shrink-0 ${
+                        isSelected
+                          ? 'border-amber-400/40 text-amber-400 bg-amber-400/10'
+                          : 'border-sidebar-border text-muted-foreground group-hover:text-sidebar-foreground'
+                      }`}
                     >
-                      {item.badge}
-                    </Badge>
-                  )}
-                  {isSelected && (
-                    <span className="text-amber-400 font-bold text-xs">●</span>
-                  )}
-                </div>
-              </button>
-            );
-          })}
+                      <IconComponent className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="truncate">{item.label}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
 
           {/* Enlace a Portada de Bienvenida */}
-          <div className="pt-2 border-t border-sidebar-border/40 mt-2">
+          <div className="pt-2 border-t border-sidebar-border/40">
             <button
               onClick={() => handleNavClick('LANDING')}
               className={`flex w-full items-center space-x-2.5 rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent/40 hover:text-sidebar-foreground transition-all ${
                 tabActiva === 'LANDING' ? 'bg-sidebar-accent/50 text-sidebar-foreground' : ''
               }`}
             >
-              <span className="font-mono text-[10px] px-1 py-0.5 rounded border border-sidebar-border">
-                00
+              <span className="flex items-center justify-center w-6 h-6 rounded border border-sidebar-border shrink-0">
+                <Home className="h-3.5 w-3.5" />
               </span>
               <span>Portada de Bienvenida</span>
             </button>
@@ -345,58 +324,38 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         <Separator className="bg-sidebar-border" />
 
-        {/* Perfil del Funcionario Municipal Autenticado */}
+        {/* Perfil del Operador y Botón de Cerrar Sesión */}
         <div className="p-3 bg-sidebar-accent/30 m-3 rounded-lg border border-sidebar-border space-y-2">
-          <div className="text-left">
-            <div className="flex items-center justify-between mb-0.5">
-              <span className="text-xs font-semibold text-sidebar-foreground truncate" title={usuario.nombre}>
-                {usuario.nombre}
+          <div className="text-left space-y-0.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-sidebar-foreground truncate" title={usuario?.nombre}>
+                {usuario?.nombre || 'Usuario Municipal'}
               </span>
-              <Badge variant="outline" className="text-[9px] font-mono px-1 py-0 border-amber-400/30 text-amber-300">
-                {usuario.rol}
-              </Badge>
             </div>
-            <p className="text-[10px] text-muted-foreground font-mono">
-              RUT: {usuario.rut}
+            <p className="text-[10px] text-muted-foreground truncate" title={usuario?.cargo}>
+              {usuario?.cargo || 'Funcionario'}
             </p>
-            <p className="text-[10px] text-muted-foreground truncate" title={usuario.cargo}>
-              {usuario.cargo}
-            </p>
-            <p className="text-[9px] text-muted-foreground/80 truncate font-mono" title={usuario.unidad}>
-              {usuario.unidad}
+            <p className="text-[9px] text-muted-foreground/80 truncate font-mono" title={usuario?.unidad}>
+              {usuario?.unidad || 'Municipalidad de Coquimbo'}
             </p>
           </div>
 
-          <div className="flex items-center justify-between pt-1 border-t border-sidebar-border/60">
-            {onOpenLogin && (
-              <button
-                type="button"
-                onClick={onOpenLogin}
-                className="text-[10px] text-amber-400 hover:underline font-mono"
-              >
-                Cambiar Rol / Cuenta
-              </button>
-            )}
-            {isAutenticado && (
-              <button
-                type="button"
-                onClick={() => {
-                  logout();
-                  onSelectTab('LANDING');
-                }}
-                className="text-[10px] text-rose-400 hover:underline font-mono"
-              >
-                Cerrar Sesión
-              </button>
-            )}
-          </div>
+          <Button
+            onClick={logout}
+            variant="outline"
+            size="sm"
+            className="w-full text-xs h-7 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 border-rose-500/30 font-semibold"
+          >
+            Cerrar Sesión
+          </Button>
         </div>
 
         <div className="p-2 pt-0 text-[9px] text-muted-foreground text-center font-mono">
-          Ley N° 21.663 (ANCI / CSIRT)
+          Municipalidad de Coquimbo • 2026
         </div>
       </aside>
     </>
   );
 };
+
 export default Sidebar;

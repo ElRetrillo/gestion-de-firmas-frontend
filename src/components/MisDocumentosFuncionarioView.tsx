@@ -36,9 +36,16 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
   const [filtroEstado, setFiltroEstado] = useState<string>('TODOS');
   const [documentoEnFirma, setDocumentoEnFirma] = useState<DocumentoFuncionario | null>(null);
   const [firmando, setFirmando] = useState(false);
-  const [pinToken, setPinToken] = useState(usuario.pinToken || '1234');
+  const [pinToken, setPinToken] = useState(usuario.pinToken || '');
   const [errorPin, setErrorPin] = useState<string | null>(null);
   const [firmaExitosaModal, setFirmaExitosaModal] = useState<DocumentoFuncionario | null>(null);
+  const [mostrarAsistenteAgente, setMostrarAsistenteAgente] = useState(false);
+
+  const handleDescargarInstaladorAgente = () => {
+    const unidadParam = encodeURIComponent(usuario?.unidad || 'Red Interna Municipal - Coquimbo');
+    window.location.href = `/api/v1/telemetria/descargar-agente?unidad=${unidadParam}`;
+    setMostrarAsistenteAgente(true);
+  };
 
   const cargarBandeja = async () => {
     try {
@@ -60,14 +67,14 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
                   ? 'EN_REVISION'
                   : 'PENDIENTE',
             prioridad: (s.prioridad as any) || 'NORMAL',
-            hashSha256: s.hashSha256 || 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+            hashSha256: s.hashSha256 || '-',
             firmaInfo:
               s.estadoAprobacion === 'FIRMADA'
                 ? {
-                    firmadoPor: s.usuarioSolicitante?.nombre || usuario.nombre,
-                    fechaFirma: new Date(s.tsaTimestamp || s.updatedAt).toLocaleString('es-CL'),
-                    codigoVerificacion: s.codigoVerificacion || `VERIF-${s.codigoDocumento}`,
-                  }
+                  firmadoPor: s.usuarioSolicitante?.nombre || usuario.nombre,
+                  fechaFirma: new Date(s.tsaTimestamp || s.updatedAt).toLocaleString('es-CL'),
+                  codigoVerificacion: s.codigoVerificacion || `VERIF-${s.codigoDocumento}`,
+                }
                 : undefined,
           }));
           setDocumentos(mapeados);
@@ -80,7 +87,7 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
   };
 
   useEffect(() => {
-    setPinToken(usuario.pinToken || '1234');
+    setPinToken(usuario.pinToken || '');
     cargarBandeja();
   }, [usuario.rut, usuario.pinToken]);
 
@@ -184,11 +191,19 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
             Bandeja de Documentos Asignados
           </h2>
           <p className="text-xs text-muted-foreground">
-            Gestión y firma electrónica avanzada con validación de PIN eHSM ({usuario.nombre} • {usuario.cargo})
+            Gestión y firma electrónica avanzada con validación de PIN ({usuario.nombre} • {usuario.cargo})
           </p>
         </div>
 
         <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleDescargarInstaladorAgente}
+            className="text-xs font-bold h-9 shadow-xs"
+          >
+            Descargar Agente USB (1 Clic)
+          </Button>
           {seleccionados.length > 0 && (
             <Button
               onClick={handleFirmarLoteSeleccionado}
@@ -200,6 +215,41 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Banner de Detección e Instalación Asistida en 1 Clic (Estilo Zoom / FirmaGob - Sin AD) */}
+      {!estacionConectada && (
+        <Card className="border-amber-500/40 bg-amber-500/5 shadow-xs">
+          <CardContent className="p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-foreground">
+                  No se detecta un Token Criptográfico USB activo en su estación
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Si es la primera vez que ingresa desde este computador, descargue y ejecute por única vez el{' '}
+                <strong className="text-foreground">Instalador Automático en 1 Clic</strong>. No requiere permisos de Administrador y se iniciará solo con Windows.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleDescargarInstaladorAgente}
+                className="text-xs font-bold h-9 px-4"
+              >
+                Instalar Agente USB
+              </Button>
+              <a
+                href="coquimbo-agent://ping"
+                className="inline-flex items-center justify-center rounded-md border border-border bg-background hover:bg-muted px-3 h-9 text-xs font-semibold text-foreground"
+              >
+                Ya lo instalé (Activar Agente)
+              </a>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="border-border/80 bg-card p-4">
@@ -235,9 +285,6 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
           <div className="text-xs font-bold text-foreground mt-1 font-mono truncate">
             {tokenActivo ? `FEA ACTIVA • ${tokenActivo.marca || 'Token USB'}` : 'FEA DISPONIBLE'}
           </div>
-          <p className="text-[10px] text-muted-foreground mt-0.5 truncate font-mono">
-            PIN Prueba: {usuario.pinToken || '1234'} (3 intentos máx)
-          </p>
         </Card>
       </div>
 
@@ -280,7 +327,7 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
           <div>
             <CardTitle className="text-sm font-bold">Listado de Documentos Oficiales</CardTitle>
             <CardDescription className="text-xs">
-              {documentosFiltrados.length} documento(s) encontrado(s) en PostgreSQL
+              {documentosFiltrados.length} documento(s) encontrado(s) para ti
             </CardDescription>
           </div>
           {pendientes > 0 && (
@@ -309,95 +356,102 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody className="text-xs">
-              {documentosFiltrados.map((doc) => {
-                const isChecked = seleccionados.includes(doc.id);
-                const isFirmado = doc.estado === 'FIRMADO';
+              {documentosFiltrados.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-28 text-center font-mono text-xs text-muted-foreground">
+                    No hay documentos registrados en la bandeja
+                  </TableCell>
+                </TableRow>
+              ) : (
+                documentosFiltrados.map((doc) => {
+                  const isChecked = seleccionados.includes(doc.id);
+                  const isFirmado = doc.estado === 'FIRMADO';
 
-                return (
-                  <TableRow key={doc.id} className="hover:bg-muted/30">
-                    <TableCell className="text-center">
-                      <input
-                        type="checkbox"
-                        disabled={isFirmado}
-                        checked={isChecked}
-                        onChange={() => toggleSeleccion(doc.id)}
-                        className="rounded border-input text-primary cursor-pointer disabled:opacity-30"
-                      />
-                    </TableCell>
-                    <TableCell className="font-mono text-[11px] font-semibold text-foreground">
-                      {doc.codigo}
-                      <div className="text-[10px] text-muted-foreground font-normal">
-                        {doc.fechaAsignacion}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-medium text-foreground">{doc.titulo}</div>
-                      <div className="text-[10px] text-muted-foreground font-mono truncate max-w-md">
-                        SHA: {doc.hashSha256.substring(0, 24)}...
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-[11px]">
-                      {doc.unidadOrigen}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          doc.prioridad === 'URGENTE'
-                            ? 'destructive'
-                            : doc.prioridad === 'ALTA'
-                              ? 'warning'
-                              : 'outline'
-                        }
-                        className="text-[9px] font-mono"
-                      >
-                        {doc.prioridad}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge
-                        variant={
-                          doc.estado === 'FIRMADO'
-                            ? 'success'
-                            : doc.estado === 'EN_REVISION'
-                              ? 'secondary'
-                              : 'outline'
-                        }
-                        className="text-[10px] font-mono"
-                      >
-                        {doc.estado}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {isFirmado ? (
-                        <div className="flex flex-col items-end gap-1">
-                          <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
-                            {doc.firmaInfo?.codigoVerificacion}
-                          </span>
-                          <a
-                            href={`/api/v1/firmas/solicitudes/${doc.id}/pdf`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-[10px] font-mono text-primary hover:underline font-bold"
-                          >
-                            Descargar PDF
-                          </a>
+                  return (
+                    <TableRow key={doc.id} className="hover:bg-muted/30">
+                      <TableCell className="text-center">
+                        <input
+                          type="checkbox"
+                          disabled={isFirmado}
+                          checked={isChecked}
+                          onChange={() => toggleSeleccion(doc.id)}
+                          className="rounded border-input text-primary cursor-pointer disabled:opacity-30"
+                        />
+                      </TableCell>
+                      <TableCell className="font-mono text-[11px] font-semibold text-foreground">
+                        {doc.codigo}
+                        <div className="text-[10px] text-muted-foreground font-normal">
+                          {doc.fechaAsignacion}
                         </div>
-                      ) : (
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            setErrorPin(null);
-                            setDocumentoEnFirma(doc);
-                          }}
-                          className="text-xs h-8 px-3 font-semibold"
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium text-foreground">{doc.titulo}</div>
+                        <div className="text-[10px] text-muted-foreground font-mono truncate max-w-md">
+                          SHA: {doc.hashSha256.substring(0, 24)}...
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-[11px]">
+                        {doc.unidadOrigen}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            doc.prioridad === 'URGENTE'
+                              ? 'destructive'
+                              : doc.prioridad === 'ALTA'
+                                ? 'warning'
+                                : 'outline'
+                          }
+                          className="text-[9px] font-mono"
                         >
-                          Firmar con Token
-                        </Button>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+                          {doc.prioridad}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Badge
+                          variant={
+                            doc.estado === 'FIRMADO'
+                              ? 'success'
+                              : doc.estado === 'EN_REVISION'
+                                ? 'secondary'
+                                : 'outline'
+                          }
+                          className="text-[10px] font-mono"
+                        >
+                          {doc.estado}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {isFirmado ? (
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
+                              {doc.firmaInfo?.codigoVerificacion}
+                            </span>
+                            <a
+                              href={`/api/v1/firmas/solicitudes/${doc.id}/pdf`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[10px] font-mono text-primary hover:underline font-bold"
+                            >
+                              Descargar PDF
+                            </a>
+                          </div>
+                        ) : (
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              setErrorPin(null);
+                              setDocumentoEnFirma(doc);
+                            }}
+                            className="text-xs h-8 px-3 font-semibold"
+                          >
+                            Firmar con Token
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                }))}
             </TableBody>
           </Table>
         </div>
@@ -410,7 +464,7 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
             <CardHeader className="p-5 pb-3 border-b">
               <div className="flex items-center justify-between">
                 <Badge variant="outline" className="font-mono text-[9px]">
-                  FIRMA ELECTRÓNICA AVANZADA (PKCS#11)
+                  FIRMA ELECTRÓNICA AVANZADA
                 </Badge>
                 <button
                   onClick={() => setDocumentoEnFirma(null)}
@@ -459,7 +513,7 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
                     PIN de Acceso Token Criptográfico:
                   </label>
                   <span className="text-[10px] font-mono text-muted-foreground">
-                    PIN de prueba: {usuario.pinToken || '1234'}
+                    3 intentos máx
                   </span>
                 </div>
                 <Input
@@ -502,7 +556,7 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
           <Card className="w-full max-w-md border-emerald-500/40 shadow-2xl bg-card">
             <CardHeader className="p-5 pb-3 border-b bg-emerald-500/10">
               <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 font-bold text-xs">
-                <span>✓ DOCUMENTO FIRMADO EXITOSAMENTE</span>
+                <span>DOCUMENTO FIRMADO EXITOSAMENTE</span>
                 <span className="font-mono">{firmaExitosaModal.firmaInfo?.fechaFirma}</span>
               </div>
               <CardTitle className="text-base font-bold text-foreground mt-1">
@@ -511,7 +565,7 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
             </CardHeader>
             <CardContent className="p-5 space-y-3 text-xs">
               <p className="text-muted-foreground">
-                El documento ha sido firmado con Firma Electrónica Avanzada (FEA) y sellado de tiempo RFC 3161.
+                El documento ha sido firmado con Firma Electrónica Avanzada (FEA).
               </p>
               <div className="p-3 bg-muted/30 rounded border font-mono text-[11px] space-y-1">
                 <div>
@@ -539,6 +593,86 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
                   className="flex-1 text-xs font-bold h-9"
                 >
                   Continuar
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Modal Asistente de Instalación en 1 Clic (Estilo Zoom / Webex / FirmaGob) */}
+      {mostrarAsistenteAgente && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <Card className="w-full max-w-lg border-border bg-card shadow-2xl">
+            <CardContent className="p-6 space-y-4">
+              <div className="flex items-center justify-between border-b pb-3">
+                <div>
+                  <Badge variant="outline" className="text-[10px]">
+                    INSTALACIÓN ASISTIDA EN 1 CLIC (SIN ACTIVE DIRECTORY)
+                  </Badge>
+                  <h3 className="text-base font-bold text-foreground mt-1">
+                    Configurando Agente Silencioso USB en su PC
+                  </h3>
+                </div>
+                <button
+                  onClick={() => setMostrarAsistenteAgente(false)}
+                  className="text-xs font-bold text-muted-foreground hover:text-foreground px-2 py-1"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-3 text-xs text-muted-foreground">
+                <div className="p-3 rounded-md bg-muted/40 border space-y-2">
+                  <div className="font-bold text-foreground">
+                    Paso 1: Abra el archivo recién descargado en su navegador
+                  </div>
+                  <p>
+                    Haga clic en <code className="font-mono font-bold text-foreground">Instalar-Agente-USB-Coquimbo.bat</code> (o el ejecutable <code className="font-mono">.exe</code>) en la barra de descargas de su navegador.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-md bg-muted/40 border space-y-2">
+                  <div className="font-bold text-foreground">
+                    Paso 2: Instalación silenciosa y arranque automático
+                  </div>
+                  <p>
+                    El instalador copiará el agente en su perfil local (<code className="font-mono">%LOCALAPPDATA%\CoquimboGhostApp</code>), lo registrará en el inicio de Windows (<code className="font-mono">openAtLogin</code>) sin pedir permisos de Administrador y lo iniciará en segundo plano.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-md border flex items-center justify-between bg-background">
+                  <div>
+                    <div className="font-bold text-foreground">Estado de detección en vivo:</div>
+                    <div className="text-[11px]">
+                      {estacionConectada
+                        ? `¡Agente y Token detectados en estación ${estacionConectada.codigoPc}!`
+                        : 'Esperando primer reporte del agente o inserción del Token USB...'}
+                    </div>
+                  </div>
+                  <Badge variant={estacionConectada ? 'success' : 'warning'} className="text-[10px]">
+                    {estacionConectada ? 'CONECTADO' : 'ESPERANDO...'}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDescargarInstaladorAgente}
+                  className="text-xs h-9"
+                >
+                  Volver a Descargar
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setMostrarAsistenteAgente(false)}
+                  className="text-xs font-bold h-9 px-4"
+                >
+                  Entendido
                 </Button>
               </div>
             </CardContent>

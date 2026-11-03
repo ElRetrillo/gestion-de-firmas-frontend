@@ -54,16 +54,15 @@ export const ChecksignView: React.FC = () => {
             tituloDocumento: data.tituloDocumento,
             hashSha256Calculado:
               data.hashSha256Calculado || valorConsulta,
-            algoritmo: data.algoritmo || 'SHA-256 con RSA-4096 (FEA Avanzada)',
+            algoritmo: data.algoritmo || 'SHA-256 (FEA)',
             tsaTimestamp: data.tsaTimestamp || new Date().toISOString(),
-            emisorCertificado:
-              data.emisorCertificado || 'ESIGN Chile S.A. - Entidad Acreditada',
-            firmante: data.firmanteTitular?.nombre || data.firmante || 'Ministro de Fe',
-            cargo: data.firmanteTitular?.cargo || data.cargo || 'Funcionario Autorizado',
-            rutFirmante: data.firmanteTitular?.rut || data.rutFirmante || 'Sin RUT',
-            normativa: data.normativa || 'Conforme a Ley N° 19.799, Ley N° 21.180 y Ley N° 21.663',
-            ocspEstado: 'VÁLIDO (Sin revocación OCSP)',
-            numeroSerie: data.serialCertificado || '0x4F9B882103AC55E1',
+            emisorCertificado: data.emisorCertificado || '-',
+            firmante: data.firmanteTitular?.nombre || data.firmante || '-',
+            cargo: data.firmanteTitular?.cargo || data.cargo || '-',
+            rutFirmante: data.firmanteTitular?.rut || data.rutFirmante || '-',
+            normativa: data.normativa || 'Firma Electrónica Avanzada',
+            ocspEstado: data.ocspEstado || 'VÁLIDO',
+            numeroSerie: data.serialCertificado || '-',
             urlDescargaDocumento: data.urlDescargaDocumento,
             urlCertificadoVerificacion:
               data.urlCertificadoVerificacion ||
@@ -110,15 +109,15 @@ export const ChecksignView: React.FC = () => {
         <Card className="lg:col-span-7 border-border/80 bg-card">
           <CardHeader className="p-5 pb-3 border-b">
             <div className="flex items-center gap-2 mb-1">
-              <Badge variant="outline" className="font-mono text-[9px]">
-                [ Checkeo de Firmas // Web Crypto API ]
+              <Badge variant="outline" className="text-[10px]">
+                Verificación de Documento
               </Badge>
             </div>
             <CardTitle className="text-base font-bold text-foreground">
-              Portal de Verificación Criptográfica Checksign
+              Portal de Verificación de Documentos
             </CardTitle>
             <CardDescription className="text-xs text-muted-foreground mt-0.5">
-              Validador oficial de firma electrónica avanzada, código de verificación y huella SHA-256 para documentos municipales.
+              Comprueba la autenticidad, validez de las firmas y fecha de emisión de documentos municipales.
             </CardDescription>
           </CardHeader>
 
@@ -126,14 +125,14 @@ export const ChecksignView: React.FC = () => {
             <form onSubmit={verificarDocumento} className="space-y-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-foreground">
-                  Código de Documento, Código Checksign o Hash SHA-256:
+                  Código del documento o identificador de verificación:
                 </label>
                 <div className="flex gap-2">
                   <Input
                     type="text"
                     value={codigoHash}
                     onChange={(e) => setCodigoHash(e.target.value)}
-                    placeholder="Ej: DEC-ALC-2026-0904 o VERIF-CQBO-904-2026"
+                    placeholder="Ej: DEC-ALC-2026-0904"
                     className="text-xs font-mono"
                   />
                   <Button
@@ -145,32 +144,9 @@ export const ChecksignView: React.FC = () => {
                   </Button>
                 </div>
               </div>
-
-              <div className="flex items-center gap-2 pt-1">
-                <span className="text-[10px] font-mono text-muted-foreground uppercase">
-                  Ejemplos en BD:
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {['DEC-ALC-2026-0904', 'VERIF-CQBO-904-2026', 'CON-HON-2026-0412', 'PERM-DOM-2026-0088'].map(
-                    (ej) => (
-                      <button
-                        key={ej}
-                        type="button"
-                        onClick={() => {
-                          setCodigoHash(ej);
-                          ejecutarConsultaChecksign(ej);
-                        }}
-                        className="text-[10px] font-mono px-2 py-0.5 rounded border border-border/80 bg-muted/40 hover:bg-muted text-foreground transition-colors"
-                      >
-                        {ej}
-                      </button>
-                    ),
-                  )}
-                </div>
-              </div>
             </form>
 
-            {/* Zona Interactiva de Arrastre de Archivos con Web Crypto API */}
+            {/* Zona Interactiva de Arrastre de Archivos */}
             <input
               type="file"
               ref={fileInputRef}
@@ -187,13 +163,13 @@ export const ChecksignView: React.FC = () => {
               onClick={() => fileInputRef.current?.click()}
               className="p-5 border-2 border-dashed border-border/70 rounded-lg text-center space-y-2 bg-muted/10 hover:bg-muted/20 transition-colors cursor-pointer"
             >
-              <span className="font-mono text-xs font-semibold text-foreground block">
+              <span className="text-xs font-semibold text-foreground block">
                 {nombreArchivoLocal
-                  ? `✓ Archivo procesado localmente: ${nombreArchivoLocal}`
-                  : 'Arrastre un archivo PDF aquí (o haga clic) para calcular su digest SHA-256'}
+                  ? `✓ Archivo cargado: ${nombreArchivoLocal}`
+                  : 'Arrastra tu archivo PDF aquí o haz clic para seleccionarlo'}
               </span>
               <p className="text-[11px] text-muted-foreground max-w-sm mx-auto">
-                El hash criptográfico se calcula en su navegador mediante Web Crypto API (`crypto.subtle.digest`). El documento no abandona su estación.
+                La verificación se realiza de manera segura y confidencial desde tu navegador.
               </p>
             </div>
           </CardContent>
@@ -201,11 +177,11 @@ export const ChecksignView: React.FC = () => {
 
         <Card className="lg:col-span-5 border-border/80 bg-card flex flex-col justify-between">
           <CardHeader className="p-5 pb-3 border-b">
-            <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-              CADENA DE CONFIANZA
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+              VALIDACIONES DE SEGURIDAD
             </span>
             <CardTitle className="text-sm font-bold text-foreground">
-              Inspección de Validez Jurídica
+              Criterios de Verificación
             </CardTitle>
           </CardHeader>
 
@@ -213,49 +189,49 @@ export const ChecksignView: React.FC = () => {
             <div className="space-y-2.5">
               <div className="flex items-center justify-between p-2.5 rounded bg-muted/30 border">
                 <div>
-                  <div className="font-semibold text-foreground text-[11px]">Integridad del Archivo</div>
-                  <div className="text-[10px] text-muted-foreground font-mono">Hash SHA-256 inalterado</div>
+                  <div className="font-semibold text-foreground text-[11px]">Integridad del Documento</div>
+                  <div className="text-[10px] text-muted-foreground">El archivo no ha sido modificado</div>
                 </div>
-                <Badge variant="success" className="font-mono text-[9px]">
+                <Badge variant="success" className="text-[10px]">
                   CORRECTO
                 </Badge>
               </div>
 
               <div className="flex items-center justify-between p-2.5 rounded bg-muted/30 border">
                 <div>
-                  <div className="font-semibold text-foreground text-[11px]">Certificado de Firmante</div>
-                  <div className="text-[10px] text-muted-foreground font-mono">X.509 Acreditado Min. Economía</div>
+                  <div className="font-semibold text-foreground text-[11px]">Firma del Funcionario</div>
+                  <div className="text-[10px] text-muted-foreground">Certificado oficial vigente</div>
                 </div>
-                <Badge variant="success" className="font-mono text-[9px]">
+                <Badge variant="success" className="text-[10px]">
                   VÁLIDO
                 </Badge>
               </div>
 
               <div className="flex items-center justify-between p-2.5 rounded bg-muted/30 border">
                 <div>
-                  <div className="font-semibold text-foreground text-[11px]">Sellado de Tiempo (TSA)</div>
-                  <div className="text-[10px] text-muted-foreground font-mono">RFC 3161 Timestamp Token</div>
+                  <div className="font-semibold text-foreground text-[11px]">Fecha y Hora Oficial</div>
+                  <div className="text-[10px] text-muted-foreground">Estampado de tiempo registrado</div>
                 </div>
-                <Badge variant="success" className="font-mono text-[9px]">
-                  SELLADO
+                <Badge variant="success" className="text-[10px]">
+                  CERTIFICADO
                 </Badge>
               </div>
 
               <div className="flex items-center justify-between p-2.5 rounded bg-muted/30 border">
                 <div>
-                  <div className="font-semibold text-foreground text-[11px]">Estado OCSP / CRL</div>
-                  <div className="text-[10px] text-muted-foreground font-mono">Verificación en tiempo real</div>
+                  <div className="font-semibold text-foreground text-[11px]">Estado de la Firma</div>
+                  <div className="text-[10px] text-muted-foreground">Firma activa y autorizada</div>
                 </div>
-                <Badge variant="success" className="font-mono text-[9px]">
-                  ACTIVO
+                <Badge variant="success" className="text-[10px]">
+                  VIGENTE
                 </Badge>
               </div>
             </div>
           </CardContent>
 
-          <CardFooter className="p-4 border-t bg-muted/20 text-[10px] font-mono text-muted-foreground flex justify-between">
-            <span>REGISTRO: CGR-2026-CL</span>
-            <span>AUDITORÍA: ANCI LEY 21.663</span>
+          <CardFooter className="p-4 border-t bg-muted/20 text-[10px] text-muted-foreground flex justify-between">
+            <span>Registro Municipal de Coquimbo</span>
+            <span>Verificación Oficial</span>
           </CardFooter>
         </Card>
       </div>
@@ -338,15 +314,15 @@ export const ChecksignView: React.FC = () => {
               </div>
 
               <div className="p-3 rounded-lg border bg-muted/20 space-y-1">
-                <div className="text-[10px] font-mono uppercase text-muted-foreground">FECHA &amp; TSA</div>
+                <div className="text-[10px] font-semibold uppercase text-muted-foreground">FECHA Y HORA OFICIAL</div>
                 <div className="font-bold text-foreground text-xs font-mono truncate">{resultado.tsaTimestamp}</div>
-                <div className="text-[10px] text-muted-foreground">Estampado RFC 3161 Certificado</div>
+                <div className="text-[10px] text-muted-foreground">Fecha y hora certificada</div>
               </div>
             </div>
 
             <div className="p-3 rounded border bg-muted/40 font-mono text-[11px] space-y-1">
               <div className="text-[10px] text-muted-foreground uppercase">
-                DIGEST CRIPTOGRÁFICO SHA-256 DEL ARCHIVO:
+                HUELLA DIGITAL DE SEGURIDAD (HASH):
               </div>
               <div className="text-foreground break-all select-all font-semibold">
                 {resultado.hashSha256Calculado}
@@ -358,7 +334,7 @@ export const ChecksignView: React.FC = () => {
             <div className="flex flex-col sm:flex-row items-center justify-between text-[11px] font-mono text-muted-foreground gap-2">
               <span>{resultado.normativa}</span>
               <Badge variant="outline" className="text-[10px]">
-                ANCI-TOKEN: VALIDATED-2026
+                ESTADO: VÁLIDO
               </Badge>
             </div>
           </CardContent>

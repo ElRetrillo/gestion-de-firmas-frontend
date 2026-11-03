@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Sidebar, NavTab } from './components/Sidebar';
 import { TopHeader } from './components/TopHeader';
 import { LandingPage } from './components/LandingPage';
+import { LoginModal } from './components/LoginModal';
 import { MisDocumentosFuncionarioView } from './components/MisDocumentosFuncionarioView';
 import { FePublicaDecretosView } from './components/FePublicaDecretosView';
 import { DashboardSupervisores } from './components/DashboardSupervisores';
@@ -11,52 +12,8 @@ import { AlertasCertificadosView } from './components/AlertasCertificadosView';
 import { AuditoriaView } from './components/AuditoriaView';
 import { ConfiguracionSistemaView } from './components/ConfiguracionSistemaView';
 import { GestionUsuariosEquipamientoView } from './components/GestionUsuariosEquipamientoView';
-import { LoginModal } from './components/LoginModal';
 import { useTelemetriaStore } from './store/useTelemetriaStore';
-import { useAuthStore, UserRole } from './store/useAuthStore';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './components/ui/card';
-import { Button } from './components/ui/button';
-
-// Matriz de permisos por rol autenticado devuelto por el backend
-const ROLE_ALLOWED_TABS: Record<UserRole, NavTab[]> = {
-  ADMIN: [
-    'DASHBOARD',
-    'FIRMAS',
-    'USUARIOS_CUSTODIA',
-    'CHECKSIGN',
-    'ALERTAS',
-    'AUDITORIA',
-    'CONFIGURACION',
-    'MIS_DOCUMENTOS',
-    'FE_PUBLICA',
-    'LANDING',
-  ],
-  SUPERVISOR: [
-    'DASHBOARD',
-    'FIRMAS',
-    'USUARIOS_CUSTODIA',
-    'CHECKSIGN',
-    'ALERTAS',
-    'MIS_DOCUMENTOS',
-    'LANDING',
-  ],
-  MINISTRO_DE_FE: [
-    'MIS_DOCUMENTOS',
-    'FE_PUBLICA',
-    'CHECKSIGN',
-    'ALERTAS',
-    'LANDING',
-  ],
-  FUNCIONARIO: [
-    'MIS_DOCUMENTOS',
-    'CHECKSIGN',
-    'LANDING',
-  ],
-  CIUDADANO: [
-    'CHECKSIGN',
-    'LANDING',
-  ],
-};
+import { useAuthStore } from './store/useAuthStore';
 
 export const App: React.FC = () => {
   const [tabActiva, setTabActiva] = useState<NavTab>('LANDING');
@@ -64,131 +21,128 @@ export const App: React.FC = () => {
   const [loginModalOpen, setLoginModalOpen] = useState(false);
 
   const { inicializarSocket, cargarEstaciones } = useTelemetriaStore();
-  const { usuario, isAutenticado, vistaGeneralActiva } = useAuthStore();
+  const { isAutenticado, usuario, verificarSesion, cargandoSesion, debeCambiarPassword } = useAuthStore();
 
+  const esAdmin = usuario?.rol === 'ADMIN';
+  const esSupervisor = usuario?.rol === 'SUPERVISOR';
+  const esMinistro = usuario?.rol === 'MINISTRO_DE_FE';
+  const tieneAccesoGestion = esAdmin || esSupervisor;
+
+  // Garantizar que la pestaña activa corresponda a los permisos del rol (RBAC)
   useEffect(() => {
-    inicializarSocket();
-    cargarEstaciones();
-  }, [inicializarSocket, cargarEstaciones]);
-
-  // Al autenticarse, el backend determina el rol y el frontend asigna la vista inicial idónea
-  const handleLoginSuccess = (rol: UserRole) => {
-    if (rol === 'ADMIN' || rol === 'SUPERVISOR') {
-      setTabActiva('DASHBOARD');
-    } else if (rol === 'MINISTRO_DE_FE') {
-      setTabActiva('MIS_DOCUMENTOS');
-    } else {
-      setTabActiva('MIS_DOCUMENTOS');
+    if (isAutenticado && usuario) {
+      if (!tieneAccesoGestion) {
+        // Rutas no permitidas para FUNCIONARIO sin permisos de gestión
+        const rutasGestion: NavTab[] = [
+          'DASHBOARD',
+          'FIRMAS',
+          'USUARIOS_CUSTODIA',
+          'ALERTAS',
+          'AUDITORIA',
+          'CONFIGURACION',
+        ];
+        if (rutasGestion.includes(tabActiva)) {
+          setTabActiva('MIS_DOCUMENTOS');
+        }
+        if (tabActiva === 'FE_PUBLICA' && !esMinistro && !esAdmin) {
+          setTabActiva('MIS_DOCUMENTOS');
+        }
+      }
     }
-  };
+  }, [tabActiva, isAutenticado, usuario, tieneAccesoGestion, esMinistro, esAdmin]);
 
-  // Validar si el rol actual tiene acceso al módulo seleccionado
-  const allowedTabs = ROLE_ALLOWED_TABS[usuario.rol] || ['MIS_DOCUMENTOS', 'LANDING'];
-  const hasAccess = allowedTabs.includes(tabActiva);
+  // Verificar si hay sesión activa almacenada al cargar
+  useEffect(() => {
+    verificarSesion();
+  }, [verificarSesion]);
 
-  // Si la pestaña seleccionada es LANDING, renderizamos la portada de bienvenida institucional
-  if (tabActiva === 'LANDING') {
+  // Si está autenticado, conectar telemetría en tiempo real
+  useEffect(() => {
+    if (isAutenticado) {
+      inicializarSocket();
+      cargarEstaciones();
+    }
+  }, [isAutenticado, inicializarSocket, cargarEstaciones]);
+
+  // Pantalla de carga inicial si hay token previo
+  if (cargandoSesion && localStorage.getItem('access_token')) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
+        <div className="flex flex-col items-center space-y-3">
+          <div className="w-8 h-8 border-3 border-amber-400 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-mono text-muted-foreground">Verificando credenciales institucionales...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // 1. Si la pestaña seleccionada es LANDING o no está autenticado
+  if (tabActiva === 'LANDING' || !isAutenticado) {
     return (
       <>
         <LandingPage
           onGoToApp={() => {
-            if (isAutenticado) {
-              handleLoginSuccess(usuario.rol);
+            if (isAutenticado && usuario) {
+              const esAdmin = usuario.rol === 'ADMIN' || usuario.rol === 'SUPERVISOR';
+              setTabActiva(esAdmin ? 'DASHBOARD' : 'MIS_DOCUMENTOS');
             } else {
               setLoginModalOpen(true);
             }
           }}
           onOpenLogin={() => setLoginModalOpen(true)}
         />
+
         <LoginModal
-          isOpen={loginModalOpen}
+          isOpen={loginModalOpen || debeCambiarPassword}
           onClose={() => setLoginModalOpen(false)}
-          onSuccess={handleLoginSuccess}
+          onLoginSuccess={() => {
+            const u = useAuthStore.getState().usuario;
+            const esAdmin = u?.rol === 'ADMIN' || u?.rol === 'SUPERVISOR';
+            setTabActiva(esAdmin ? 'DASHBOARD' : 'MIS_DOCUMENTOS');
+          }}
         />
       </>
     );
   }
 
-  // Vista interna corporativa con menú lateral y encabezado
+  // 2. Vista interna corporativa con navegación según rol
   return (
     <div className="min-h-screen flex w-full bg-background text-foreground transition-colors duration-200">
-      {/* Barra Lateral con 2 Vistas Generales y Secciones por Rol */}
+      {/* Barra Lateral con Navegación filtrada por Rol Real */}
       <Sidebar
         tabActiva={tabActiva}
         onSelectTab={setTabActiva}
         isOpenMobile={sidebarMobileOpen}
         onCloseMobile={() => setSidebarMobileOpen(false)}
-        onOpenLogin={() => setLoginModalOpen(true)}
       />
 
       {/* Contenedor Principal */}
       <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
-        {/* Encabezado con Identidad Municipal, Conmutador y Estado de Sesión */}
+        {/* Encabezado Institucional */}
         <TopHeader
           tabActiva={tabActiva}
           onOpenMobileSidebar={() => setSidebarMobileOpen(true)}
           onGoToLanding={() => setTabActiva('LANDING')}
-          onOpenLogin={() => setLoginModalOpen(true)}
           onSelectTab={setTabActiva}
         />
 
-        {/* Área de Visualización según Rol y Vista General */}
+        {/* Área de Contenido Principal */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-background">
           <div className="max-w-7xl mx-auto space-y-6">
-            {!hasAccess ? (
-              <Card className="border-destructive/30 bg-destructive/5 text-left p-6">
-                <CardHeader className="p-0 pb-3">
-                  <div className="flex items-center gap-2 text-destructive font-bold text-sm">
-                    <span>Módulo Restringido por Rol Institucional</span>
-                  </div>
-                  <CardTitle className="text-base font-bold text-foreground mt-1">
-                    Acceso No Autorizado ({usuario.rol})
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    El backend no ha concedido permisos a tu perfil ({usuario.rol} - {usuario.cargo}) para interactuar con esta sección.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="p-0 pt-2 space-y-3 text-xs">
-                  <p className="text-muted-foreground">
-                    Conforme al principio de mínimo privilegio estipulado en la Ley N° 21.663 (ANCI / CSIRT) y las directivas internas de la I. Municipalidad de Coquimbo, solo los roles autorizados pueden acceder a este entorno.
-                  </p>
-                  <div className="flex gap-2 pt-2">
-                    <Button
-                      size="sm"
-                      onClick={() => handleLoginSuccess(usuario.rol)}
-                      className="text-xs font-semibold"
-                    >
-                      Ir a mi módulo principal ({vistaGeneralActiva === 'ADMIN' ? 'Dashboard' : 'Mis Documentos'})
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setLoginModalOpen(true)}
-                      className="text-xs font-semibold"
-                    >
-                      Cambiar de Cuenta / Rol
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ) : (
-              <>
-                {/* Vistas de Funcionario */}
-                {tabActiva === 'MIS_DOCUMENTOS' && <MisDocumentosFuncionarioView />}
-                {tabActiva === 'FE_PUBLICA' && <FePublicaDecretosView />}
+            {/* Vistas Personales del Funcionario */}
+            {tabActiva === 'MIS_DOCUMENTOS' && <MisDocumentosFuncionarioView />}
+            {tabActiva === 'FE_PUBLICA' && (esMinistro || esAdmin) && <FePublicaDecretosView />}
 
-                {/* Vistas de Administrador */}
-                {tabActiva === 'DASHBOARD' && <DashboardSupervisores />}
-                {tabActiva === 'FIRMAS' && <FirmaLotesView />}
-                {tabActiva === 'USUARIOS_CUSTODIA' && <GestionUsuariosEquipamientoView />}
-                {tabActiva === 'ALERTAS' && <AlertasCertificadosView />}
-                {tabActiva === 'AUDITORIA' && <AuditoriaView />}
-                {tabActiva === 'CONFIGURACION' && <ConfiguracionSistemaView />}
+            {/* Vistas de Administrador / Supervisor protegidas con RBAC */}
+            {tabActiva === 'DASHBOARD' && tieneAccesoGestion && <DashboardSupervisores />}
+            {tabActiva === 'FIRMAS' && tieneAccesoGestion && <FirmaLotesView />}
+            {tabActiva === 'USUARIOS_CUSTODIA' && tieneAccesoGestion && <GestionUsuariosEquipamientoView />}
+            {tabActiva === 'ALERTAS' && tieneAccesoGestion && <AlertasCertificadosView />}
+            {tabActiva === 'AUDITORIA' && tieneAccesoGestion && <AuditoriaView />}
+            {tabActiva === 'CONFIGURACION' && tieneAccesoGestion && <ConfiguracionSistemaView />}
 
-                {/* Compartida */}
-                {tabActiva === 'CHECKSIGN' && <ChecksignView />}
-              </>
-            )}
+            {/* Compartida */}
+            {tabActiva === 'CHECKSIGN' && <ChecksignView />}
           </div>
         </main>
 
@@ -196,25 +150,29 @@ export const App: React.FC = () => {
         <footer className="border-t bg-card py-3 px-6 text-xs text-muted-foreground">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
             <div>
-              © 2026 Ilustre Municipalidad de Coquimbo • Departamento de Gestión de Sistemas y TICs
+              © 2026 Ilustre Municipalidad de Coquimbo
             </div>
-            <div className="flex items-center space-x-3 text-[11px] font-mono">
-              <span>Ley N° 21.663 (ANCI / CSIRT)</span>
+            <div className="flex items-center space-x-3 text-[11px]">
+              <span>Plataforma Oficial de Firma Electrónica</span>
               <span>•</span>
-              <span>Ley N° 19.799 (FEA)</span>
-              <span>•</span>
-              <span>ISO/IEC 27001</span>
+              <span>Seguridad Institucional</span>
             </div>
           </div>
         </footer>
       </div>
 
-      {/* Modal de Login Único Institucional */}
-      <LoginModal
-        isOpen={loginModalOpen}
-        onClose={() => setLoginModalOpen(false)}
-        onSuccess={handleLoginSuccess}
-      />
+      {/* Modal de cambio forzado de contraseña si aplica */}
+      {debeCambiarPassword && (
+        <LoginModal
+          isOpen={true}
+          onClose={() => {}}
+          onLoginSuccess={() => {
+            const u = useAuthStore.getState().usuario;
+            const esAdmin = u?.rol === 'ADMIN' || u?.rol === 'SUPERVISOR';
+            setTabActiva(esAdmin ? 'DASHBOARD' : 'MIS_DOCUMENTOS');
+          }}
+        />
+      )}
     </div>
   );
 };

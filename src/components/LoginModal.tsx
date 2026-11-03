@@ -1,277 +1,563 @@
 import React, { useState } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './ui/card';
-import { Button } from './ui/button';
-import { Badge } from './ui/badge';
-import { Input } from './ui/input';
-import { useAuthStore, UserRole, DEFAULT_USERS } from '../store/useAuthStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { LogoMunicipalidad } from './LogoMunicipalidad';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Card, CardContent } from './ui/card';
+import { Badge } from './ui/badge';
+import { formatRut } from '../lib/rut';
 
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (rol: UserRole) => void;
-  initialRole?: UserRole;
+  onLoginSuccess?: () => void;
 }
 
-const TEST_ACCOUNTS: Array<{
-  role: UserRole;
-  label: string;
-  rut: string;
-  password: string;
-  pin: string;
-  desc: string;
-}> = [
-  {
-    role: 'ADMIN',
-    label: 'Administrador TIC / Secretario',
-    rut: '12.894.120-3',
-    password: 'AdminCoquimbo2026!',
-    pin: '1234',
-    desc: 'Acceso total: Telemetría, Lotes BullMQ, Baja RRHH <48h, Actas PDF y Auditoría ANCI.',
-  },
-  {
-    role: 'SUPERVISOR',
-    label: 'Supervisora DAF / Partes',
-    rut: '14.120.932-5',
-    password: 'SuperCoquimbo2026!',
-    pin: '2580',
-    desc: 'Monitoreo de estaciones USB, firma en lotes, alertas de vencimiento y custodia.',
-  },
-  {
-    role: 'MINISTRO_DE_FE',
-    label: 'Ministro de Fe Municipal',
-    rut: '11.554.218-1',
-    password: 'MinistroCoquimbo2026!',
-    pin: '9999',
-    desc: 'Atestación notarial de Decretos Alcaldicios (Ley N° 18.695 Art. 20) y bandeja FEA.',
-  },
-  {
-    role: 'FUNCIONARIO',
-    label: 'Funcionario Firmante',
-    rut: '16.782.341-2',
-    password: 'FuncCoquimbo2026!',
-    pin: '1234',
-    desc: 'Bandeja personal de documentos asignados, visación jerárquica y Checksign.',
-  },
-];
+export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLoginSuccess }) => {
+  const { loginSuccess, actualizarPasswordCompletada } = useAuthStore();
 
-export const LoginModal: React.FC<LoginModalProps> = ({
-  isOpen,
-  onClose,
-  onSuccess,
-}) => {
-  const { login } = useAuthStore();
-  const [rut, setRut] = useState('12.894.120-3');
-  const [clave, setClave] = useState('AdminCoquimbo2026!');
+  const [rut, setRut] = useState('');
+  const [password, setPassword] = useState('');
   const [cargando, setCargando] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [selectedRole, setSelectedRole] = useState<UserRole>('ADMIN');
+  const [error, setError] = useState<string | null>(null);
+  const [exitoRegistro, setExitoRegistro] = useState<string | null>(null);
+
+  // Pestaña Login vs Registro autónomo
+  const [tabAuth, setTabAuth] = useState<'LOGIN' | 'REGISTRO'>('LOGIN');
+
+  // Campos para Registro autónomo
+  const [regRut, setRegRut] = useState('');
+  const [regNombre, setRegNombre] = useState('');
+  const [regApellido, setRegApellido] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regPasswordConf, setRegPasswordConf] = useState('');
+  const [regCargo, setRegCargo] = useState('');
+  const [regUnidad, setRegUnidad] = useState('');
+
+  // Estado para cambio de contraseña obligatorio
+  const [modoCambioPassword, setModoCambioPassword] = useState(false);
+  const [tokenTemporal, setTokenTemporal] = useState<string | null>(null);
+  const [usuarioTemporal, setUsuarioTemporal] = useState<any>(null);
+  const [passwordActual, setPasswordActual] = useState('');
+  const [passwordNueva, setPasswordNueva] = useState('');
+  const [passwordConfirmacion, setPasswordConfirmacion] = useState('');
 
   if (!isOpen) return null;
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleRegistro = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    setExitoRegistro(null);
+
+    if (!regRut.trim() || !regNombre.trim() || !regApellido.trim()) {
+      setError('RUT, Nombre y Apellido son obligatorios.');
+      return;
+    }
+    if (regPassword.length < 10) {
+      setError('La contraseña debe tener al menos 10 caracteres.');
+      return;
+    }
+    if (!/[A-Z]/.test(regPassword) || !/[a-z]/.test(regPassword) || !/\d/.test(regPassword)) {
+      setError('La contraseña debe incluir mayúsculas, minúsculas y números.');
+      return;
+    }
+    if (regPassword !== regPasswordConf) {
+      setError('Las contraseñas no coinciden.');
+      return;
+    }
+
     setCargando(true);
-    setErrorMsg(null);
+    try {
+      const res = await fetch('/api/v1/auth/registro', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rut: formatRut(regRut.trim()) || regRut.trim(),
+          nombre: regNombre.trim(),
+          apellido: regApellido.trim(),
+          email: regEmail.trim() || undefined,
+          password: regPassword,
+          cargo: regCargo.trim() || 'Funcionario Municipal',
+          unidad: regUnidad.trim() || 'I. Municipalidad de Coquimbo',
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Error al procesar el registro.');
+      }
+
+      setExitoRegistro(
+        '¡Registro recibido con éxito! Tu cuenta está a la espera de que el Administrador te asigne un rol en el panel de control para que puedas iniciar sesión.',
+      );
+      setTabAuth('LOGIN');
+      setRut(regRut);
+    } catch (err: any) {
+      setError(err.message || 'Error al comunicarse con el servidor.');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setCargando(true);
 
     try {
       const res = await fetch('/api/v1/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          rut: rut.trim(),
-          password: clave,
-          rolSimulado: selectedRole,
+          rut: formatRut(rut.trim()) || rut.trim(),
+          password,
         }),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || 'Credenciales inválidas o cuenta revocada por RRHH.');
+        throw new Error(data.message || 'Credenciales institucionales inválidas.');
       }
 
-      const data = await res.json();
-      const rolReal = (data.usuario?.rol as UserRole) || selectedRole;
-      const testAcc = TEST_ACCOUNTS.find((a) => a.rut === data.usuario?.rut || a.role === rolReal);
-
-      login(
-        rolReal,
-        {
-          id: data.usuario?.id,
-          rut: data.usuario?.rut || rut.trim(),
-          nombre: data.usuario?.nombre || DEFAULT_USERS[rolReal].nombre,
-          email: data.usuario?.email || DEFAULT_USERS[rolReal].email,
-          cargo: data.usuario?.cargo || DEFAULT_USERS[rolReal].cargo,
-          unidad: data.usuario?.unidad || DEFAULT_USERS[rolReal].unidad,
-          pinToken: testAcc?.pin || '1234',
-        },
-        data.accessToken,
-      );
-
-      setCargando(false);
-      onSuccess(rolReal);
-      onClose();
-    } catch (err: any) {
-      // Si el error es bloqueo explícito (403 Desvinculado), mostrar alerta de seguridad
-      if (String(err.message).includes('DESVINCULADO') || String(err.message).includes('bloqueada')) {
-        setErrorMsg(err.message);
+      // Si el backend indica que debe cambiar contraseña obligatoriamente
+      if (data.debeCambiarPassword) {
+        setTokenTemporal(data.accessToken);
+        setUsuarioTemporal(data.usuario);
+        setPasswordActual(password);
+        setModoCambioPassword(true);
         setCargando(false);
         return;
       }
 
-      // Fallback local resiliente
-      const usuarioEncontrado = Object.values(DEFAULT_USERS).find((u) => u.rut === rut.trim());
-      const rolFinal: UserRole = usuarioEncontrado ? usuarioEncontrado.rol : selectedRole;
-      login(rolFinal, {
-        rut: rut.trim(),
-        nombre: usuarioEncontrado ? usuarioEncontrado.nombre : 'Funcionario Municipal',
-        cargo: usuarioEncontrado ? usuarioEncontrado.cargo : 'Personal Municipal',
-        unidad: usuarioEncontrado ? usuarioEncontrado.unidad : 'Municipalidad de Coquimbo',
-      });
-      setCargando(false);
-      onSuccess(rolFinal);
+      // Login exitoso definitivo
+      loginSuccess(data);
       onClose();
+      if (onLoginSuccess) onLoginSuccess();
+    } catch (err: any) {
+      setError(err.message || 'Error al comunicarse con el servidor.');
+    } finally {
+      setCargando(false);
     }
   };
 
-  const handleSelectAccount = (acc: (typeof TEST_ACCOUNTS)[0]) => {
-    setSelectedRole(acc.role);
-    setRut(acc.rut);
-    setClave(acc.password);
-    setErrorMsg(null);
+  const handleLoginClaveUnica = async () => {
+    setError(null);
+    setCargando(true);
+    try {
+      const rutTarget = formatRut(rut.trim()) || rut.trim();
+      const res = await fetch('/api/v1/auth/claveunica/callback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rut: rutTarget || undefined,
+          state: 'cqm-oauth-2026',
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'No se pudo autenticar mediante ClaveÚnica.');
+      }
+      if (data.debeCambiarPassword) {
+        setTokenTemporal(data.accessToken);
+        setUsuarioTemporal(data.usuario);
+        setModoCambioPassword(true);
+        setCargando(false);
+        return;
+      }
+      loginSuccess(data);
+      onClose();
+      if (onLoginSuccess) onLoginSuccess();
+    } catch (err: any) {
+      setError(err.message || 'Error al validar sesión con ClaveÚnica.');
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  const handleCambioPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (passwordNueva.length < 10) {
+      setError('La nueva contraseña debe tener al menos 10 caracteres.');
+      return;
+    }
+    if (!/[A-Z]/.test(passwordNueva) || !/[a-z]/.test(passwordNueva) || !/\d/.test(passwordNueva)) {
+      setError('La contraseña debe contener mayúsculas, minúsculas y números.');
+      return;
+    }
+    if (passwordNueva !== passwordConfirmacion) {
+      setError('Las contraseñas ingresadas no coinciden.');
+      return;
+    }
+    if (passwordNueva === passwordActual) {
+      setError('La nueva contraseña debe ser distinta de la contraseña temporal.');
+      return;
+    }
+
+    setCargando(true);
+    try {
+      const res = await fetch('/api/v1/auth/cambiar-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${tokenTemporal}`,
+        },
+        body: JSON.stringify({
+          passwordActual,
+          passwordNueva,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'No se pudo actualizar la contraseña.');
+      }
+
+      actualizarPasswordCompletada(data);
+      onClose();
+      if (onLoginSuccess) onLoginSuccess();
+    } catch (err: any) {
+      setError(err.message || 'Error al procesar el cambio de contraseña.');
+    } finally {
+      setCargando(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <Card className="w-full max-w-xl border-border/80 shadow-2xl bg-card">
-        <CardHeader className="space-y-1 pb-4 border-b">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <LogoMunicipalidad variant="header" className="h-6 w-6" />
-              <span className="text-[10px] font-mono tracking-wider text-muted-foreground uppercase font-bold">
-                MUNICIPALIDAD DE COQUIMBO • OIDC / JWT HS256
-              </span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+      <Card className="w-full max-w-md border-border/80 shadow-2xl bg-card overflow-hidden">
+        {/* Cabecera del Modal */}
+        <div className="p-6 border-b bg-muted/30 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <LogoMunicipalidad variant="sidebar" className="h-10 w-10 shrink-0" />
+            <div>
+              <h2 className="text-base font-bold text-foreground">
+                {modoCambioPassword ? 'Actualización de Contraseña' : 'Iniciar Sesión Institucional'}
+              </h2>
+              <p className="text-[11px] text-muted-foreground">
+                {modoCambioPassword ? 'Actualización de Seguridad' : 'Ilustre Municipalidad de Coquimbo'}
+              </p>
             </div>
-            <button
-              onClick={onClose}
-              className="text-xs text-muted-foreground hover:text-foreground font-mono px-2 py-1 rounded hover:bg-muted"
-            >
-              [✕ CERRAR]
-            </button>
           </div>
-          <CardTitle className="text-lg font-bold">
-            Autenticación Institucional y Credenciales de Prueba
-          </CardTitle>
-          <CardDescription className="text-xs">
-            Valida tu identidad contra PostgreSQL (`/api/v1/auth/login`) o selecciona uno de los 4 perfiles precargados en la base de datos de testing.
-          </CardDescription>
-        </CardHeader>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground text-sm font-bold p-1 rounded-md"
+            title="Cerrar"
+          >
+            ✕
+          </button>
+        </div>
 
-        <CardContent className="pt-4 space-y-4">
-          {errorMsg && (
-            <div className="p-3 rounded-lg border border-rose-500/40 bg-rose-500/10 text-xs font-mono text-rose-600 dark:text-rose-400">
-              [ALERTA] {errorMsg}
+        <CardContent className="p-6 space-y-4">
+          {error && (
+            <div className="p-3 text-xs bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 rounded-md">
+              <span className="font-bold">Aviso:</span> {error}
             </div>
           )}
 
-          {/* Formulario de Login Único */}
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-[11px] font-semibold text-foreground">
-                  RUT Institucional:
-                </label>
-                <Input
-                  type="text"
-                  value={rut}
-                  onChange={(e) => setRut(e.target.value)}
-                  placeholder="12.894.120-3"
-                  required
-                  className="text-xs h-9 font-mono"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <div className="flex justify-between items-center">
-                  <label className="text-[11px] font-semibold text-foreground">
-                    Clave Institucional:
-                  </label>
-                  <span className="text-[9px] text-muted-foreground font-mono">
-                    PIN Token: {TEST_ACCOUNTS.find((a) => a.role === selectedRole)?.pin || '1234'}
-                  </span>
-                </div>
-                <Input
-                  type="password"
-                  value={clave}
-                  onChange={(e) => setClave(e.target.value)}
-                  placeholder="••••••••••••"
-                  required
-                  className="text-xs h-9 font-mono"
-                />
-              </div>
+          {exitoRegistro && (
+            <div className="p-3 text-xs bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 rounded-md">
+              <span className="font-bold">✓ Éxito:</span> {exitoRegistro}
             </div>
+          )}
 
-            <Button
-              type="submit"
-              disabled={cargando}
-              className="w-full text-xs font-bold h-10 mt-1 shadow-sm flex items-center justify-center gap-2"
-            >
-              {cargando ? (
-                <>
-                  <span className="animate-spin text-sm">⟳</span>
-                  <span>Autenticando JWT en Backend...</span>
-                </>
-              ) : (
-                <span>Iniciar Sesión Oficial ({selectedRole})</span>
-              )}
-            </Button>
-          </form>
-
-          {/* Selector de Credenciales Semilla para Testing */}
-          <div className="pt-3 border-t space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground font-bold">
-                CREDENCIALES DE PRUEBA (SEED POSTGRESQL):
-              </span>
-              <Badge variant="outline" className="text-[9px] font-mono">
-                1-Click Autocompletar
-              </Badge>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              {TEST_ACCOUNTS.map((acc) => (
+          {!modoCambioPassword ? (
+            <div>
+              {/* Selector de Pestañas: Iniciar Sesión vs Registrarse */}
+              <div className="flex border-b border-border mb-4">
                 <button
-                  key={acc.role}
                   type="button"
-                  onClick={() => handleSelectAccount(acc)}
-                  className={`p-2.5 rounded-lg border text-left transition-all ${
-                    selectedRole === acc.role
-                      ? 'border-primary bg-primary/10 shadow-xs ring-1 ring-primary/30'
-                      : 'border-border/70 hover:bg-muted/40'
+                  onClick={() => {
+                    setTabAuth('LOGIN');
+                    setError(null);
+                  }}
+                  className={`flex-1 py-2 text-xs font-bold border-b-2 transition-colors ${
+                    tabAuth === 'LOGIN'
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-muted-foreground hover:text-foreground'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-0.5">
-                    <span className="font-bold text-[11px] text-foreground">{acc.label}</span>
-                    <Badge variant="outline" className="text-[8px] font-mono">
-                      PIN: {acc.pin}
-                    </Badge>
-                  </div>
-                  <div className="text-[10px] font-mono text-muted-foreground">
-                    RUT: {acc.rut} • Clave: {acc.password}
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">
-                    {acc.desc}
-                  </p>
+                  Iniciar Sesión
                 </button>
-              ))}
-            </div>
-          </div>
-        </CardContent>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTabAuth('REGISTRO');
+                    setError(null);
+                    setExitoRegistro(null);
+                  }}
+                  className={`flex-1 py-2 text-xs font-bold border-b-2 transition-colors ${
+                    tabAuth === 'REGISTRO'
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Registrarse
+                </button>
+              </div>
 
-        <CardFooter className="p-3.5 bg-muted/20 border-t flex items-center justify-between text-[11px] text-muted-foreground">
-          <span>Autenticación JWT HS256 conectada a PostgreSQL</span>
-          <span className="font-mono">Ley N° 19.799 &amp; 21.663</span>
-        </CardFooter>
+              {tabAuth === 'LOGIN' ? (
+                /* Formulario de Login */
+                <form onSubmit={handleLogin} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                      <span>RUT Institucional</span>
+                      <span className="text-[10px] font-mono text-muted-foreground">Ej: 12.345.678-9</span>
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="12.345.678-9"
+                      value={rut}
+                      onChange={(e) => setRut(formatRut(e.target.value))}
+                      className="font-mono text-sm"
+                      required
+                      autoFocus
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                      <span>Contraseña</span>
+                      <span className="text-[10px] text-muted-foreground">Clave institucional</span>
+                    </label>
+                    <Input
+                      type="password"
+                      placeholder=""
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="text-sm"
+                      required
+                    />
+                  </div>
+
+                  <div className="pt-2 space-y-2.5">
+                    <Button
+                      type="submit"
+                      disabled={cargando}
+                      className="w-full font-bold text-sm h-10 shadow-md"
+                    >
+                      {cargando ? 'Validando credenciales...' : 'Iniciar Sesión (Directorio Municipal)'}
+                    </Button>
+
+                    <div className="relative flex py-1 items-center">
+                      <div className="flex-grow border-t border-border/60" />
+                      <span className="flex-shrink mx-2 text-[10px] uppercase tracking-wider text-muted-foreground">
+                        o autenticación del Estado
+                      </span>
+                      <div className="flex-grow border-t border-border/60" />
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={cargando}
+                      onClick={handleLoginClaveUnica}
+                      className="w-full font-bold text-xs h-9 border-blue-600/40 text-blue-700 dark:text-blue-400 hover:bg-blue-600/10"
+                    >
+                      Ingresar con ClaveÚnica (OAuth2 Estado)
+                    </Button>
+                  </div>
+
+                  <div className="text-center pt-1">
+                    <span className="text-[10px] text-muted-foreground">
+                      Acceso exclusivo para funcionarios de la Municipalidad de Coquimbo
+                    </span>
+                  </div>
+                </form>
+              ) : (
+                /* Formulario de Registro Autónomo */
+                <form onSubmit={handleRegistro} className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-foreground">Nombre</label>
+                      <Input
+                        type="text"
+                        placeholder="Ej: Claudia"
+                        value={regNombre}
+                        onChange={(e) => setRegNombre(e.target.value)}
+                        className="text-xs h-8"
+                        required
+                        autoFocus
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-foreground">Apellido</label>
+                      <Input
+                        type="text"
+                        placeholder="Ej: Morales Gómez"
+                        value={regApellido}
+                        onChange={(e) => setRegApellido(e.target.value)}
+                        className="text-xs h-8"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-foreground flex items-center justify-between">
+                      <span>RUT</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">Con o sin puntos</span>
+                    </label>
+                    <Input
+                      type="text"
+                      placeholder="12.345.678-9"
+                      value={regRut}
+                      onChange={(e) => setRegRut(formatRut(e.target.value))}
+                      className="text-xs font-mono h-8"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-foreground">Cargo / Función</label>
+                      <Input
+                        type="text"
+                        placeholder="Ej: Jefa de Proyecto"
+                        value={regCargo}
+                        onChange={(e) => setRegCargo(e.target.value)}
+                        className="text-xs h-8"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-foreground">Unidad</label>
+                      <Input
+                        type="text"
+                        placeholder="Ej: Dirección de Obras"
+                        value={regUnidad}
+                        onChange={(e) => setRegUnidad(e.target.value)}
+                        className="text-xs h-8"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-semibold text-foreground">Correo Electrónico (opcional)</label>
+                    <Input
+                      type="email"
+                      placeholder="nombre@municoquimbo.cl"
+                      value={regEmail}
+                      onChange={(e) => setRegEmail(e.target.value)}
+                      className="text-xs h-8"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-foreground">Contraseña</label>
+                      <Input
+                        type="password"
+                        placeholder="Mín. 10 car."
+                        value={regPassword}
+                        onChange={(e) => setRegPassword(e.target.value)}
+                        className="text-xs h-8"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-foreground">Confirmar</label>
+                      <Input
+                        type="password"
+                        placeholder="Repetir"
+                        value={regPasswordConf}
+                        onChange={(e) => setRegPasswordConf(e.target.value)}
+                        className="text-xs h-8"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="text-[10px] text-muted-foreground pt-0.5">
+                    Nota: Al registrarte, un administrador revisará tu cuenta y te asignará el rol correspondiente antes de que puedas iniciar sesión.
+                  </div>
+
+                  <div className="pt-2">
+                    <Button
+                      type="submit"
+                      disabled={cargando}
+                      className="w-full font-bold text-xs h-9 shadow-md bg-emerald-600 hover:bg-emerald-700 text-white"
+                    >
+                      {cargando ? 'Procesando registro...' : 'Registrarse en la Plataforma'}
+                    </Button>
+                  </div>
+                </form>
+              )}
+            </div>
+          ) : (
+            /* Formulario de Cambio Obligatorio de Contraseña */
+            <form onSubmit={handleCambioPassword} className="space-y-3.5">
+              <div className="p-3 rounded-md bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-700 dark:text-amber-300">
+                <p className="font-bold mb-1">
+                  Bienvenido, {usuarioTemporal?.nombre || 'Funcionario'}.
+                </p>
+                <p>
+                  Por seguridad, debes actualizar la contraseña temporal asignada por una clave personal definitiva antes de acceder al sistema.
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-foreground">Contraseña Temporal Actual</label>
+                <Input
+                  type="password"
+                  value={passwordActual}
+                  onChange={(e) => setPasswordActual(e.target.value)}
+                  className="text-xs font-mono"
+                  required
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-foreground">Nueva Contraseña Definitiva</label>
+                <Input
+                  type="password"
+                  placeholder="Mínimo 10 caracteres (A-Z, a-z, 0-9)"
+                  value={passwordNueva}
+                  onChange={(e) => setPasswordNueva(e.target.value)}
+                  className="text-xs"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-foreground">Confirmar Nueva Contraseña</label>
+                <Input
+                  type="password"
+                  placeholder="Reingrese la nueva contraseña"
+                  value={passwordConfirmacion}
+                  onChange={(e) => setPasswordConfirmacion(e.target.value)}
+                  className="text-xs"
+                  required
+                />
+              </div>
+
+              <div className="text-[10px] text-muted-foreground space-y-0.5 pt-1">
+                <div className={passwordNueva.length >= 10 ? 'text-emerald-500 font-semibold' : ''}>
+                  ✓ Mínimo 10 caracteres
+                </div>
+                <div className={/[A-Z]/.test(passwordNueva) && /[a-z]/.test(passwordNueva) ? 'text-emerald-500 font-semibold' : ''}>
+                  ✓ Letras mayúsculas y minúsculas
+                </div>
+                <div className={/\d/.test(passwordNueva) ? 'text-emerald-500 font-semibold' : ''}>
+                  ✓ Al menos un número
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <Button
+                  type="submit"
+                  disabled={cargando}
+                  className="w-full font-bold text-xs h-10 shadow-md bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  {cargando ? 'Guardando y accediendo...' : 'Establecer Contraseña y Acceder'}
+                </Button>
+              </div>
+            </form>
+          )}
+        </CardContent>
       </Card>
     </div>
   );

@@ -11,50 +11,49 @@ interface TopHeaderProps {
   tabActiva: NavTab;
   onOpenMobileSidebar: () => void;
   onGoToLanding: () => void;
-  onOpenLogin?: () => void;
   onSelectTab?: (tab: NavTab) => void;
 }
 
 const TAB_TITLES: Record<NavTab, { title: string; subtitle: string }> = {
   LANDING: {
-    title: 'Portada de Bienvenida Institucional',
-    subtitle: 'Plataforma oficial de gestión de firmas electrónicas avanzadas (FEA) de Coquimbo',
+    title: 'Portada Institucional',
+    subtitle: 'Plataforma oficial de gestión y firma electrónica de Coquimbo',
   },
   MIS_DOCUMENTOS: {
-    title: 'Bandeja de Documentos Asignados',
-    subtitle: 'Gestión personal y firma digital de decretos, resoluciones y memorándums',
+    title: 'Mis Documentos',
+    subtitle: 'Gestión personal y firma de decretos, resoluciones y oficios',
   },
   FE_PUBLICA: {
-    title: 'Despacho de Decretos y Fe Pública Municipal',
-    subtitle: 'Sección Exclusiva: Toma de razón, visación legal y estampillado ministerial',
+    title: 'Fe Pública y Decretos',
+    subtitle: 'Revisión, visación y certificación oficial de documentos',
   },
   DASHBOARD: {
-    title: 'Dashboard de Supervisión de Telemetría de Tokens',
-    subtitle: 'Monitoreo en tiempo real de estaciones de trabajo y tokens criptográficos físicos',
+    title: 'Dispositivos Conectados',
+    subtitle: 'Supervisión en tiempo real de los equipos y dispositivos de firma',
   },
   FIRMAS: {
-    title: 'Orquestación de Firma Masiva por Lotes',
-    subtitle: 'Procesamiento paralelo asíncrono en segundo plano',
+    title: 'Firma Masiva de Documentos',
+    subtitle: 'Firma simultánea de múltiples documentos en segundo plano',
   },
   USUARIOS_CUSTODIA: {
-    title: 'Gobernanza de Funcionarios, Protocolo RRHH (<48h) y Custodia USB',
-    subtitle: 'Revocación automática de certificados, desbloqueo PUK y actas digitales PDF de entrega',
+    title: 'Gestión de Funcionarios y Custodia',
+    subtitle: 'Administración de usuarios y registro de entrega de dispositivos',
   },
   CHECKSIGN: {
-    title: 'Portal de Verificación Documental Checksign',
-    subtitle: 'Comprobación de autenticidad criptográfica e integridad (Ley N° 19.799)',
+    title: 'Verificación de Documentos',
+    subtitle: 'Comprobación de autenticidad y validez de firmas en documentos PDF',
   },
   ALERTAS: {
-    title: 'Alertas Preventivas de Vencimiento de Certificados',
-    subtitle: 'Monitoreo proactivo de vigencia a escalas de 60, 30 y 15 días',
+    title: 'Alertas y Vencimientos',
+    subtitle: 'Avisos preventivos sobre la vigencia de certificados digitales',
   },
   AUDITORIA: {
-    title: 'Registro de Auditoría Forense ANCI',
-    subtitle: 'Trazabilidad inalterable de eventos y mutaciones según Ley N° 21.663',
+    title: 'Historial de Actividad',
+    subtitle: 'Registro y seguimiento de todas las acciones realizadas en la plataforma',
   },
   CONFIGURACION: {
-    title: 'Configuración del Sistema y Parámetros de Red',
-    subtitle: 'Gestión técnica de topología, puertos y directivas criptográficas',
+    title: 'Configuración del Sistema',
+    subtitle: 'Parámetros generales y preferencias de la plataforma',
   },
 };
 
@@ -62,21 +61,13 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   tabActiva,
   onOpenMobileSidebar,
   onGoToLanding,
-  onOpenLogin,
   onSelectTab,
 }) => {
   const { wsConectado, cargarEstaciones } = useTelemetriaStore();
-  const { usuario, isAutenticado, logout, vistaGeneralActiva, setVistaGeneralActiva } = useAuthStore();
+  const { usuario, logout } = useAuthStore();
   const current = TAB_TITLES[tabActiva] || TAB_TITLES.DASHBOARD;
-  const puedeAlternarVistas = usuario.rol === 'ADMIN' || usuario.rol === 'SUPERVISOR';
 
-  const alternarVista = () => {
-    const nuevaVista = vistaGeneralActiva === 'ADMIN' ? 'FUNCIONARIO' : 'ADMIN';
-    setVistaGeneralActiva(nuevaVista);
-    if (onSelectTab) {
-      onSelectTab(nuevaVista === 'ADMIN' ? 'DASHBOARD' : 'MIS_DOCUMENTOS');
-    }
-  };
+  const esAdmin = usuario?.rol === 'ADMIN' || usuario?.rol === 'SUPERVISOR';
 
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b bg-background/95 backdrop-blur-md px-4 sm:px-6">
@@ -101,12 +92,6 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             <h1 className="text-xs sm:text-sm font-bold tracking-tight text-foreground">
               {current.title}
             </h1>
-            <Badge variant="outline" className="text-[9px] font-mono py-0 h-4 border-amber-500/40 text-amber-600 dark:text-amber-400">
-              ROL: {usuario.rol}
-            </Badge>
-            <Badge variant="secondary" className="text-[9px] font-mono py-0 h-4">
-              {vistaGeneralActiva === 'ADMIN' ? 'VISTA ADMIN' : 'VISTA FUNCIONARIO'}
-            </Badge>
           </div>
           <p className="text-[10px] text-muted-foreground truncate max-w-md">
             {current.subtitle}
@@ -114,89 +99,59 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         </div>
       </div>
 
-      {/* Acciones Superiores: Conmutador de Vista General, Conexión WS, Login y Tema */}
-      <div className="flex items-center space-x-2">
-        {puedeAlternarVistas && (
+      {/* Acciones Superiores: Perfil Real, Recargar Telemetría, Tema y Logout */}
+      <div className="flex items-center space-x-2.5">
+        {esAdmin && (
           <Button
             variant="outline"
             size="sm"
-            onClick={alternarVista}
-            className="text-xs h-8 px-2.5 font-semibold hidden md:inline-flex"
-            title="Alternar entre la Vista de Administrador y la Vista de Funcionario"
+            onClick={() => cargarEstaciones()}
+            className="text-xs h-8 px-2.5 font-medium hidden sm:inline-flex"
+            title="Actualizar estado de conexión"
           >
-            {vistaGeneralActiva === 'ADMIN' ? 'Ver como Funcionario' : 'Ver como Admin'}
+            Actualizar Estado
           </Button>
         )}
 
-        {vistaGeneralActiva === 'ADMIN' && (
-          <>
-            <Badge
-              variant={wsConectado ? 'success' : 'danger'}
-              className="flex items-center gap-1.5 py-1 px-2.5 text-[10px] font-mono"
-            >
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${
-                  wsConectado ? 'bg-emerald-500 live-indicator' : 'bg-rose-500'
-                }`}
-              />
-              <span className="hidden lg:inline">
-                {wsConectado ? 'WS ONLINE' : 'WS OFFLINE'}
+        {usuario && (
+          <div className="flex items-center space-x-2 px-2.5 py-1 rounded-md bg-muted/40 border border-border/60">
+            <div className="hidden md:flex flex-col text-right text-xs">
+              <span className="font-bold text-foreground truncate max-w-[170px]" title={usuario.nombre}>
+                {usuario.nombre}
               </span>
-            </Badge>
-
-            <Button
+              <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[170px]">
+                {usuario.rut}
+              </span>
+            </div>
+            <Badge
               variant="outline"
-              size="sm"
-              onClick={() => cargarEstaciones()}
-              className="text-xs h-8 px-2 font-medium hidden xl:inline-flex"
-              title="Actualizar datos de telemetría"
+              className={`text-[10px] font-mono font-bold px-1.5 py-0 ${
+                usuario.rol === 'ADMIN'
+                  ? 'border-amber-400 text-amber-400 bg-amber-400/10'
+                  : 'border-emerald-400 text-emerald-400 bg-emerald-400/10'
+              }`}
             >
-              Recargar
-            </Button>
-          </>
-        )}
-
-        {isAutenticado && (
-          <div className="hidden 2xl:flex flex-col text-right text-[11px] px-2 border-r border-border">
-            <span className="font-semibold text-foreground truncate max-w-[180px]">
-              {usuario.nombre}
-            </span>
-            <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[180px]">
-              {usuario.cargo}
-            </span>
+              {usuario.rol}
+            </Badge>
           </div>
         )}
 
         <ThemeToggle />
 
-        {onOpenLogin && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onOpenLogin}
-            className="text-xs h-8 px-2.5 font-mono text-muted-foreground hover:text-foreground"
-            title="Cambiar credenciales o simular otro rol de backend"
-          >
-            Cambiar Rol
-          </Button>
-        )}
-
-        {isAutenticado && (
+        {usuario && (
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => {
-              logout();
-              onGoToLanding();
-            }}
+            onClick={logout}
             className="text-xs h-8 px-2.5 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
-            title="Cerrar sesión institucional"
+            title="Cerrar sesión actual"
           >
-            Salir
+            Cerrar Sesión
           </Button>
         )}
       </div>
     </header>
   );
 };
+
 export default TopHeader;

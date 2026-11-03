@@ -11,10 +11,7 @@ interface LandingPageProps {
   onOpenLogin: () => void;
 }
 
-export const LandingPage: React.FC<LandingPageProps> = ({
-  onGoToApp,
-  onOpenLogin,
-}) => {
+export const LandingPage: React.FC<LandingPageProps> = ({ onGoToApp, onOpenLogin }) => {
   const { isAutenticado, usuario, logout } = useAuthStore();
 
   return (
@@ -37,11 +34,12 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           <div className="flex items-center space-x-2 sm:space-x-3">
             <ThemeToggle />
 
-            {isAutenticado ? (
+            {isAutenticado && usuario ? (
               <div className="flex items-center space-x-2">
-                <Badge variant="outline" className="text-[11px] font-mono hidden md:inline-flex px-2 py-1">
-                  {usuario.rol} • {usuario.nombre}
-                </Badge>
+                <div className="hidden md:flex flex-col text-right text-xs">
+                  <span className="font-bold text-foreground truncate max-w-[160px]">{usuario.nombre}</span>
+                  <span className="text-[10px] text-amber-500 font-mono font-bold">{usuario.rol}</span>
+                </div>
                 <Button
                   onClick={onGoToApp}
                   size="sm"
@@ -53,7 +51,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                   onClick={logout}
                   variant="outline"
                   size="sm"
-                  className="text-xs px-3 h-9 font-mono text-muted-foreground hover:text-foreground"
+                  className="text-xs h-9 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
                 >
                   Salir
                 </Button>
@@ -62,83 +60,57 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <Button
                 onClick={onOpenLogin}
                 size="sm"
-                className="font-bold text-xs px-4 h-9 shadow-sm flex items-center gap-2"
+                className="font-bold text-xs px-4 h-9 shadow-sm bg-primary hover:bg-primary/90 text-primary-foreground"
               >
-                <svg
-                  className="w-4 h-4 text-primary-foreground/90"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                  />
-                </svg>
-                <span>Acceso</span>
+                Iniciar Sesión
               </Button>
             )}
           </div>
         </div>
       </header>
 
-      {/* 2. Hero / Portada de Bienvenida Institucional (Sin datos ni accesos para consultar) */}
+      {/* 2. Hero / Portada de Bienvenida Institucional */}
       <main className="flex-1 flex flex-col justify-center px-4 sm:px-6 py-12 lg:py-16 max-w-7xl mx-auto w-full">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           {/* Mensaje de Bienvenida Institucional */}
           <div className="lg:col-span-7 space-y-6 text-left">
 
             <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-foreground leading-[1.15]">
-              Bienvenido a la Plataforma de Gestión y Firma Electrónica Avanzada
+              Plataforma de Gestión y Firma Electrónica
             </h1>
 
             <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-              Gestiona tus firmas, realiza solicitudes y revisa tus documentos de forma rápida y segura.
+              Gestión integral de firmas de documentos, control de dispositivos conectados, firma masiva y seguimiento de decretos y resoluciones municipales de manera simple y segura.
             </p>
 
-            {/* Llamado a la Acción Único: Login / Acceso */}
+            {/* Llamado a la Acción Directo al Sistema */}
             <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              {isAutenticado ? (
+              {isAutenticado && usuario ? (
                 <Button
                   size="lg"
                   onClick={onGoToApp}
-                  className="font-bold text-sm h-12 px-6 shadow-md flex items-center justify-center gap-2"
+                  className="font-bold text-sm h-12 px-7 shadow-md flex items-center justify-center gap-2.5"
                 >
-                  <span>Ingresar al Entorno de Trabajo ({usuario.rol})</span>
+                  <span>Ingresar como {usuario.nombre} ({usuario.rol})</span>
                   <span>→</span>
                 </Button>
               ) : (
                 <Button
                   size="lg"
                   onClick={onOpenLogin}
-                  className="font-bold text-sm h-12 px-7 shadow-md flex items-center justify-center gap-2.5"
+                  className="font-bold text-sm h-12 px-7 shadow-md flex items-center justify-center gap-2.5 bg-primary hover:bg-primary/90 text-primary-foreground"
                 >
-                  <svg
-                    className="w-5 h-5 text-primary-foreground/90"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                    />
-                  </svg>
-                  <span>Acceder</span>
+                  <span>Iniciar Sesión</span>
                 </Button>
               )}
             </div>
 
-            {/* Aviso de confidencialidad institucional */}
+            {/* Aviso institucional */}
             <div className="p-3.5 rounded-lg border border-border/70 bg-muted/30 text-xs text-muted-foreground flex items-start gap-3">
               <div className="space-y-0.5">
-                <span className="font-semibold text-foreground block">Sistema interno</span>
+                <span className="font-semibold text-foreground block">Acceso seguro y protegido</span>
                 <p className="text-[11px] leading-relaxed">
-                  Sistema de gestión y firma electrónica avanzada de uso exclusivo para funcionarios y autoridades de la Ilustre Municipalidad de Coquimbo. Esta plataforma centraliza la orquestación, custodia criptográfica y firma digital de decretos, resoluciones y expedientes oficiales con plena validez jurídica.
+                  El acceso a esta plataforma es exclusivo para funcionarios autorizados de la Municipalidad de Coquimbo. Todas las operaciones y firmas quedan respaldadas en el registro institucional.
                 </p>
               </div>
             </div>
@@ -156,7 +128,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                     Ilustre Municipalidad de Coquimbo
                   </h3>
                   <p className="text-xs text-muted-foreground">
-                    Dirección de Gestión Documental y Tecnologías de la Información
+                    Gestor documental de la Unidad de Gestión de Firmas del Departamento de Gestión de Sistemas y TICS
                   </p>
                 </div>
               </div>
@@ -164,47 +136,33 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <CardContent className="p-6 space-y-4">
                 <div className="space-y-3">
                   <div className="flex items-start gap-3 p-3 rounded-lg border bg-background/60">
-                    <div className="w-8 h-8 rounded-md bg-primary/10 text-primary flex items-center justify-center font-bold text-sm shrink-0">
-                      01
-                    </div>
                     <div className="space-y-0.5 text-xs">
-                      <div className="font-semibold text-foreground">Acceso Individual por Rol</div>
+                      <div className="font-semibold text-foreground">Monitoreo de Dispositivos y Usuarios</div>
                       <p className="text-muted-foreground text-[11px]">
-                        Accede según tu rol: Administrador, Supervisor, Ministro de Fe, Funcionario.
+                        Supervisión del estado de los dispositivos de firma en los equipos municipales de trabajo.
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-start gap-3 p-3 rounded-lg border bg-background/60">
-                    <div className="w-8 h-8 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-sm shrink-0">
-                      02
-                    </div>
                     <div className="space-y-0.5 text-xs">
-                      <div className="font-semibold text-foreground">Firma digital avanzada (FEA)</div>
+                      <div className="font-semibold text-foreground">Firma Digital de Documentos</div>
                       <p className="text-muted-foreground text-[11px]">
-                        Orquestación, custodia criptográfica y firma digital de decretos, resoluciones y expedientes oficiales con plena validez jurídica.
+                        Firma de documentos digitalmente con validez legal, individual o masivamente.
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-start gap-3 p-3 rounded-lg border bg-background/60">
-                    <div className="w-8 h-8 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold text-sm shrink-0">
-                      03
-                    </div>
                     <div className="space-y-0.5 text-xs">
-                      <div className="font-semibold text-foreground">Ciberseguridad y Trazabilidad (Ley N° 21.663)</div>
+                      <div className="font-semibold text-foreground">Seguridad y Registro de Actividad</div>
                       <p className="text-muted-foreground text-[11px]">
-                        Registro inalterable de auditoría forense para telemetría de hardware, firma por lotes y revocación de certificados.
+                        Control de permisos por funcionario y registro completo de operaciones para respaldo y transparencia.
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="pt-2 border-t flex items-center justify-between text-[11px] font-mono text-muted-foreground">
-                  <span>Sistema en proceso de prueba (BETA)</span>
-                  <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold">
-                  </span>
-                </div>
               </CardContent>
             </Card>
           </div>
@@ -224,16 +182,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 text-[10px] font-mono">
-            <span>LEY N° 19.799 (FEA)</span>
+          <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+            <span>Firma Electrónica</span>
             <span>•</span>
-            <span>LEY N° 21.663 (ANCI / CSIRT)</span>
+            <span>Seguridad y Transparencia</span>
             <span>•</span>
-            <span>LEY N° 21.180 (TRANSFORMACIÓN DIGITAL DEL ESTADO)</span>
+            <span>Gestión Documental</span>
           </div>
         </div>
       </footer>
     </div>
   );
 };
+
 export default LandingPage;

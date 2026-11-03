@@ -23,6 +23,7 @@ export interface TelemetriaLog {
   codigoPc: string;
   estado: EstadoHardwareType;
   timestamp: string;
+  fecha?: string;
   serialNumber?: string;
 }
 
@@ -159,11 +160,19 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
         ? payload.metadatos?.previousSerialNumber || estacionPrevia?.tokenInfo?.serialNumber || undefined
         : tokenRecibido?.serialNumber || payload.serialNumber || payload.tokenInfo?.serialNumber;
 
+      const fechaObj = new Date(payload.timestamp || Date.now());
+      const fechaValida = !isNaN(fechaObj.getTime()) ? fechaObj : new Date();
+
       const nuevoLog: TelemetriaLog = {
         id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         codigoPc: payload.codigoPc,
         estado: payload.estadoHardware,
-        timestamp: new Date(payload.timestamp || Date.now()).toLocaleTimeString('es-CL'),
+        timestamp: fechaValida.toLocaleTimeString('es-CL'),
+        fecha: fechaValida.toLocaleDateString('es-CL', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        }),
         serialNumber: serialFinal,
       };
 
@@ -206,11 +215,19 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
               }
             }
 
+            const fechaEv = new Date(ev.timestamp);
+            const fechaEvValida = !isNaN(fechaEv.getTime()) ? fechaEv : new Date();
+
             return {
               id: ev.id,
               codigoPc: ev.codigoPc,
               estado: ev.evento || ev.estadoHardware || 'DESCONECTADO',
-              timestamp: new Date(ev.timestamp).toLocaleTimeString('es-CL'),
+              timestamp: fechaEvValida.toLocaleTimeString('es-CL'),
+              fecha: fechaEvValida.toLocaleDateString('es-CL', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+              }),
               serialNumber:
                 ev.token?.serialNumber ||
                 ev.metadatosJsonb?.previousSerialNumber ||

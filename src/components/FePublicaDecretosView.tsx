@@ -60,7 +60,7 @@ export const FePublicaDecretosView: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           rutMinistro: usuario.rut,
-          pin: usuario.pinToken || '1234',
+          pin: usuario.pinToken || '',
         }),
       });
       if (res.ok) {
@@ -76,18 +76,15 @@ export const FePublicaDecretosView: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-amber-500 font-bold">
-              [ SECCIÓN EXCLUSIVA // MINISTRO DE FE MUNICIPAL ]
-            </span>
-            <Badge variant="outline" className="text-[9px] font-mono border-amber-500/50 text-amber-500">
-              LEY N° 18.695 ART. 20 &amp; LEY N° 19.799
+            <Badge variant="outline" className="text-[10px] border-amber-500/50 text-amber-500">
+              FE PÚBLICA
             </Badge>
           </div>
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground mt-0.5">
-            Despacho de Decretos y Atestación de Fe Pública
+            Despacho de Decretos y Fe Pública
           </h2>
           <p className="text-xs text-muted-foreground">
-            Entorno reservado para el Ministro de Fe ({usuario.nombre} • {usuario.cargo}) para toma de razón, atestación y certificación legal de Decretos Alcaldicios.
+            Bandeja para toma de razón, revisión y certificación oficial de Decretos Municipales.
           </p>
         </div>
       </div>
@@ -96,7 +93,7 @@ export const FePublicaDecretosView: React.FC = () => {
         <Card className="border-border/80 bg-card p-4">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>Decretos por Visar</span>
-            <span className="text-amber-500 font-mono font-bold">FE PÚBLICA</span>
+            <span className="text-amber-500 font-semibold text-[10px]">POR REVISAR</span>
           </div>
           <div className="text-2xl font-bold text-foreground mt-1">
             {decretos.filter((d) => d.estadoFePublica === 'PENDIENTE_VISACION').length}
@@ -112,28 +109,28 @@ export const FePublicaDecretosView: React.FC = () => {
           <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
             {decretos.filter((d) => d.estadoFePublica === 'FE_PUBLICA_OTORGADA').length}
           </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Con estampilla y registro notarial</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Con firma y registro oficial</p>
         </Card>
 
         <Card className="border-border/80 bg-card p-4">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Libro Notarial Correlativo</span>
-            <span className="text-primary font-mono text-[10px]">AÑO 2026</span>
+            <span>Libro Oficial de Decretos</span>
+            <span className="text-primary text-[10px] font-semibold">AÑO 2026</span>
           </div>
-          <div className="text-sm font-bold text-foreground mt-1 font-mono">
-            LIBRO ELECTRÓNICO N° 14
+          <div className="text-sm font-bold text-foreground mt-1">
+            LIBRO MUNICIPAL N° 14
           </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5 font-mono">
-            Registro inalterable ANCI Ley 21.663
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            Registro oficial institucional
           </p>
         </Card>
       </div>
 
       <Card className="border-border/80 bg-card overflow-hidden">
         <CardHeader className="p-4 pb-2 border-b bg-muted/20">
-          <CardTitle className="text-sm font-bold">Actos Administrativos para Certificación Notarial</CardTitle>
+          <CardTitle className="text-sm font-bold">Actos Administrativos para Certificación</CardTitle>
           <CardDescription className="text-xs">
-            Revisión de legalidad y estampillado de fe pública ministerial en PostgreSQL
+            Revisión y validación de fe pública ministerial para decretos municipales
           </CardDescription>
         </CardHeader>
 
@@ -145,18 +142,25 @@ export const FePublicaDecretosView: React.FC = () => {
                 <TableHead>Materia</TableHead>
                 <TableHead className="w-44">Unidad Emisora</TableHead>
                 <TableHead className="w-36 text-center">Estado</TableHead>
-                <TableHead className="w-56 text-right">Acción Notarial / PDF</TableHead>
+                <TableHead className="w-56 text-right">Acción / Documento PDF</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="text-xs">
-              {decretos.map((dec) => {
+              {decretos.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="h-28 text-center text-xs text-muted-foreground">
+                    No hay decretos pendientes de fe pública en este momento
+                  </TableCell>
+                </TableRow>
+              ) : (
+                decretos.map((dec) => {
                 const isOtorgado = dec.estadoFePublica === 'FE_PUBLICA_OTORGADA';
 
                 return (
                   <TableRow key={dec.id} className="hover:bg-muted/30">
                     <TableCell className="font-semibold text-foreground font-mono">
                       {dec.numeroDecreto}
-                      <div className="text-[10px] text-muted-foreground font-mono">
+                      <div className="text-[10px] text-muted-foreground">
                         {dec.fechaEmision}
                       </div>
                     </TableCell>
@@ -172,9 +176,9 @@ export const FePublicaDecretosView: React.FC = () => {
                     <TableCell className="text-center">
                       <Badge
                         variant={isOtorgado ? 'success' : 'warning'}
-                        className="text-[10px] font-mono"
+                        className="text-[10px]"
                       >
-                        {isOtorgado ? 'FE PÚBLICA DADA' : 'PENDIENTE VISACIÓN'}
+                        {isOtorgado ? 'FE PÚBLICA DADA' : 'PENDIENTE REVISIÓN'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
@@ -205,7 +209,7 @@ export const FePublicaDecretosView: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 );
-              })}
+              }))}
             </TableBody>
           </Table>
         </div>

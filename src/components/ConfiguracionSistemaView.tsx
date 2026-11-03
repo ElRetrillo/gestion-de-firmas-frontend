@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -7,14 +7,36 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '.
 import { useAuthStore } from '../store/useAuthStore';
 import { useTelemetriaStore } from '../store/useTelemetriaStore';
 
+interface ProveedorAdaptador {
+  servicio: string;
+  nombre: string;
+  modoOperacion: 'SANDBOX_LOCAL' | 'PRODUCCION_OFICIAL';
+  endpointConfigurado: string;
+  variablesRequeridas: string[];
+  operativo: boolean;
+}
+
 export const ConfiguracionSistemaView: React.FC = () => {
   const { usuario } = useAuthStore();
   const { estaciones } = useTelemetriaStore();
 
   const [wsUrl, setWsUrl] = useState('ws://localhost:3001/telemetria');
-  const [retencionLogs, setRetencionLogs] = useState('5 años (Ley N° 21.663 ANCI)');
+  const [retencionLogs, setRetencionLogs] = useState('5 años');
   const [tokenTimeout, setTokenTimeout] = useState('300 segundos');
   const [guardado, setGuardado] = useState(false);
+  const [adaptadores, setAdaptadores] = useState<ProveedorAdaptador[]>([]);
+  const [mensajeConector, setMensajeConector] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/v1/integraciones/estado-adaptadores')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && Array.isArray(data.proveedores)) {
+          setAdaptadores(data.proveedores);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleGuardarConfig = (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,41 +46,38 @@ export const ConfiguracionSistemaView: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
-      {/* Header Exclusivo de Administrador */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-mono uppercase tracking-wider text-rose-500 font-bold">
-              [ SECCIÓN EXCLUSIVA // ADMINISTRADOR TIC MUNICIPAL ]
-            </span>
-            <Badge variant="outline" className="text-[9px] font-mono border-rose-500/40 text-rose-500">
-              ACCESO ROOT
+            <Badge variant="outline" className="text-[10px]">
+              CONFIGURACIÓN GENERAL
             </Badge>
           </div>
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground mt-0.5">
-            Configuración del Sistema y Parámetros de Red
+            Configuración del Sistema
           </h2>
           <p className="text-xs text-muted-foreground">
-            Gestión técnica centralizada de la plataforma de firmas, puertos de telemetría y directivas de ciberseguridad.
+            Gestión centralizada de preferencias de la plataforma, conexión de equipos y parámetros de seguridad.
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Parámetros de Red y Ciberseguridad (Span 7) */}
+        {/* Parámetros de Conexión */}
         <div className="lg:col-span-7 space-y-5">
           <Card className="border-border/80 bg-card">
             <CardHeader className="p-5 pb-3 border-b">
-              <CardTitle className="text-sm font-bold">Directivas Técnicas de Telemetría</CardTitle>
+              <CardTitle className="text-sm font-bold">Directivas de Conexión</CardTitle>
               <CardDescription className="text-xs">
-                Ajustes de conexión en tiempo real con agentes de hardware municipales
+                Ajustes de enlace en tiempo real con los equipos municipales
               </CardDescription>
             </CardHeader>
             <CardContent className="p-5">
               <form onSubmit={handleGuardarConfig} className="space-y-4 text-xs">
                 <div className="space-y-1">
                   <label className="font-semibold text-foreground">
-                    Endpoint de Telemetría WebSocket (VITE_WS_URL):
+                    Dirección del Servidor de Conexión:
                   </label>
                   <Input
                     type="text"
@@ -67,40 +86,40 @@ export const ConfiguracionSistemaView: React.FC = () => {
                     className="text-xs h-9 font-mono"
                   />
                   <p className="text-[10px] text-muted-foreground">
-                    Canal seguro WSS para eventos de inserción/extracción de tokens SafeNet.
+                    Canal seguro para la detección automática de dispositivos de firma.
                   </p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="font-semibold text-foreground">
-                      Retención de Logs ANCI:
+                      Retención del Historial:
                     </label>
                     <Input
                       type="text"
                       value={retencionLogs}
                       onChange={(e) => setRetencionLogs(e.target.value)}
-                      className="text-xs h-9 font-mono"
+                      className="text-xs h-9"
                     />
                   </div>
 
                   <div className="space-y-1">
                     <label className="font-semibold text-foreground">
-                      Timeout Inactividad Token:
+                      Tiempo de Inactividad Permitido:
                     </label>
                     <Input
                       type="text"
                       value={tokenTimeout}
                       onChange={(e) => setTokenTimeout(e.target.value)}
-                      className="text-xs h-9 font-mono"
+                      className="text-xs h-9"
                     />
                   </div>
                 </div>
 
                 <div className="pt-2 flex items-center justify-between">
                   {guardado ? (
-                    <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold font-mono">
-                      ✓ Parámetros guardados y sincronizados
+                    <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
+                      ✓ Parámetros guardados correctamente
                     </span>
                   ) : <span />}
 
@@ -112,21 +131,21 @@ export const ConfiguracionSistemaView: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Políticas de Seguridad ANCI y Pruebas de Integración */}
+          {/* Políticas de Seguridad */}
           <Card className="border-border/80 bg-card p-5 space-y-3">
-            <h3 className="text-sm font-bold text-foreground">Políticas Criptográficas &amp; Entorno Testing</h3>
+            <h3 className="text-sm font-bold text-foreground">Estándares de Seguridad de la Plataforma</h3>
             <div className="space-y-2 text-xs">
               <div className="flex items-center justify-between p-2 rounded bg-muted/30 border">
-                <span>Algoritmo de Hash Primario</span>
-                <Badge variant="outline" className="font-mono text-[10px]">SHA-256 FIPS 180-4</Badge>
+                <span>Comprobación de Integridad</span>
+                <Badge variant="outline" className="text-[10px]">Alta Seguridad (SHA-256)</Badge>
               </div>
               <div className="flex items-center justify-between p-2 rounded bg-muted/30 border">
-                <span>Longitud Clave Asimétrica</span>
-                <Badge variant="outline" className="font-mono text-[10px]">RSA 4096 BITS</Badge>
+                <span>Nivel de Cifrado</span>
+                <Badge variant="outline" className="text-[10px]">Oficial Certificado</Badge>
               </div>
               <div className="flex items-center justify-between p-2 rounded bg-muted/30 border">
                 <span>Sellado de Tiempo Oficial</span>
-                <Badge variant="outline" className="font-mono text-[10px]">RFC 3161 TSA (ESIGN)</Badge>
+                <Badge variant="outline" className="text-[10px]">Fecha Legal Acreditada</Badge>
               </div>
             </div>
 
@@ -140,55 +159,126 @@ export const ConfiguracionSistemaView: React.FC = () => {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                      evento: 'CERTIFICADO_VALIDADO_OCSP',
-                      codigoDocumento: 'DEC-ALC-2026-0904',
+                      evento: 'TEST_WEBHOOK_PING',
+                      timestamp: new Date().toISOString(),
                     }),
                   });
                   if (res.ok) setGuardado(true);
                 }}
-                className="text-xs font-mono h-8"
+                className="text-xs h-8"
               >
-                Probar Webhook HMAC-SHA256
+                Probar Conexión de Notificación
               </Button>
+            </div>
+          </Card>
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  const res = await fetch('/api/v1/auth/seed-reset', { method: 'POST' });
-                  if (res.ok) setGuardado(true);
-                }}
-                className="text-xs font-mono h-8 border-amber-500/50 text-amber-500"
-              >
-                Restaurar Base de Datos Semilla
-              </Button>
+          {/* Módulo 6: Adaptadores Dual-Mode (Sandbox Local vs Producción Oficial) y Conectores DOM/SECPLAN */}
+          <Card className="border-border/80 bg-card p-5 space-y-4">
+            <div>
+              <h3 className="text-sm font-bold text-foreground">
+                Pasarela de Integraciones Externas (Dual-Mode Adapter)
+              </h3>
+              <p className="text-[11px] text-muted-foreground">
+                Opera automáticamente en modo Sandbox Criptográfico Local mientras no existan credenciales externas en .env, y conmuta sin cambios de código al configurar las llaves de producción.
+              </p>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              {adaptadores.map((ad) => (
+                <div
+                  key={ad.servicio}
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded bg-muted/30 border"
+                >
+                  <div>
+                    <div className="font-bold text-foreground">{ad.nombre}</div>
+                    <div className="text-[10px] font-mono text-muted-foreground">
+                      {ad.endpointConfigurado}
+                    </div>
+                  </div>
+                  <Badge
+                    variant={ad.modoOperacion === 'PRODUCCION_OFICIAL' ? 'success' : 'warning'}
+                    className="text-[10px] shrink-0"
+                  >
+                    {ad.modoOperacion}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-2 border-t space-y-2">
+              <div className="text-[11px] font-semibold text-foreground">
+                Conectores de Sistemas Municipales (SDK Embebible: <code className="font-mono">/api/v1/integraciones/conectores/sdk.js</code>)
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {(['DOM', 'SECPLAN', 'DECRETOS'] as const).map((sis) => (
+                  <Button
+                    key={sis}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      setMensajeConector(null);
+                      const res = await fetch(`/api/v1/integraciones/conectores/${sis}/solicitar-firma`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          rutSolicitante: usuario?.rut || '',
+                          tituloDocumento: `Expediente Electrónico ${sis} - Coquimbo`,
+                          tipoTramite: `EXPEDIENTE_${sis}`,
+                          clasificacion: sis === 'DECRETOS' ? 'CRITICA' : 'INTERNA',
+                        }),
+                      });
+                      const data = await res.json();
+                      if (res.ok) {
+                        setMensajeConector(
+                          `✓ Conector ${sis}: Documento ${data.codigoDocumento} inyectado en bandeja de firmas.`,
+                        );
+                      }
+                    }}
+                    className="text-xs h-8"
+                  >
+                    Simular Ingesta {sis}
+                  </Button>
+                ))}
+              </div>
+              {mensajeConector && (
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                  {mensajeConector}
+                </p>
+              )}
             </div>
           </Card>
         </div>
 
-        {/* Resumen de Estaciones Configuradas (Span 5) */}
+        {/* Resumen de Estaciones Configuradas */}
         <div className="lg:col-span-5 space-y-5">
           <Card className="border-border/80 bg-card overflow-hidden">
             <CardHeader className="p-5 pb-3 border-b bg-muted/20">
-              <CardTitle className="text-sm font-bold">Topología de Estaciones ({estaciones.length})</CardTitle>
+              <CardTitle className="text-sm font-bold">Equipos Registrados ({estaciones.length})</CardTitle>
               <CardDescription className="text-xs">
-                Equipos registrados con permiso de firma criptográfica
+                Equipos habilitados para operaciones de firma
               </CardDescription>
             </CardHeader>
             <div className="overflow-x-auto max-h-[380px] overflow-y-auto">
               <Table>
                 <TableHeader className="bg-muted/40 text-[11px]">
                   <TableRow>
-                    <TableHead>Estación</TableHead>
+                    <TableHead>Equipo</TableHead>
                     <TableHead>IP</TableHead>
-                    <TableHead className="text-right">Hardware</TableHead>
+                    <TableHead className="text-right">Estado</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody className="text-xs">
-                  {estaciones.map((est) => (
+                  {estaciones.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3} className="h-28 text-center text-xs text-muted-foreground">
+                        No hay equipos registrados actualmente
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    estaciones.map((est) => (
                     <TableRow key={est.codigoPc}>
-                      <TableCell className="font-mono text-[11px] font-semibold">
+                      <TableCell className="text-[11px] font-semibold">
                         {est.codigoPc}
                         <div className="text-[10px] text-muted-foreground font-normal truncate max-w-[150px]">
                           {est.dependenciaFisica}
@@ -206,13 +296,13 @@ export const ConfiguracionSistemaView: React.FC = () => {
                               ? 'warning'
                               : 'danger'
                           }
-                          className="text-[9px] font-mono"
+                          className="text-[10px]"
                         >
                           {est.estadoEnVivo}
                         </Badge>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )))}
                 </TableBody>
               </Table>
             </div>

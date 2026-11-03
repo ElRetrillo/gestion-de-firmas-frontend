@@ -64,63 +64,56 @@ export const AuditoriaView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* 1. Bento Asimétrico: Monitor Forense ANCI & Filtros de Seguridad */}
+      {/* 1. Header y Filtros */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Columna Izquierda (Span 8): Monitor de Auditoría Inalterable */}
+        {/* Columna Izquierda: Monitor de Auditoría */}
         <Card className="lg:col-span-8 border-border/80 bg-card">
           <CardHeader className="p-5 pb-3 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <Badge variant="outline" className="font-mono text-[9px]">
-                  [ ANCI // LEY 21.663 ]
-                </Badge>
-                <Badge variant="secondary" className="font-mono text-[9px]">
-                  TABLAS CON AUDIT TRAIL GIN
+                <Badge variant="outline" className="text-[10px]">
+                  Historial de Actividad
                 </Badge>
               </div>
               <CardTitle className="text-base font-bold text-foreground">
-                Trazabilidad y Auditoría Forense
+                Historial de Operaciones
               </CardTitle>
               <CardDescription className="text-xs text-muted-foreground mt-0.5">
-                Bitácora criptográfica inalterable en PostgreSQL con índices GIN e inspección forense de mutaciones JSONB.
+                Registro de actividades, firmas y cambios realizados en el sistema.
               </CardDescription>
             </div>
-
-            <Badge variant="outline" className="text-xs font-mono py-1 px-3 shrink-0">
-              CGR &amp; ANCI READY
-            </Badge>
           </CardHeader>
 
           <CardContent className="p-5 space-y-4">
             <div className="grid grid-cols-3 gap-3">
               <div className="p-3 rounded-lg border bg-muted/30 space-y-1">
-                <div className="text-[10px] font-mono text-muted-foreground uppercase">
-                  EVENTOS AUDITADOS
+                <div className="text-[10px] text-muted-foreground uppercase font-semibold">
+                  TOTAL ACTIVIDADES
                 </div>
-                <div className="font-mono font-bold text-xl text-foreground">
-                  14,892
+                <div className="font-bold text-xl text-foreground">
+                  {eventos.length.toLocaleString('es-CL')}
                 </div>
-                <div className="text-[10px] text-muted-foreground">Últimos 30 días</div>
+                <div className="text-[10px] text-muted-foreground">Registros guardados</div>
               </div>
 
               <div className="p-3 rounded-lg border bg-muted/30 space-y-1">
-                <div className="text-[10px] font-mono text-muted-foreground uppercase">
-                  INTEGRIDAD DEL LEDGER
+                <div className="text-[10px] text-muted-foreground uppercase font-semibold">
+                  ESTADO DEL REGISTRO
                 </div>
-                <div className="font-mono font-bold text-xl text-emerald-600 dark:text-emerald-400">
-                  100% ÍNTEGRO
+                <div className="font-bold text-xl text-emerald-600 dark:text-emerald-400">
+                  {eventos.length > 0 ? 'CORRECTO' : '0 REGISTROS'}
                 </div>
-                <div className="text-[10px] text-muted-foreground">Sin discrepancias hash</div>
+                <div className="text-[10px] text-muted-foreground">{eventos.length > 0 ? 'Sin inconsistencias' : 'Sin eventos previos'}</div>
               </div>
 
               <div className="p-3 rounded-lg border bg-muted/30 space-y-1">
-                <div className="text-[10px] font-mono text-muted-foreground uppercase">
-                  LATENCIA DE BÚSQUEDA
+                <div className="text-[10px] text-muted-foreground uppercase font-semibold">
+                  SEGURIDAD
                 </div>
-                <div className="font-mono font-bold text-xl text-primary">
-                  0.4 ms
+                <div className="font-bold text-xl text-primary">
+                  ACTIVA
                 </div>
-                <div className="text-[10px] text-muted-foreground">PostgreSQL GIN index</div>
+                <div className="text-[10px] text-muted-foreground">Respaldo inalterable</div>
               </div>
             </div>
 
@@ -129,35 +122,35 @@ export const AuditoriaView: React.FC = () => {
                 type="text"
                 value={filtro}
                 onChange={(e) => setFiltro(e.target.value)}
-                placeholder="Buscar por usuario, IP, estación o tabla afectada..."
-                className="text-xs font-mono"
+                placeholder="Buscar por usuario, IP, equipo o acción..."
+                className="text-xs"
               />
             </div>
           </CardContent>
 
-          <CardFooter className="p-4 border-t bg-muted/20 text-[10px] font-mono text-muted-foreground flex justify-between">
-            <span>NORMATIVA: LEY N° 21.663</span>
-            <span>POLÍTICA DE RETENCIÓN: 5 AÑOS</span>
+          <CardFooter className="p-4 border-t bg-muted/20 text-[10px] text-muted-foreground flex justify-between">
+            <span>Registro del Sistema</span>
+            <span>Historial Activo</span>
           </CardFooter>
         </Card>
 
-        {/* Columna Derecha (Span 4): Filtros Rápidos de Severidad */}
+        {/* Columna Derecha: Filtros */}
         <Card className="lg:col-span-4 border-border/80 bg-card flex flex-col justify-between">
           <CardHeader className="p-5 pb-3 border-b">
-            <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-              SEGMENTACIÓN DE EVENTOS
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+              FILTRAR POR ACTIVIDAD
             </span>
             <CardTitle className="text-sm font-bold text-foreground">
-              Tipología de Registro
+              Tipos de Actividad
             </CardTitle>
           </CardHeader>
 
           <CardContent className="p-5 space-y-2 text-xs">
             {[
-              { id: 'TODOS', label: 'Todos los Eventos', count: eventos.length },
-              { id: 'FIRMA_EJECUTADA', label: 'Firmas Criptográficas (FEA)', count: 1 },
-              { id: 'UPDATE', label: 'Mutaciones de Base de Datos', count: 3 },
-              { id: 'TELEMETRIA_PING', label: 'Pings de Telemetría WebHID', count: 1 },
+              { id: 'TODOS', label: 'Todas las Actividades', count: eventos.length },
+              { id: 'FIRMA_EJECUTADA', label: 'Firmas de Documentos', count: 1 },
+              { id: 'UPDATE', label: 'Modificaciones del Sistema', count: 3 },
+              { id: 'TELEMETRIA_PING', label: 'Conexión de Equipos', count: 1 },
             ].map((cat) => (
               <button
                 key={cat.id}
@@ -174,9 +167,9 @@ export const AuditoriaView: React.FC = () => {
             ))}
           </CardContent>
 
-          <CardFooter className="p-4 border-t bg-muted/20 text-[10px] font-mono text-muted-foreground flex justify-between">
-            <span>HASH LEDGER: SHA-256</span>
-            <span>EXPORTAR: JSON / CSV</span>
+          <CardFooter className="p-4 border-t bg-muted/20 text-[10px] text-muted-foreground flex justify-between">
+            <span>Registro oficial municipal</span>
+            <span>Exportar Historial</span>
           </CardFooter>
         </Card>
       </div>
@@ -188,8 +181,8 @@ export const AuditoriaView: React.FC = () => {
             <span className="text-xs font-bold text-foreground">
               Registros Encontrados ({eventosFiltrados.length})
             </span>
-            <span className="text-[10px] font-mono text-muted-foreground">
-              Haga clic en una fila para inspeccionar el payload JSONB
+            <span className="text-[10px] text-muted-foreground">
+              Haz clic en una fila para ver los detalles de la operación
             </span>
           </CardHeader>
 
@@ -197,25 +190,25 @@ export const AuditoriaView: React.FC = () => {
             <Table>
               <TableHeader>
                 <TableRow className="border-b">
-                  <TableHead className="text-xs font-bold">ID / Tabla</TableHead>
+                  <TableHead className="text-xs font-bold">ID / Módulo</TableHead>
                   <TableHead className="text-xs font-bold">Acción</TableHead>
                   <TableHead className="text-xs font-bold">Registro / Estación</TableHead>
-                  <TableHead className="text-xs font-bold">Usuario / Agente</TableHead>
+                  <TableHead className="text-xs font-bold">Usuario</TableHead>
                   <TableHead className="text-xs font-bold">IP</TableHead>
-                  <TableHead className="text-xs font-bold">Timestamp</TableHead>
+                  <TableHead className="text-xs font-bold">Fecha y Hora</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {cargando ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center font-mono text-xs text-muted-foreground">
-                      Consultando bitácora de auditoría inalterable en PostgreSQL...
+                    <TableCell colSpan={6} className="h-24 text-center text-xs text-muted-foreground">
+                      Consultando historial de actividades...
                     </TableCell>
                   </TableRow>
                 ) : eventosFiltrados.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center font-mono text-xs text-muted-foreground">
-                      No se encontraron registros de auditoría forense con los criterios seleccionados.
+                    <TableCell colSpan={6} className="h-24 text-center text-xs text-muted-foreground">
+                      No se encontraron registros con los criterios seleccionados.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -268,13 +261,13 @@ export const AuditoriaView: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Panel Inspector JSONB */}
+        {/* Panel Inspector de Detalles */}
         {eventoSeleccionado && (
           <Card className="lg:col-span-5 border-border/80 bg-card flex flex-col justify-between">
             <CardHeader className="p-4 border-b flex flex-row items-center justify-between">
               <div>
-                <span className="text-[10px] font-mono text-muted-foreground uppercase">
-                  PAYLOAD JSONB AUDITADO
+                <span className="text-[10px] text-muted-foreground uppercase font-semibold">
+                  DETALLES DE LA OPERACIÓN
                 </span>
                 <CardTitle className="text-sm font-bold text-foreground">
                   {eventoSeleccionado.id} • {eventoSeleccionado.registroId}
@@ -292,16 +285,16 @@ export const AuditoriaView: React.FC = () => {
             </CardHeader>
 
             <CardContent className="p-4 space-y-3">
-              <div className="p-3 bg-muted/40 rounded border font-mono text-[11px] space-y-1">
-                <div><strong>Tabla:</strong> {eventoSeleccionado.tablaAfectada}</div>
+              <div className="p-3 bg-muted/40 rounded border text-[11px] space-y-1">
+                <div><strong>Módulo:</strong> {eventoSeleccionado.tablaAfectada}</div>
                 <div><strong>Usuario:</strong> {eventoSeleccionado.usuario}</div>
-                <div><strong>IP Origen:</strong> {eventoSeleccionado.ip}</div>
-                <div><strong>Timestamp:</strong> {eventoSeleccionado.timestamp}</div>
+                <div><strong>IP:</strong> {eventoSeleccionado.ip}</div>
+                <div><strong>Fecha y Hora:</strong> {eventoSeleccionado.timestamp}</div>
               </div>
 
               <div className="space-y-1">
-                <span className="text-[10px] font-mono text-muted-foreground uppercase">
-                  Mutación Completa (Diff JSON):
+                <span className="text-[10px] text-muted-foreground uppercase font-semibold">
+                  Detalle de los cambios:
                 </span>
                 <pre className="p-3 bg-muted/60 rounded border text-[11px] font-mono text-foreground overflow-x-auto max-h-60 select-all">
                   {JSON.stringify(eventoSeleccionado.diffJson, null, 2)}
@@ -309,15 +302,15 @@ export const AuditoriaView: React.FC = () => {
               </div>
             </CardContent>
 
-            <CardFooter className="p-3 border-t bg-muted/20 text-[10px] font-mono text-muted-foreground flex justify-between">
-              <span>FIRMA SHA-256 VERIFICADA</span>
+            <CardFooter className="p-3 border-t bg-muted/20 text-[10px] text-muted-foreground flex justify-between">
+              <span>Registro oficial verificado</span>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => navigator.clipboard.writeText(JSON.stringify(eventoSeleccionado.diffJson, null, 2))}
-                className="h-6 px-2 text-[10px] font-mono"
+                className="h-6 px-2 text-[10px]"
               >
-                Copiar JSON
+                Copiar Datos
               </Button>
             </CardFooter>
           </Card>
