@@ -126,11 +126,6 @@ export const EntornoPruebasFirmaGobV2: React.FC = () => {
     }
   };
 
-  const handleProbarOtpErroneo = async () => {
-    setOtpHeader('000000');
-    setMensajeOtp('Se estableció OTP erróneo (000000) en el header para probar el contador de intentos fallidos.');
-  };
-
   const handleResetearOtp = async () => {
     try {
       const res = await fetch('/api/v1/firmas/v2/reset-otp', {
@@ -405,25 +400,10 @@ export const EntornoPruebasFirmaGobV2: React.FC = () => {
               </div>
             )}
 
-            <div className="flex flex-wrap gap-2 pt-1">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => setOtpHeader(testConfig?.otpSandboxEnVivo?.otpActual || '')}
-                className="text-xs h-7"
-              >
-                Copiar OTP a Header
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={handleProbarOtpErroneo}
-                className="text-xs h-7 text-amber-600 border-amber-500/40"
-              >
-                Probar OTP Erróneo (000000)
-              </Button>
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t">
+              <span className="text-[10px] text-muted-foreground">
+                Ingrese el código de 6 dígitos que figura en su aplicación móvil o el código de prueba superior.
+              </span>
               <Button
                 type="button"
                 size="sm"
@@ -431,7 +411,7 @@ export const EntornoPruebasFirmaGobV2: React.FC = () => {
                 onClick={handleResetearOtp}
                 className="text-xs h-7 ml-auto font-semibold"
               >
-                Desbloquear OTP
+                Desbloquear RUN (HTTP 429)
               </Button>
             </div>
           </CardContent>

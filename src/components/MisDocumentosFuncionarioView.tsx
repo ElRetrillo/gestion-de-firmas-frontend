@@ -8,6 +8,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { useTelemetriaStore } from '../store/useTelemetriaStore';
 import { IngestaArchivoModal } from './IngestaArchivoModal';
 import { EntornoPruebasFirmaGobV2 } from './EntornoPruebasFirmaGobV2';
+import { ModalConfigurarTotp } from './ModalConfigurarTotp';
 
 interface DocumentoFuncionario {
   id: string;
@@ -43,6 +44,8 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
   const [modalidadFirmaModal, setModalidadFirmaModal] = useState<'ATENDIDA' | 'DESATENDIDA'>('ATENDIDA');
   const [firmando, setFirmando] = useState(false);
   const [pinToken, setPinToken] = useState(usuario.pinToken || '');
+  const [codigoOtp, setCodigoOtp] = useState('');
+  const [modalTotpAbierto, setModalTotpAbierto] = useState(false);
   const [errorPin, setErrorPin] = useState<string | null>(null);
   const [firmaExitosaModal, setFirmaExitosaModal] = useState<DocumentoFuncionario | null>(null);
   const [mostrarAsistenteAgente, setMostrarAsistenteAgente] = useState(false);
@@ -127,7 +130,7 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
         body: JSON.stringify({
           rutFirmante: usuario.rut,
           pin: modalidadFirmaModal === 'ATENDIDA' ? pinToken : undefined,
-          otp: modalidadFirmaModal === 'ATENDIDA' ? pinToken : undefined,
+          otp: modalidadFirmaModal === 'ATENDIDA' ? (codigoOtp || pinToken) : undefined,
           modalidadFirma: modalidadFirmaModal,
           accion: 'FIRMAR',
         }),
@@ -151,9 +154,11 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
       };
 
       await cargarBandeja();
+      setFiltroEstado('FIRMADO'); // Cambiar automáticamente a la vista de documentos firmados
       setSeleccionados((prev) => prev.filter((id) => id !== doc.id));
       setFirmando(false);
       setDocumentoEnFirma(null);
+      setCodigoOtp('');
       setFirmaExitosaModal(updatedDoc);
     } catch (err: any) {
       setErrorPin(err.message);
@@ -231,6 +236,14 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
           <Button
             type="button"
             variant="outline"
+            onClick={() => setModalTotpAbierto(true)}
+            className="text-xs font-bold h-9 border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
+          >
+            📲 Configurar OTP / Authenticator
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
             onClick={handleDescargarInstaladorAgente}
             className="text-xs font-bold h-9 shadow-xs"
           >
@@ -288,17 +301,35 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border-border/80 bg-card p-4">
+        <Card
+          onClick={() => setFiltroEstado('PENDIENTE')}
+          className={`cursor-pointer transition-all hover:border-primary/60 p-4 ${
+            filtroEstado === 'PENDIENTE'
+              ? 'ring-2 ring-primary border-primary bg-primary/5 shadow-xs'
+              : 'border-border/80 bg-card'
+          }`}
+        >
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>Pendientes de Firma</span>
+            <span className="text-[10px] font-mono text-primary font-semibold">Ver lista →</span>
           </div>
           <div className="text-2xl font-bold text-foreground mt-1">{pendientes}</div>
           <p className="text-[11px] text-muted-foreground mt-0.5">Requieren tu firma digital</p>
         </Card>
 
-        <Card className="border-border/80 bg-card p-4">
+        <Card
+          onClick={() => setFiltroEstado('FIRMADO')}
+          className={`cursor-pointer transition-all hover:border-emerald-500/60 p-4 ${
+            filtroEstado === 'FIRMADO'
+              ? 'ring-2 ring-emerald-500 border-emerald-500 bg-emerald-500/5 shadow-xs'
+              : 'border-border/80 bg-card'
+          }`}
+        >
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>Firmados Exitosamente</span>
+            <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
+              Ver firmados →
+            </span>
           </div>
           <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
             {firmados}
@@ -306,9 +337,17 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
           <p className="text-[11px] text-muted-foreground mt-0.5">Con estampilla y folio FEA</p>
         </Card>
 
-        <Card className="border-border/80 bg-card p-4">
+        <Card
+          onClick={() => setFiltroEstado('EN_REVISION')}
+          className={`cursor-pointer transition-all hover:border-blue-500/60 p-4 ${
+            filtroEstado === 'EN_REVISION'
+              ? 'ring-2 ring-blue-500 border-blue-500 bg-blue-500/5 shadow-xs'
+              : 'border-border/80 bg-card'
+          }`}
+        >
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>En Revisión / Visación</span>
+            <span className="text-[10px] font-mono text-blue-500 font-semibold">Ver lista →</span>
           </div>
           <div className="text-2xl font-bold text-foreground mt-1">{enRevision}</div>
           <p className="text-[11px] text-muted-foreground mt-0.5">En proceso por jefaturas</p>
@@ -321,6 +360,7 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
           <div className="text-xs font-bold text-foreground mt-1 font-mono truncate">
             {tokenActivo ? `FEA ACTIVA • ${tokenActivo.marca || 'Token USB'}` : 'FEA DISPONIBLE'}
           </div>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Token Criptográfico FIPS 140-2</p>
         </Card>
       </div>
 
@@ -337,23 +377,38 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
-            {['TODOS', 'PENDIENTE', 'EN_REVISION', 'FIRMADO'].map((st) => (
-              <Button
-                key={st}
-                size="sm"
-                variant={filtroEstado === st ? 'default' : 'outline'}
-                onClick={() => setFiltroEstado(st)}
-                className="text-xs h-8 px-2.5 font-mono"
-              >
-                {st === 'TODOS'
-                  ? 'Todos'
-                  : st === 'PENDIENTE'
-                    ? 'Pendientes'
-                    : st === 'EN_REVISION'
-                      ? 'En Revisión'
-                      : 'Firmados'}
-              </Button>
-            ))}
+            <Button
+              size="sm"
+              variant={filtroEstado === 'PENDIENTE' ? 'default' : 'outline'}
+              onClick={() => setFiltroEstado('PENDIENTE')}
+              className="text-xs h-9 px-3 font-semibold"
+            >
+              ⏳ Pendientes ({pendientes})
+            </Button>
+            <Button
+              size="sm"
+              variant={filtroEstado === 'FIRMADO' ? 'default' : 'outline'}
+              onClick={() => setFiltroEstado('FIRMADO')}
+              className="text-xs h-9 px-3 font-semibold text-emerald-600 dark:text-emerald-400 border-emerald-500/40"
+            >
+              ✅ Firmados ({firmados})
+            </Button>
+            <Button
+              size="sm"
+              variant={filtroEstado === 'EN_REVISION' ? 'default' : 'outline'}
+              onClick={() => setFiltroEstado('EN_REVISION')}
+              className="text-xs h-9 px-3 font-semibold"
+            >
+              ✍️ En Revisión ({enRevision})
+            </Button>
+            <Button
+              size="sm"
+              variant={filtroEstado === 'TODOS' ? 'default' : 'outline'}
+              onClick={() => setFiltroEstado('TODOS')}
+              className="text-xs h-9 px-3 font-mono"
+            >
+              Todos ({documentos.length})
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -571,27 +626,50 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
               </div>
 
               {modalidadFirmaModal === 'ATENDIDA' && (
-                <div className="space-y-1">
-                  <div className="flex justify-between">
-                    <label className="text-[11px] font-semibold text-foreground">
-                      PIN o Código OTP (6 dígitos):
-                    </label>
-                    <span className="text-[10px] font-mono text-muted-foreground">
-                      {tokenActivo ? 'PIN de Hardware Token' : 'OTP Sandbox v2'}
-                    </span>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <div className="flex justify-between">
+                      <label className="text-[11px] font-semibold text-foreground">
+                        PIN de Seguridad / Token USB:
+                      </label>
+                      <span className="text-[10px] font-mono text-muted-foreground">
+                        {tokenActivo ? `Hardware S/N: ${tokenActivo.serialNumber}` : 'PIN Funcionario'}
+                      </span>
+                    </div>
+                    <Input
+                      type="password"
+                      value={pinToken}
+                      onChange={(e) => setPinToken(e.target.value)}
+                      placeholder="Ingrese el PIN del token USB..."
+                      className="text-xs h-9 font-mono"
+                    />
                   </div>
-                  <Input
-                    type="password"
-                    value={pinToken}
-                    onChange={(e) => setPinToken(e.target.value)}
-                    placeholder="Ingresa tu PIN o código OTP..."
-                    className="text-xs h-9 font-mono"
-                  />
-                  <p className="text-[10px] text-muted-foreground">
-                    {tokenActivo
-                      ? `Token ${tokenActivo.serialNumber} detectado en estación. Ingrese PIN de seguridad.`
-                      : 'Acepta PIN del funcionario (ej: 1908) o el código OTP de 6 dígitos del entorno de pruebas.'}
-                  </p>
+
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <label className="text-[11px] font-semibold text-foreground">
+                        Código OTP Dinámico (6 dígitos):
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setModalTotpAbierto(true)}
+                        className="text-[10px] font-semibold text-primary hover:underline inline-flex items-center gap-0.5"
+                      >
+                        📲 Configurar Authenticator
+                      </button>
+                    </div>
+                    <Input
+                      type="text"
+                      maxLength={6}
+                      value={codigoOtp}
+                      onChange={(e) => setCodigoOtp(e.target.value.replace(/\D/g, ''))}
+                      placeholder="Código de Google / MS Authenticator (ej: 481920)"
+                      className="text-xs h-9 font-mono tracking-widest"
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Ingrese el código que cambia cada 30 segundos en su aplicación móvil Google Authenticator o Microsoft Authenticator.
+                    </p>
+                  </div>
                 </div>
               )}
 
@@ -756,6 +834,12 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
           </Card>
         </div>
       )}
+
+      {/* Modal de Configuración OTP / TOTP (Google / MS Authenticator) */}
+      <ModalConfigurarTotp
+        isOpen={modalTotpAbierto}
+        onClose={() => setModalTotpAbierto(false)}
+      />
     </div>
   );
 };
