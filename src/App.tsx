@@ -132,7 +132,7 @@ export const App: React.FC = () => {
           <div className="max-w-7xl mx-auto space-y-6">
             {/* Vistas Personales del Funcionario */}
             {tabActiva === 'MIS_DOCUMENTOS' && <MisDocumentosFuncionarioView />}
-            {tabActiva === 'FIRMAGOB_V2' && <EntornoPruebasFirmaGobV2 />}
+            {tabActiva === 'FIRMAGOB_V2' && esAdmin && <EntornoPruebasFirmaGobV2 />}
             {tabActiva === 'FE_PUBLICA' && (esMinistro || esAdmin) && <FePublicaDecretosView />}
 
             {/* Vistas de Administrador / Supervisor protegidas con RBAC */}

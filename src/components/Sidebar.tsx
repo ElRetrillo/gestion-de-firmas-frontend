@@ -117,13 +117,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Mis Documentos',
       description: 'Documentos pendientes y firmados',
     },
-    {
-      id: 'FIRMAGOB_V2',
-      icon: FlaskConical,
-      label: 'Entorno FirmaGob v2',
-      badge: 'TEST',
-      description: 'Pruebas y simulación protocolo REST v2',
-    },
+    ...(esAdmin
+      ? [
+          {
+            id: 'FIRMAGOB_V2' as NavTab,
+            icon: FlaskConical,
+            label: 'Entorno FirmaGob v2',
+            badge: 'TEST',
+            description: 'Pruebas y simulación protocolo REST v2',
+          },
+        ]
+      : []),
     ...(esAdmin || esMinistro
       ? [
           {

@@ -7,7 +7,6 @@ import { Input } from './ui/input';
 import { useAuthStore } from '../store/useAuthStore';
 import { useTelemetriaStore } from '../store/useTelemetriaStore';
 import { IngestaArchivoModal } from './IngestaArchivoModal';
-import { EntornoPruebasFirmaGobV2 } from './EntornoPruebasFirmaGobV2';
 import { ModalConfigurarTotp } from './ModalConfigurarTotp';
 
 interface DocumentoFuncionario {
@@ -33,7 +32,6 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
   const estacionConectada = estaciones.find((e) => e.estadoEnVivo === 'CONECTADO' || e.estadoEnVivo === 'FIRMANDO');
   const tokenActivo = estacionConectada?.tokenInfo;
 
-  const [subTab, setSubTab] = useState<'BANDEJA' | 'PRUEBAS_V2'>('BANDEJA');
   const [modalIngestaAbierto, setModalIngestaAbierto] = useState(false);
 
   const [documentos, setDocumentos] = useState<DocumentoFuncionario[]>([]);
@@ -210,22 +208,6 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
 
         <div className="flex items-center gap-2 flex-wrap">
           <Button
-            size="sm"
-            variant={subTab === 'BANDEJA' ? 'default' : 'outline'}
-            onClick={() => setSubTab('BANDEJA')}
-            className="text-xs font-bold h-9"
-          >
-            Bandeja de Documentos ({documentos.length})
-          </Button>
-          <Button
-            size="sm"
-            variant={subTab === 'PRUEBAS_V2' ? 'default' : 'outline'}
-            onClick={() => setSubTab('PRUEBAS_V2')}
-            className="text-xs font-bold h-9 border-amber-500/40"
-          >
-            Entorno Pruebas FirmaGob v2
-          </Button>
-          <Button
             type="button"
             variant="outline"
             onClick={() => setModalIngestaAbierto(true)}
@@ -261,11 +243,7 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
         </div>
       </div>
 
-      {subTab === 'PRUEBAS_V2' ? (
-        <EntornoPruebasFirmaGobV2 />
-      ) : (
-        <>
-          {/* Banner de Detección e Instalación Asistida en 1 Clic (Estilo Zoom / FirmaGob - Sin AD) */}
+      {/* Banner de Detección e Instalación Asistida en 1 Clic (Estilo Zoom / FirmaGob - Sin AD) */}
       {!estacionConectada && (
         <Card className="border-amber-500/40 bg-amber-500/5 shadow-xs">
           <CardContent className="p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -560,8 +538,6 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
           </Table>
         </div>
       </Card>
-      </>
-      )}
 
       {/* Modal de Firma Individual con validación de PIN eHSM / FirmaGob v2 */}
       {documentoEnFirma && (
