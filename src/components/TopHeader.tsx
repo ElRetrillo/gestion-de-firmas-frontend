@@ -23,6 +23,10 @@ const TAB_TITLES: Record<NavTab, { title: string; subtitle: string }> = {
     title: 'Mis Documentos',
     subtitle: 'Gestión personal y firma de decretos, resoluciones y oficios',
   },
+  FIRMAGOB_V2: {
+    title: 'Ambiente de Pruebas FirmaGob v2',
+    subtitle: 'Protocolo Oficial de Conexión a Repositorio de Firmas (Manual Versión 18)',
+  },
   FE_PUBLICA: {
     title: 'Fe Pública y Decretos',
     subtitle: 'Revisión, visación y certificación oficial de documentos',
