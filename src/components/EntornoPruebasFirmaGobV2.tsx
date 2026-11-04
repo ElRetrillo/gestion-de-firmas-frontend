@@ -598,7 +598,7 @@ export const EntornoPruebasFirmaGobV2: React.FC = () => {
               disabled={ejecutando}
               className="text-xs font-bold h-9 px-5 shadow-xs"
             >
-              {ejecutando ? 'Ejecutando FirmaGob v2...' : '🚀 Ejecutar Protocolo FirmaGob v2'}
+              {ejecutando ? 'Ejecutando FirmaGob v2...' : 'Ejecutar Protocolo FirmaGob v2'}
             </Button>
           </div>
         </CardContent>
@@ -628,7 +628,7 @@ export const EntornoPruebasFirmaGobV2: React.FC = () => {
                 download={pdfFirmadoDescargable.nombre}
                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-emerald-600 text-white text-xs font-bold shadow hover:bg-emerald-700 transition-colors"
               >
-                📥 Descargar PDF Firmado Oficial
+                Descargar PDF Firmado Oficial
               </a>
             )}
           </CardHeader>

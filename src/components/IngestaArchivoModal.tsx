@@ -181,7 +181,7 @@ export const IngestaArchivoModal: React.FC<IngestaArchivoModalProps> = ({
                     rel="noreferrer"
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-border bg-background text-foreground text-xs font-semibold hover:bg-muted"
                   >
-                    📄 Descargar PDF Original
+                    Descargar PDF Original
                   </a>
                 )}
                 {resultado.solicitud?.estadoAprobacion === 'FIRMADA' && resultado.urlDescargaFirmado && (
@@ -191,7 +191,7 @@ export const IngestaArchivoModal: React.FC<IngestaArchivoModalProps> = ({
                     rel="noreferrer"
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-primary bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90"
                   >
-                    📥 Descargar PDF Firmado con Sello FEA
+                    Descargar PDF Firmado con Sello FEA
                   </a>
                 )}
                 <Button

@@ -386,7 +386,6 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
         <div className="p-4 rounded-xl border-2 border-amber-500/60 bg-amber-500/10 shadow-lg space-y-2">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <span className="text-amber-500 font-mono text-base">🔑</span>
               Credenciales de Acceso para {credencialGenerada.nombre}
             </h3>
             <button
@@ -461,7 +460,7 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
               rel="noreferrer"
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-primary text-primary-foreground font-bold text-xs shadow hover:bg-primary/90 transition-colors"
             >
-              📥 Descargar Comprobante de Emisión (PDF)
+              Descargar Comprobante de Emisión (PDF)
             </a>
           </div>
         </div>
@@ -785,7 +784,7 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
                             rel="noreferrer"
                             className="inline-flex items-center px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-primary text-[11px] font-bold hover:bg-primary/20 transition-colors shadow-sm"
                           >
-                            📥 Comprobante PDF
+                            Comprobante PDF
                           </a>
                         </TableCell>
                       </TableRow>

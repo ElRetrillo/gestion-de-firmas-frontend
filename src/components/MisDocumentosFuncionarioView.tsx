@@ -223,7 +223,7 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
             onClick={() => setSubTab('PRUEBAS_V2')}
             className="text-xs font-bold h-9 border-amber-500/40"
           >
-            🧪 Entorno Pruebas FirmaGob v2
+            Entorno Pruebas FirmaGob v2
           </Button>
           <Button
             type="button"
@@ -231,7 +231,7 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
             onClick={() => setModalIngestaAbierto(true)}
             className="text-xs font-bold h-9 border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
           >
-            📥 Ingresar Archivo API / Subir PDF
+            Ingresar Archivo API / Subir PDF
           </Button>
           <Button
             type="button"
@@ -239,7 +239,7 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
             onClick={() => setModalTotpAbierto(true)}
             className="text-xs font-bold h-9 border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
           >
-            📲 Configurar OTP / Authenticator
+            Configurar OTP / Authenticator
           </Button>
           <Button
             type="button"
@@ -383,7 +383,7 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
               onClick={() => setFiltroEstado('PENDIENTE')}
               className="text-xs h-9 px-3 font-semibold"
             >
-              ⏳ Pendientes ({pendientes})
+              Pendientes ({pendientes})
             </Button>
             <Button
               size="sm"
@@ -391,7 +391,7 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
               onClick={() => setFiltroEstado('FIRMADO')}
               className="text-xs h-9 px-3 font-semibold text-emerald-600 dark:text-emerald-400 border-emerald-500/40"
             >
-              ✅ Firmados ({firmados})
+              Firmados ({firmados})
             </Button>
             <Button
               size="sm"
@@ -399,7 +399,7 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
               onClick={() => setFiltroEstado('EN_REVISION')}
               className="text-xs h-9 px-3 font-semibold"
             >
-              ✍️ En Revisión ({enRevision})
+              En Revisión ({enRevision})
             </Button>
             <Button
               size="sm"
@@ -655,7 +655,7 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
                         onClick={() => setModalTotpAbierto(true)}
                         className="text-[10px] font-semibold text-primary hover:underline inline-flex items-center gap-0.5"
                       >
-                        📲 Configurar Authenticator
+                        Configurar Authenticator
                       </button>
                     </div>
                     <Input

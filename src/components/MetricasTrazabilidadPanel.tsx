@@ -242,7 +242,7 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
             disabled={!metricas}
             className="h-8 px-3 text-xs font-bold"
           >
-            📥 Exportar CSV
+            Exportar CSV
           </Button>
         </div>
       </CardHeader>
