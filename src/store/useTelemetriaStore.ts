@@ -27,11 +27,150 @@ export interface TelemetriaLog {
   serialNumber?: string;
 }
 
+export interface MetricasTrazabilidadResponse {
+  periodo: {
+    modo: 'ULTIMOS_30_DIAS' | 'POR_MES';
+    mesSeleccionado: string;
+    etiquetaPeriodo: string;
+    fechaInicio: string;
+    fechaFin: string;
+    mesesDisponibles: Array<{
+      valor: string;
+      etiqueta: string;
+    }>;
+  };
+  telemetria: {
+    totalEstaciones: number;
+    estacionesConectadas: number;
+    estacionesFirmando: number;
+    estacionesDesconectadas: number;
+    porcentajeDisponibilidad: number;
+    totalEventosPeriodo: number;
+    eventosConectado: number;
+    eventosFirmando: number;
+    eventosDesconectado: number;
+    porcentajeEventosConectado: number;
+    porcentajeEventosFirmando: number;
+    porcentajeEventosDesconectado: number;
+    tokensRegistrados: number;
+    tokensOperativos: number;
+    porcentajeTokensOperativos: number;
+    rankingEstaciones: Array<{
+      codigoPc: string;
+      dependenciaFisica: string;
+      ipAsignada: string;
+      estadoActual: 'CONECTADO' | 'FIRMANDO' | 'DESCONECTADO';
+      serialTokenActivo: string | null;
+      totalEventos: number;
+      conexiones: number;
+      firmas: number;
+      desconexiones: number;
+      ultimoPing: string;
+      porcentajeActividad: number;
+      tasaExitoConexion: number;
+    }>;
+    trazabilidadDispositivos: Array<{
+      id: string;
+      serialNumber: string;
+      marca: string;
+      modelo: string;
+      vendorId: string;
+      estadoPatrimonial: 'OPERATIVO' | 'ASIGNADO' | 'EN_REVISION' | 'DADO_DE_BAJA';
+      funcionarioAsignado: {
+        nombre: string;
+        rut: string;
+        unidad: string;
+      } | null;
+      estacionActual: string | null;
+      estadoEnVivo: 'CONECTADO' | 'FIRMANDO' | 'DESCONECTADO';
+      totalEventosPeriodo: number;
+      conexionesPeriodo: number;
+      firmasPeriodo: number;
+      desconexionesPeriodo: number;
+      porcentajeUsoPeriodo: number;
+      ultimaActividad: string;
+    }>;
+  };
+  firmas: {
+    totalSolicitudesPeriodo: number;
+    firmadas: number;
+    pendientes: number;
+    rechazadas: number;
+    tasaExitoFirmaPct: number;
+    tasaPendientesPct: number;
+    tasaRechazoPct: number;
+    fePublicaOtorgada: number;
+    fePublicaPendiente: number;
+    porcentajeFePublica: number;
+    porClasificacion: Array<{
+      clasificacion: 'PUBLICA' | 'INTERNA' | 'CONFIDENCIAL' | 'CRITICA';
+      cantidad: number;
+      porcentaje: number;
+    }>;
+    porUnidad: Array<{
+      unidad: string;
+      total: number;
+      firmadas: number;
+      pendientes: number;
+      rechazadas: number;
+      porcentajeExito: number;
+      porcentajeParticipacion: number;
+    }>;
+  };
+  administracion: {
+    totalUsuarios: number;
+    usuariosActivos: number;
+    usuariosPendientesAprobacion: number;
+    usuariosNuevosPeriodo: number;
+    porcentajeUsuariosActivos: number;
+    totalCertificados: number;
+    certificadosVigentes: number;
+    certificadosPorVencer: number;
+    certificadosRevocadosVencidos: number;
+    porcentajeVigenciaCertificados: number;
+    custodiaTokenFisico: number;
+    custodiaCloud: number;
+    porcentajeTokenFisico: number;
+    porcentajeCloud: number;
+    actasPeriodo: number;
+    actasPorTipo: {
+      ENTREGA: number;
+      DEVOLUCION: number;
+      TRASPASO: number;
+      BAJA: number;
+    };
+    totalEventosAuditoriaPeriodo: number;
+    auditoriaPorAccion: Array<{
+      accion: string;
+      cantidad: number;
+      porcentaje: number;
+    }>;
+    auditoriaPorModulo: Array<{
+      modulo: string;
+      cantidad: number;
+      porcentaje: number;
+    }>;
+  };
+  serieTemporal: Array<{
+    fecha: string;
+    etiqueta: string;
+    eventosTelemetria: number;
+    conexionesUsb: number;
+    firmasRealizadas: number;
+    operacionesAuditoria: number;
+    totalActividad: number;
+  }>;
+}
+
 interface TelemetriaState {
   socket: Socket | null;
   wsConectado: boolean;
   estaciones: EstacionTrabajo[];
   historialEventos: TelemetriaLog[];
+  metricas: MetricasTrazabilidadResponse | null;
+  cargandoMetricas: boolean;
+  modoReporte: 'ULTIMOS_30_DIAS' | 'POR_MES';
+  mesSeleccionado: string;
   inicializarSocket: () => void;
   actualizarEstadoEstacion: (payload: {
     codigoPc: string;
@@ -47,22 +186,65 @@ interface TelemetriaState {
     metadatos?: any;
   }) => void;
   cargarEstaciones: () => Promise<void>;
+  cargarMetricas: (modo?: 'ULTIMOS_30_DIAS' | 'POR_MES', mes?: string) => Promise<void>;
+  setPeriodoReporte: (modo: 'ULTIMOS_30_DIAS' | 'POR_MES', mes?: string) => Promise<void>;
   simularEventoHardware: (codigoPc: string, nuevoEstado: EstadoHardwareType) => Promise<void>;
   limpiarMalla: () => void;
 }
+
+const defaultMesActual = () => {
+  const ahora = new Date();
+  return `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}`;
+};
 
 export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
   socket: null,
   wsConectado: false,
   estaciones: [],
   historialEventos: [],
+  metricas: null,
+  cargandoMetricas: false,
+  modoReporte: 'ULTIMOS_30_DIAS',
+  mesSeleccionado: defaultMesActual(),
 
   limpiarMalla: async () => {
     set({ estaciones: [], historialEventos: [] });
     try {
       await fetch('/api/v1/telemetria/limpiar', { method: 'POST' });
+      get().cargarMetricas();
     } catch {
       // Ignorar si falla limpieza remota
+    }
+  },
+
+  setPeriodoReporte: async (modo, mes) => {
+    const nuevoMes = mes || get().mesSeleccionado || defaultMesActual();
+    set({ modoReporte: modo, mesSeleccionado: nuevoMes });
+    await get().cargarMetricas(modo, nuevoMes);
+  },
+
+  cargarMetricas: async (modoInput, mesInput) => {
+    const modo = modoInput || get().modoReporte || 'ULTIMOS_30_DIAS';
+    const mes = mesInput || get().mesSeleccionado || defaultMesActual();
+    set({ cargandoMetricas: true });
+    try {
+      const params = new URLSearchParams({ modo });
+      if (modo === 'POR_MES' && mes) {
+        params.set('mes', mes);
+      }
+      const res = await fetch(`/api/v1/telemetria/metricas?${params.toString()}`);
+      if (res.ok) {
+        const data: MetricasTrazabilidadResponse = await res.json();
+        set({
+          metricas: data,
+          modoReporte: data.periodo?.modo || modo,
+          mesSeleccionado: data.periodo?.mesSeleccionado || mes,
+        });
+      }
+    } catch (err) {
+      console.warn('Error al cargar métricas de trazabilidad:', err);
+    } finally {
+      set({ cargandoMetricas: false });
     }
   },
 
@@ -81,6 +263,7 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
       set({ wsConectado: true });
       socket.emit('unirse_dashboard');
       get().cargarEstaciones();
+      get().cargarMetricas();
     });
 
     socket.on('disconnect', () => {
@@ -89,10 +272,25 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
 
     socket.on('estado_pc_actualizado', (payload: any) => {
       get().actualizarEstadoEstacion(payload);
+      const isHeartbeat = payload?.metadatos?.isHeartbeat === true && payload?.metadatos?.stateChanged === false;
+      if (!isHeartbeat) {
+        get().cargarMetricas();
+      }
+    });
+
+    socket.on('usb-status-changed', (payload: any) => {
+      if (payload?.codigoPc) {
+        get().actualizarEstadoEstacion(payload);
+      }
+      const isHeartbeat = payload?.metadatos?.isHeartbeat === true && payload?.metadatos?.stateChanged === false;
+      if (!isHeartbeat) {
+        get().cargarMetricas();
+      }
     });
 
     socket.on('telemetria_malla_limpiada', () => {
       set({ estaciones: [], historialEventos: [] });
+      get().cargarMetricas();
     });
 
     set({ socket });

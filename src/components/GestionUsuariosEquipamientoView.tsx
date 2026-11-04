@@ -6,6 +6,7 @@ import { Input } from './ui/input';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from './ui/table';
 import { useAuthStore } from '../store/useAuthStore';
 import { formatRut, matchesRutSearch } from '../lib/rut';
+import { MetricasTrazabilidadPanel } from './MetricasTrazabilidadPanel';
 
 interface UsuarioItem {
   id: string;
@@ -363,6 +364,9 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* Panel de Métricas de Trazabilidad y Estadísticas de Dispositivos / Custodia */}
+      <MetricasTrazabilidadPanel vistaOrigen="CUSTODIA" />
 
       {/* Notificación de operación */}
       {mensajeOperacion && (

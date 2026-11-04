@@ -4,6 +4,8 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '.
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
+import { useTelemetriaStore } from '../store/useTelemetriaStore';
+import { MetricasTrazabilidadPanel } from './MetricasTrazabilidadPanel';
 
 interface EventoAuditoria {
   id: string;
@@ -17,6 +19,7 @@ interface EventoAuditoria {
 }
 
 export const AuditoriaView: React.FC = () => {
+  const { modoReporte, mesSeleccionado } = useTelemetriaStore();
   const [filtro, setFiltro] = useState('');
   const [filtroAccion, setFiltroAccion] = useState<string>('TODOS');
   const [eventoSeleccionado, setEventoSeleccionado] = useState<EventoAuditoria | null>(null);
@@ -25,7 +28,11 @@ export const AuditoriaView: React.FC = () => {
 
   useEffect(() => {
     setCargando(true);
-    fetch('/api/v1/auditoria')
+    const params = new URLSearchParams({ modo: modoReporte });
+    if (modoReporte === 'POR_MES' && mesSeleccionado) {
+      params.set('mes', mesSeleccionado);
+    }
+    fetch(`/api/v1/auditoria?${params.toString()}`)
       .then((res) => res.json())
       .then((data) => {
         const lista = Array.isArray(data) ? data : data?.historialCambios;
@@ -36,19 +43,21 @@ export const AuditoriaView: React.FC = () => {
               tablaAfectada: item.tablaAfectada || 'historial_cambios',
               registroId: item.registroId || 'N/A',
               accion: item.accion || 'UPDATE',
-              usuario: item.usuarioEmail || item.usuario?.email || 'sistema',
-              ip: item.ipOrigen || '-',
-              timestamp: item.createdAt
+              usuario: item.usuario || item.usuarioEmail || item.usuario?.email || 'sistema',
+              ip: item.ip || item.ipOrigen || '-',
+              timestamp: item.timestamp
+                ? item.timestamp
+                : item.createdAt
                 ? new Date(item.createdAt).toLocaleString('es-CL')
                 : new Date().toLocaleString('es-CL'),
-              diffJson: item.diffJsonb || {},
+              diffJson: item.diffJson || item.diffJsonb || {},
             })),
           );
         }
       })
       .catch(() => {})
       .finally(() => setCargando(false));
-  }, []);
+  }, [modoReporte, mesSeleccionado]);
 
   const eventosFiltrados = eventos.filter((e) => {
     const matchesTexto =
@@ -57,13 +66,25 @@ export const AuditoriaView: React.FC = () => {
       e.tablaAfectada.toLowerCase().includes(filtro.toLowerCase()) ||
       e.id.toLowerCase().includes(filtro.toLowerCase());
 
-    const matchesAccion = filtroAccion === 'TODOS' || e.accion === filtroAccion;
+    const matchesAccion =
+      filtroAccion === 'TODOS'
+        ? true
+        : filtroAccion === 'FIRMA_EJECUTADA'
+        ? e.accion.includes('FIRMA')
+        : filtroAccion === 'ACTA_CUSTODIA'
+        ? e.accion.includes('ACTA') || e.accion.includes('TOKEN')
+        : filtroAccion === 'CREACION'
+        ? !e.accion.includes('FIRMA') && !e.accion.includes('ACTA') && !e.accion.includes('TOKEN')
+        : e.accion === filtroAccion;
 
     return matchesTexto && matchesAccion;
   });
 
   return (
     <div className="space-y-6">
+      {/* 0. Panel Resumen de Métricas y Trazabilidad sincronizado con el selector de período */}
+      <MetricasTrazabilidadPanel vistaOrigen="AUDITORIA" compacto />
+
       {/* 1. Header y Filtros */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Columna Izquierda: Monitor de Auditoría */}
@@ -148,9 +169,21 @@ export const AuditoriaView: React.FC = () => {
           <CardContent className="p-5 space-y-2 text-xs">
             {[
               { id: 'TODOS', label: 'Todas las Actividades', count: eventos.length },
-              { id: 'FIRMA_EJECUTADA', label: 'Firmas de Documentos', count: 1 },
-              { id: 'UPDATE', label: 'Modificaciones del Sistema', count: 3 },
-              { id: 'TELEMETRIA_PING', label: 'Conexión de Equipos', count: 1 },
+              {
+                id: 'FIRMA_EJECUTADA',
+                label: 'Firmas de Documentos',
+                count: eventos.filter((e) => e.accion.includes('FIRMA')).length,
+              },
+              {
+                id: 'ACTA_CUSTODIA',
+                label: 'Custodia de Dispositivos',
+                count: eventos.filter((e) => e.accion.includes('ACTA') || e.accion.includes('TOKEN')).length,
+              },
+              {
+                id: 'CREACION',
+                label: 'Creación y Modificaciones',
+                count: eventos.filter((e) => !e.accion.includes('FIRMA') && !e.accion.includes('ACTA') && !e.accion.includes('TOKEN')).length,
+              },
             ].map((cat) => (
               <button
                 key={cat.id}

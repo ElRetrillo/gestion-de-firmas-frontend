@@ -5,6 +5,7 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Separator } from './ui/separator';
+import { MetricasTrazabilidadPanel } from './MetricasTrazabilidadPanel';
 
 export const DashboardSupervisores: React.FC = () => {
   const { estaciones, historialEventos, wsConectado, cargarEstaciones, limpiarMalla } = useTelemetriaStore();
@@ -155,6 +156,9 @@ export const DashboardSupervisores: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* 2.5. Panel de Métricas de Trazabilidad y Estadísticas (Por Mes / Últimos 30 días) */}
+      <MetricasTrazabilidadPanel vistaOrigen="DISPOSITIVOS" />
 
       {/* 3. Barra de Búsqueda y Filtros */}
       <Card>
