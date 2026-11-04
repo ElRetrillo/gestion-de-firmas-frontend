@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   CheckCircle2,
   Home,
+  FlaskConical,
   LucideIcon,
 } from 'lucide-react';
 import { useTelemetriaStore } from '../store/useTelemetriaStore';
@@ -22,6 +23,7 @@ import { Button } from './ui/button';
 export type NavTab =
   | 'LANDING'
   | 'MIS_DOCUMENTOS'
+  | 'FIRMAGOB_V2'
   | 'FE_PUBLICA'
   | 'DASHBOARD'
   | 'FIRMAS'
@@ -114,6 +116,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: FileText,
       label: 'Mis Documentos',
       description: 'Documentos pendientes y firmados',
+    },
+    {
+      id: 'FIRMAGOB_V2',
+      icon: FlaskConical,
+      label: 'Entorno FirmaGob v2',
+      badge: 'TEST',
+      description: 'Pruebas y simulación protocolo REST v2',
     },
     ...(esAdmin || esMinistro
       ? [

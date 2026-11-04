@@ -6,6 +6,8 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '.
 import { Input } from './ui/input';
 import { useAuthStore } from '../store/useAuthStore';
 import { useTelemetriaStore } from '../store/useTelemetriaStore';
+import { IngestaArchivoModal } from './IngestaArchivoModal';
+import { EntornoPruebasFirmaGobV2 } from './EntornoPruebasFirmaGobV2';
 
 interface DocumentoFuncionario {
   id: string;
@@ -30,11 +32,15 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
   const estacionConectada = estaciones.find((e) => e.estadoEnVivo === 'CONECTADO' || e.estadoEnVivo === 'FIRMANDO');
   const tokenActivo = estacionConectada?.tokenInfo;
 
+  const [subTab, setSubTab] = useState<'BANDEJA' | 'PRUEBAS_V2'>('BANDEJA');
+  const [modalIngestaAbierto, setModalIngestaAbierto] = useState(false);
+
   const [documentos, setDocumentos] = useState<DocumentoFuncionario[]>([]);
   const [seleccionados, setSeleccionados] = useState<string[]>([]);
   const [filtroTexto, setFiltroTexto] = useState('');
   const [filtroEstado, setFiltroEstado] = useState<string>('TODOS');
   const [documentoEnFirma, setDocumentoEnFirma] = useState<DocumentoFuncionario | null>(null);
+  const [modalidadFirmaModal, setModalidadFirmaModal] = useState<'ATENDIDA' | 'DESATENDIDA'>('ATENDIDA');
   const [firmando, setFirmando] = useState(false);
   const [pinToken, setPinToken] = useState(usuario.pinToken || '');
   const [errorPin, setErrorPin] = useState<string | null>(null);
@@ -120,14 +126,16 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           rutFirmante: usuario.rut,
-          pin: pinToken,
+          pin: modalidadFirmaModal === 'ATENDIDA' ? pinToken : undefined,
+          otp: modalidadFirmaModal === 'ATENDIDA' ? pinToken : undefined,
+          modalidadFirma: modalidadFirmaModal,
           accion: 'FIRMAR',
         }),
       });
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.message || 'PIN Criptográfico inválido');
+        throw new Error(errData.message || 'Error al procesar la firma electrónica');
       }
 
       const actualizada = await res.json();
@@ -195,14 +203,38 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            size="sm"
+            variant={subTab === 'BANDEJA' ? 'default' : 'outline'}
+            onClick={() => setSubTab('BANDEJA')}
+            className="text-xs font-bold h-9"
+          >
+            Bandeja de Documentos ({documentos.length})
+          </Button>
+          <Button
+            size="sm"
+            variant={subTab === 'PRUEBAS_V2' ? 'default' : 'outline'}
+            onClick={() => setSubTab('PRUEBAS_V2')}
+            className="text-xs font-bold h-9 border-amber-500/40"
+          >
+            🧪 Entorno Pruebas FirmaGob v2
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setModalIngestaAbierto(true)}
+            className="text-xs font-bold h-9 border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+          >
+            📥 Ingresar Archivo API / Subir PDF
+          </Button>
           <Button
             type="button"
             variant="outline"
             onClick={handleDescargarInstaladorAgente}
             className="text-xs font-bold h-9 shadow-xs"
           >
-            Descargar Agente USB (1 Clic)
+            Descargar Agente USB
           </Button>
           {seleccionados.length > 0 && (
             <Button
@@ -216,7 +248,11 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
         </div>
       </div>
 
-      {/* Banner de Detección e Instalación Asistida en 1 Clic (Estilo Zoom / FirmaGob - Sin AD) */}
+      {subTab === 'PRUEBAS_V2' ? (
+        <EntornoPruebasFirmaGobV2 />
+      ) : (
+        <>
+          {/* Banner de Detección e Instalación Asistida en 1 Clic (Estilo Zoom / FirmaGob - Sin AD) */}
       {!estacionConectada && (
         <Card className="border-amber-500/40 bg-amber-500/5 shadow-xs">
           <CardContent className="p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -427,14 +463,27 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
                             <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
                               {doc.firmaInfo?.codigoVerificacion}
                             </span>
-                            <a
-                              href={`/api/v1/firmas/solicitudes/${doc.id}/pdf`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-[10px] font-mono text-primary hover:underline font-bold"
-                            >
-                              Descargar PDF
-                            </a>
+                            <div className="flex items-center gap-1.5 text-[10px] font-mono">
+                              <a
+                                href={`/api/v1/firmas/solicitudes/${doc.id}/original-pdf`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-muted-foreground hover:underline"
+                                title="Descargar PDF Original recibido por API"
+                              >
+                                Original
+                              </a>
+                              <span className="text-muted-foreground">•</span>
+                              <a
+                                href={`/api/v1/firmas/solicitudes/${doc.id}/pdf`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-primary hover:underline font-bold"
+                                title="Descargar PDF Firmado con Sello FEA"
+                              >
+                                Firmado
+                              </a>
+                            </div>
                           </div>
                         ) : (
                           <Button
@@ -456,15 +505,17 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
           </Table>
         </div>
       </Card>
+      </>
+      )}
 
-      {/* Modal de Firma Individual con validación de PIN eHSM */}
+      {/* Modal de Firma Individual con validación de PIN eHSM / FirmaGob v2 */}
       {documentoEnFirma && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in">
           <Card className="w-full max-w-md border-border/80 shadow-2xl bg-card">
             <CardHeader className="p-5 pb-3 border-b">
               <div className="flex items-center justify-between">
                 <Badge variant="outline" className="font-mono text-[9px]">
-                  FIRMA ELECTRÓNICA AVANZADA
+                  FIRMA ELECTRÓNICA AVANZADA • PROTOCOLO V2
                 </Badge>
                 <button
                   onClick={() => setDocumentoEnFirma(null)}
@@ -498,35 +549,51 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
                   <span className="font-mono">{usuario.rut}</span>
                 </div>
                 <div className="flex justify-between items-center text-[11px]">
-                  <span className="text-muted-foreground">Dispositivo:</span>
+                  <span className="text-muted-foreground">Dispositivo USB:</span>
                   <span className="font-mono text-emerald-600 dark:text-emerald-400">
                     {tokenActivo
                       ? `${tokenActivo.marca || 'Token'} ${tokenActivo.modelo || ''} (${tokenActivo.serialNumber || 'Conectado'})`
-                      : 'Token Criptográfico USB FIPS 140-2'}
+                      : 'Token Criptográfico USB FIPS 140-2 (Emulado)'}
                   </span>
                 </div>
               </div>
 
               <div className="space-y-1">
-                <div className="flex justify-between">
-                  <label className="text-[11px] font-semibold text-foreground">
-                    PIN de Acceso Token Criptográfico:
-                  </label>
-                  <span className="text-[10px] font-mono text-muted-foreground">
-                    3 intentos máx
-                  </span>
-                </div>
-                <Input
-                  type="password"
-                  value={pinToken}
-                  onChange={(e) => setPinToken(e.target.value)}
-                  placeholder="Ingresa tu PIN..."
-                  className="text-xs h-9 font-mono"
-                />
-                <p className="text-[10px] text-muted-foreground">
-                  Política de bloqueo FIPS: 3 intentos fallidos bloquean el Token (requiere PUK Admin).
-                </p>
+                <label className="text-[11px] font-semibold text-foreground">Modalidad de Firma:</label>
+                <select
+                  value={modalidadFirmaModal}
+                  onChange={(e) => setModalidadFirmaModal(e.target.value as any)}
+                  className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs font-mono"
+                >
+                  <option value="ATENDIDA">ATENDIDA (Token USB / PIN / OTP en vivo)</option>
+                  <option value="DESATENDIDA">DESATENDIDA (Proceso Automático / Sin PIN)</option>
+                </select>
               </div>
+
+              {modalidadFirmaModal === 'ATENDIDA' && (
+                <div className="space-y-1">
+                  <div className="flex justify-between">
+                    <label className="text-[11px] font-semibold text-foreground">
+                      PIN o Código OTP (6 dígitos):
+                    </label>
+                    <span className="text-[10px] font-mono text-muted-foreground">
+                      {tokenActivo ? 'PIN de Hardware Token' : 'OTP Sandbox v2'}
+                    </span>
+                  </div>
+                  <Input
+                    type="password"
+                    value={pinToken}
+                    onChange={(e) => setPinToken(e.target.value)}
+                    placeholder="Ingresa tu PIN o código OTP..."
+                    className="text-xs h-9 font-mono"
+                  />
+                  <p className="text-[10px] text-muted-foreground">
+                    {tokenActivo
+                      ? `Token ${tokenActivo.serialNumber} detectado en estación. Ingrese PIN de seguridad.`
+                      : 'Acepta PIN del funcionario (ej: 1908) o el código OTP de 6 dígitos del entorno de pruebas.'}
+                  </p>
+                </div>
+              )}
 
               <div className="flex justify-end gap-2 pt-2">
                 <Button
@@ -550,6 +617,16 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
           </Card>
         </div>
       )}
+
+      {/* Modal Ingesta de Archivo API / Subir PDF */}
+      <IngestaArchivoModal
+        isOpen={modalIngestaAbierto}
+        onClose={() => setModalIngestaAbierto(false)}
+        rutPredeterminado={usuario.rut}
+        onDocumentoIngresado={() => {
+          cargarBandeja();
+        }}
+      />
 
       {firmaExitosaModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in">
