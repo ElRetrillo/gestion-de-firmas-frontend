@@ -173,7 +173,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <LogoMunicipalidad variant="sidebar" className="h-9 w-9 shrink-0" />
             <div className="flex flex-col text-left">
               <span className="font-bold text-xs tracking-tight text-sidebar-foreground truncate max-w-[170px]">
-                Muni Coquimbo
+                Municipalidad de Coquimbo
               </span>
               <span className="text-[10px] text-muted-foreground font-mono">
                 Gestión de Firmas FEA
