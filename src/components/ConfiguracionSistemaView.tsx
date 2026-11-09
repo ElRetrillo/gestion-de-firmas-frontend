@@ -290,10 +290,8 @@ export const ConfiguracionSistemaView: React.FC = () => {
                       <TableCell className="text-right">
                         <Badge
                           variant={
-                            est.estadoEnVivo === 'FIRMANDO'
+                            est.estadoEnVivo === 'CONECTADO'
                               ? 'success'
-                              : est.estadoEnVivo === 'CONECTADO'
-                              ? 'warning'
                               : 'danger'
                           }
                           className="text-[10px]"

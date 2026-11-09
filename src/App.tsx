@@ -26,6 +26,13 @@ export const App: React.FC = () => {
       inicializarSocket();
       cargarEstaciones();
       cargarMetricas();
+
+      const intervalId = window.setInterval(() => {
+        cargarEstaciones();
+        cargarMetricas();
+      }, 10000);
+
+      return () => window.clearInterval(intervalId);
     }
   }, [isAutenticado, inicializarSocket, cargarEstaciones, cargarMetricas]);
 

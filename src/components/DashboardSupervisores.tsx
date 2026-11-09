@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Info, User } from 'lucide-react';
 import { useTelemetriaStore } from '../store/useTelemetriaStore';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
@@ -6,17 +7,103 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from './ui/table';
 
+interface InfoPeriodoTooltipProps {
+  periodoEtiqueta?: string;
+  align?: 'left' | 'center' | 'right';
+  className?: string;
+}
+
+const InfoPeriodoTooltip: React.FC<InfoPeriodoTooltipProps> = ({
+  periodoEtiqueta = 'Últimos 30 días',
+  align = 'right',
+  className = '',
+}) => {
+  const [abierto, setAbierto] = useState(false);
+
+  const alignClasses =
+    align === 'right'
+      ? 'right-0'
+      : align === 'left'
+        ? 'left-0'
+        : 'left-1/2 -translate-x-1/2';
+
+  const arrowClasses =
+    align === 'right'
+      ? 'right-2'
+      : align === 'left'
+        ? 'left-2'
+        : 'left-1/2 -translate-x-1/2';
+
+  return (
+    <div
+      className={`relative inline-flex items-center group ${className}`}
+      onMouseEnter={() => setAbierto(true)}
+      onMouseLeave={() => setAbierto(false)}
+    >
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setAbierto((prev) => !prev);
+        }}
+        onFocus={() => setAbierto(true)}
+        onBlur={() => setAbierto(false)}
+        aria-label="¿Qué es el Período Actual?"
+        title="¿Qué es el Período Actual? (Haz hover o clic para ver la definición)"
+        className="cursor-pointer text-primary/70 hover:text-primary dark:text-primary-foreground/70 dark:hover:text-primary-foreground transition-colors focus:outline-none rounded-full p-0.5 inline-flex items-center justify-center hover:bg-primary/10"
+      >
+        <Info className="w-3.5 h-3.5" />
+      </button>
+
+      {/* Popover / Tooltip explicativo */}
+      <div
+        role="tooltip"
+        className={`absolute top-full mt-2 w-72 sm:w-80 p-3.5 bg-popover text-popover-foreground text-xs rounded-lg shadow-xl border border-border z-50 transition-all duration-150 ${alignClasses} ${abierto ? 'flex flex-col' : 'hidden'
+          }`}
+      >
+        <div className="font-bold text-[11px] text-primary flex items-center gap-1.5 pb-1.5 border-b border-border/60 mb-2">
+          <Info className="w-3.5 h-3.5 shrink-0 text-primary" />
+          <span>Definición: Período Actual</span>
+        </div>
+
+        <div className="space-y-2 text-[11px] leading-relaxed text-muted-foreground">
+          <p>
+            El <strong className="text-foreground font-semibold">Período Actual</strong> corresponde a la <span className="text-primary font-semibold font-mono">ventana temporal activa de evaluación</span> ({periodoEtiqueta}) configurada para el monitoreo institucional.
+          </p>
+
+          <div className="p-2 rounded bg-muted/40 border border-border/50 text-[10px] font-mono space-y-1">
+            <div className="text-foreground font-bold">Criterio de contabilización:</div>
+            <div className="text-emerald-600 dark:text-emerald-400 font-semibold">
+              • 1 acción = 1 firma electrónica válida
+            </div>
+            <div className="text-muted-foreground">
+              • Excluye eventos de conexión/desconexión USB para no alterar la métrica.
+            </div>
+          </div>
+
+          <p className="text-[10px] text-muted-foreground">
+            <strong className="text-foreground">Diferencia con Histórico:</strong> Mientras el histórico totaliza todas las firmas desde la puesta en marcha, el período actual permite evaluar el ritmo de uso y adopción reciente.
+          </p>
+        </div>
+
+        {/* Flecha indicadora superior */}
+        <div
+          className={`absolute bottom-full w-0 h-0 border-x-4 border-x-transparent border-b-4 border-b-popover ${arrowClasses}`}
+        />
+      </div>
+    </div>
+  );
+};
+
 export const DashboardSupervisores: React.FC = () => {
   const {
     estaciones,
     metricas,
-    registrarAccionFirma,
   } = useTelemetriaStore();
 
-  const [busquedaFirmas, setBusquedaFirmas] = useState('');
+  const [busqueda, setBusqueda] = useState('');
   const [filtroEstadoFirma, setFiltroEstadoFirma] = useState<'TODOS' | 'ACTIVO' | 'POR_VENCER' | 'EXPIRADO'>('TODOS');
-  const [filtroEstadoSesion, setFiltroEstadoSesion] = useState<string>('TODOS');
-  const [registrandoAccionId, setRegistrandoAccionId] = useState<string | null>(null);
+  const [filtroEstadoConexion, setFiltroEstadoConexion] = useState<'TODOS' | 'CONECTADO' | 'DESCONECTADO'>('TODOS');
   const [mensajeAccion, setMensajeAccion] = useState<string | null>(null);
 
   // 1. Dispositivos Existentes (Total, Activos, Expirados) y Estado en Sesión
@@ -30,20 +117,9 @@ export const DashboardSupervisores: React.FC = () => {
     Math.max(0, dispExistentes - dispActivos);
 
   const conectados = estaciones.filter((e) => e.estadoEnVivo === 'CONECTADO').length;
-  const firmando = estaciones.filter((e) => e.estadoEnVivo === 'FIRMANDO').length;
-  const desconectados = estaciones.filter((e) => e.estadoEnVivo === 'DESCONECTADO').length;
 
-  // 2. Firmas Asignadas
+  // 2. Firmas Asignadas y Acciones
   const listadoFirmas = metricas?.firmasAsignadas?.listado || [];
-  const firmasTotal = metricas?.firmasAsignadas?.totalAsignadas ?? listadoFirmas.length;
-  const firmasVigentes =
-    metricas?.firmasAsignadas?.vigentes ?? listadoFirmas.filter((f) => f.estado === 'ACTIVO').length;
-  const firmasPorVencer =
-    metricas?.firmasAsignadas?.porVencer ?? listadoFirmas.filter((f) => f.estado === 'POR_VENCER').length;
-  const firmasExpiradas =
-    metricas?.firmasAsignadas?.expiradas ?? listadoFirmas.filter((f) => f.estado === 'EXPIRADO').length;
-
-  // 3. Acciones por Funcionario (1 acción = 1 firma, excluyendo conexiones/desconexiones)
   const listadoAccionesFuncionarios = metricas?.accionesFuncionarios?.listadoPorFuncionario || [];
   const totalAccionesPeriodo =
     metricas?.accionesFuncionarios?.totalAccionesFirmaPeriodo ??
@@ -51,45 +127,150 @@ export const DashboardSupervisores: React.FC = () => {
   const totalAccionesHistorico =
     metricas?.accionesFuncionarios?.totalAccionesFirmaHistorico ??
     listadoAccionesFuncionarios.reduce((acc, item) => acc + item.accionesFirmaHistorico, 0);
-  const conexionesExcluidas = metricas?.accionesFuncionarios?.conexionesExcluidasPeriodo ?? 0;
-  const desconexionesExcluidas = metricas?.accionesFuncionarios?.desconexionesExcluidasPeriodo ?? 0;
+  const periodoEtiqueta = metricas?.periodo?.etiquetaPeriodo || 'Últimos 30 días';
 
-  const firmasFiltradas = listadoFirmas.filter((f) => {
-    const q = busquedaFirmas.trim().toLowerCase();
+  // Consolidación de datos unificados por Funcionario/Token
+  interface FilaCentralizada {
+    id: string;
+    funcionario: {
+      id?: string;
+      nombre: string;
+      rut: string;
+      unidad: string;
+      cargo?: string;
+    };
+    token: {
+      serialNumber: string;
+      marca?: string;
+      modelo?: string;
+    };
+    estadoFirma: 'ACTIVO' | 'POR_VENCER' | 'EXPIRADO';
+    fechaExpiracion?: string;
+    diasRestantes?: number;
+    tiempoExpiracionTexto?: string;
+    estadoConexion: 'CONECTADO' | 'DESCONECTADO';
+    estacionActual?: string | null;
+    ipEstacion?: string | null;
+    dependenciaFisica?: string | null;
+    firmasPeriodo: number;
+    firmasHistorico: number;
+    conexiones: number;
+    desconexiones: number;
+  }
+
+  // Mapa combinado
+  const mapaFilas = new Map<string, FilaCentralizada>();
+
+  // 1. Poblamos desde listadoFirmas
+  listadoFirmas.forEach((f) => {
+    const key = f.funcionario?.rut || f.serialNumberToken || f.id;
+    // Buscar si hay estación conectada en vivo con este serial o vinculada a este PC
+    const estacionEnVivo = estaciones.find(
+      (e) =>
+        (e.tokenInfo?.serialNumber && e.tokenInfo.serialNumber.toLowerCase() === f.serialNumberToken.toLowerCase()) ||
+        (f.estacionActual && e.codigoPc.toLowerCase() === f.estacionActual.toLowerCase())
+    );
+
+    const accionData = listadoAccionesFuncionarios.find(
+      (a) =>
+        (f.funcionario?.rut && a.rut === f.funcionario.rut) ||
+        (f.serialNumberToken && a.serialNumberToken === f.serialNumberToken)
+    );
+
+    const estadoConexionFinal = estacionEnVivo
+      ? estacionEnVivo.estadoEnVivo
+      : f.estadoConexion || 'DESCONECTADO';
+
+    mapaFilas.set(key, {
+      id: f.id || key,
+      funcionario: {
+        id: f.funcionario?.id,
+        nombre: f.funcionario?.nombre || 'Funcionario Municipal',
+        rut: f.funcionario?.rut || 'Sin RUT',
+        unidad: f.funcionario?.unidad || 'Municipalidad',
+        cargo: f.funcionario?.cargo,
+      },
+      token: {
+        serialNumber: f.serialNumberToken || 'SN-SIN-TOKEN',
+        marca: f.marca,
+        modelo: f.modelo,
+      },
+      estadoFirma: (f.estado as any) === 'POR VENCER' ? 'POR_VENCER' : f.estado,
+      fechaExpiracion: f.fechaExpiracion,
+      diasRestantes: f.diasRestantes,
+      tiempoExpiracionTexto: f.tiempoExpiracionTexto,
+      estadoConexion: estadoConexionFinal,
+      estacionActual: estacionEnVivo?.codigoPc || f.estacionActual || null,
+      ipEstacion: estacionEnVivo?.ipAsignada || null,
+      dependenciaFisica: estacionEnVivo?.dependenciaFisica || null,
+      firmasPeriodo: accionData?.accionesFirmaPeriodo ?? f.accionesFirmaPeriodo ?? 0,
+      firmasHistorico: accionData?.accionesFirmaHistorico ?? f.accionesFirmaTotal ?? 0,
+      conexiones: accionData?.conexionesIgnoradasPeriodo ?? 0,
+      desconexiones: accionData?.desconexionesIgnoradasPeriodo ?? 0,
+    });
+  });
+
+  // 2. Complementamos desde listadoAccionesFuncionarios si alguno no estuviese en listadoFirmas
+  listadoAccionesFuncionarios.forEach((a) => {
+    const key = a.rut || a.serialNumberToken || a.usuarioId;
+    if (!mapaFilas.has(key)) {
+      const estacionEnVivo = estaciones.find(
+        (e) =>
+          (e.tokenInfo?.serialNumber && e.tokenInfo.serialNumber.toLowerCase() === a.serialNumberToken.toLowerCase()) ||
+          (a.codigoPcUltimaSesion && e.codigoPc.toLowerCase() === a.codigoPcUltimaSesion.toLowerCase())
+      );
+
+      mapaFilas.set(key, {
+        id: a.usuarioId || key,
+        funcionario: {
+          id: a.usuarioId,
+          nombre: a.nombre,
+          rut: a.rut,
+          unidad: a.unidad,
+          cargo: a.cargo,
+        },
+        token: {
+          serialNumber: a.serialNumberToken,
+          modelo: a.modeloToken,
+        },
+        estadoFirma: (a.estadoToken as any) === 'POR VENCER' ? 'POR_VENCER' : (a.estadoToken || 'ACTIVO'),
+        diasRestantes: a.diasRestantesToken,
+        tiempoExpiracionTexto: a.diasRestantesToken ? `${a.diasRestantesToken} días restantes` : undefined,
+        estadoConexion: estacionEnVivo?.estadoEnVivo || 'DESCONECTADO',
+        estacionActual: estacionEnVivo?.codigoPc || a.codigoPcUltimaSesion || null,
+        ipEstacion: estacionEnVivo?.ipAsignada || null,
+        dependenciaFisica: estacionEnVivo?.dependenciaFisica || null,
+        firmasPeriodo: a.accionesFirmaPeriodo,
+        firmasHistorico: a.accionesFirmaHistorico,
+        conexiones: a.conexionesIgnoradasPeriodo,
+        desconexiones: a.desconexionesIgnoradasPeriodo,
+      });
+    }
+  });
+
+  const todasLasFilas = Array.from(mapaFilas.values());
+
+  const filasFiltradas = todasLasFilas.filter((f) => {
+    const q = busqueda.trim().toLowerCase();
     const coincideTexto =
       !q ||
       f.funcionario.nombre.toLowerCase().includes(q) ||
       f.funcionario.rut.toLowerCase().includes(q) ||
       f.funcionario.unidad.toLowerCase().includes(q) ||
-      f.serialNumberToken.toLowerCase().includes(q);
-    const coincideEstado = filtroEstadoFirma === 'TODOS' || f.estado === filtroEstadoFirma;
-    return coincideTexto && coincideEstado;
+      (f.funcionario.cargo && f.funcionario.cargo.toLowerCase().includes(q)) ||
+      f.token.serialNumber.toLowerCase().includes(q) ||
+      (f.estacionActual && f.estacionActual.toLowerCase().includes(q));
+
+    const coincideEstadoFirma =
+      filtroEstadoFirma === 'TODOS' ||
+      f.estadoFirma === filtroEstadoFirma ||
+      (filtroEstadoFirma === 'POR_VENCER' && ((f.estadoFirma as string) === 'POR VENCER' || f.estadoFirma === 'POR_VENCER'));
+
+    const coincideEstadoConexion =
+      filtroEstadoConexion === 'TODOS' || f.estadoConexion === filtroEstadoConexion;
+
+    return coincideTexto && coincideEstadoFirma && coincideEstadoConexion;
   });
-
-  const estacionesFiltradas = estaciones.filter(
-    (est) => filtroEstadoSesion === 'TODOS' || est.estadoEnVivo === filtroEstadoSesion,
-  );
-
-  const handleSimularAccionFirma = async (params: {
-    idKey: string;
-    rutFuncionario?: string;
-    nombreFuncionario?: string;
-    serialNumber?: string;
-    codigoPc?: string;
-  }) => {
-    setRegistrandoAccionId(params.idKey);
-    await registrarAccionFirma({
-      rutFuncionario: params.rutFuncionario,
-      serialNumber: params.serialNumber,
-      codigoPc: params.codigoPc,
-      glosaAccion: 'Firma realizada con token desde sesión activa',
-    });
-    setRegistrandoAccionId(null);
-    setMensajeAccion(
-      `+1 acción de firma registrada para ${params.nombreFuncionario || params.serialNumber || 'el token'}.`,
-    );
-    setTimeout(() => setMensajeAccion(null), 3500);
-  };
 
   return (
     <div className="space-y-5">
@@ -113,7 +294,7 @@ export const DashboardSupervisores: React.FC = () => {
           </div>
           <div className="text-2xl font-bold text-foreground mt-1">{dispExistentes}</div>
           <div className="text-[11px] text-muted-foreground font-mono">
-            Total en inventario
+            Registro total
           </div>
         </Card>
 
@@ -125,7 +306,7 @@ export const DashboardSupervisores: React.FC = () => {
             {dispActivos}
           </div>
           <div className="text-[11px] text-muted-foreground font-mono">
-            {conectados} conectados • {firmando} firmando
+            {conectados} Disponibles
           </div>
         </Card>
 
@@ -137,62 +318,97 @@ export const DashboardSupervisores: React.FC = () => {
             {dispExpirados}
           </div>
           <div className="text-[11px] text-muted-foreground font-mono">
-            Vigencia caducada
-          </div>
-        </Card>
-
-        <Card className="p-3.5 border-amber-500/30 bg-amber-500/5">
-          <div className="text-[10px] font-bold uppercase text-amber-600 dark:text-amber-400">
-            Firmas Asignadas
-          </div>
-          <div className="text-2xl font-bold text-amber-700 dark:text-amber-400 mt-1">
-            {firmasTotal}
-          </div>
-          <div className="text-[11px] text-muted-foreground font-mono">
-            {firmasVigentes} act. • {firmasPorVencer} por vencer • {firmasExpiradas} exp.
+            Expirados historicamente
           </div>
         </Card>
 
         <Card className="p-3.5 border-primary/40 bg-primary/5 col-span-2 sm:col-span-1">
-          <div className="text-[10px] font-bold uppercase text-primary">
-            Acciones Firma (Período)
+          <div className="flex items-center justify-between gap-1">
+            <div className="text-[10px] font-bold uppercase text-primary truncate">
+              Acciones Firma (Período Actual)
+            </div>
+            <InfoPeriodoTooltip periodoEtiqueta={periodoEtiqueta} align="right" />
           </div>
           <div className="text-2xl font-bold text-foreground mt-1">
             {totalAccionesPeriodo}
           </div>
           <div className="text-[11px] text-muted-foreground font-mono">
-            1 acción = 1 firma (Hist.: {totalAccionesHistorico})
+            Se considera que: 1 acción = 1 firma
+          </div>
+        </Card>
+
+        <Card className="p-3.5 border-primary/40 bg-primary/5 col-span-2 sm:col-span-1">
+          <div className="text-[10px] font-bold uppercase text-primary">
+            Historico de Firmas
+          </div>
+          <div className="text-2xl font-bold text-foreground mt-1">
+            {totalAccionesHistorico}
+          </div>
+          <div className="text-[11px] text-muted-foreground font-mono">
+            Total de  N° Firmas desde la implementación del sistema
           </div>
         </Card>
       </div>
 
-      {/* 2. Tabla de Firmas Asignadas (Titular, Estado y Tiempo de Expiración) */}
+      {/* 2. Tabla Centralizada Unificada de Supervisión */}
       <Card className="border-border/80 bg-card overflow-hidden">
-        <CardHeader className="p-3.5 border-b bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-          <CardTitle className="text-sm font-bold">
-            Firmas Asignadas ({firmasFiltradas.length})
-          </CardTitle>
+        <CardHeader className="p-3.5 border-b bg-muted/20 flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div>
+            <CardTitle className="text-sm font-bold flex items-center gap-2">
+              <span>Supervisión Centralizada de Firmas y Dispositivos</span>
+              <Badge variant="outline" className="text-[10px] font-mono">
+                {filasFiltradas.length} de {todasLasFilas.length} registros
+              </Badge>
+            </CardTitle>
+            <p className="text-[11px] text-muted-foreground mt-0.5">
+              Panel integrado con funcionario, token, vigencia de firma, trazabilidad en sesión y métricas de uso.
+            </p>
+          </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <Input
-              value={busquedaFirmas}
-              onChange={(e) => setBusquedaFirmas(e.target.value)}
-              placeholder="Buscar funcionario, RUT o N° serie..."
-              className="h-8 text-xs w-full sm:w-56 bg-background"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar por funcionario, RUT, unidad o N° serie..."
+              className="h-8 text-xs w-full sm:w-64 bg-background"
             />
-            <div className="inline-flex rounded-md border bg-background p-0.5">
+
+            {/* Filtro por Vigencia de Firma */}
+            <div className="inline-flex rounded-md border bg-background p-0.5" title="Filtrar por estado de vigencia del token/firma">
               {(['TODOS', 'ACTIVO', 'POR_VENCER', 'EXPIRADO'] as const).map((est) => (
                 <button
                   key={est}
                   type="button"
                   onClick={() => setFiltroEstadoFirma(est)}
-                  className={`px-2 py-1 rounded text-[11px] font-semibold ${
+                  className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
                     filtroEstadoFirma === est
                       ? 'bg-primary text-primary-foreground'
                       : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {est === 'TODOS' ? 'Todas' : est === 'POR_VENCER' ? 'Por Vencer' : est}
+                </button>
+              ))}
+            </div>
+
+            {/* Filtro por Conexión */}
+            <div className="inline-flex rounded-md border bg-background p-0.5" title="Filtrar por estado de conexión física">
+              {(['TODOS', 'CONECTADO', 'DESCONECTADO'] as const).map((cEst) => (
+                <button
+                  key={cEst}
+                  type="button"
+                  onClick={() => setFiltroEstadoConexion(cEst)}
+                  className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
+                    filtroEstadoConexion === cEst
+                      ? cEst === 'CONECTADO'
+                        ? 'bg-emerald-600 text-white'
+                        : cEst === 'DESCONECTADO'
+                        ? 'bg-rose-600 text-white'
+                        : 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {cEst === 'TODOS' ? 'Conexión: Todos' : cEst === 'CONECTADO' ? 'Conectados' : 'Desconectados'}
                 </button>
               ))}
             </div>
@@ -203,236 +419,150 @@ export const DashboardSupervisores: React.FC = () => {
           <Table>
             <TableHeader className="bg-muted/40 text-[11px]">
               <TableRow>
-                <TableHead>Funcionario Titular / RUT</TableHead>
-                <TableHead>Unidad</TableHead>
-                <TableHead>Token (N° Serie)</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Expiración / Tiempo Restante</TableHead>
-                <TableHead>Conexión en Sesión</TableHead>
+                <TableHead className="min-w-[180px]">Funcionario Titular / RUT</TableHead>
+                <TableHead className="min-w-[140px]">Unidad / Cargo</TableHead>
+                <TableHead className="min-w-[170px]">Token (Info)</TableHead>
+                <TableHead className="min-w-[110px]">Estado de Firma</TableHead>
+                <TableHead className="min-w-[140px]">Vigencia Actual</TableHead>
+                <TableHead className="min-w-[140px]">Estado de Conexión</TableHead>
+                <TableHead className="min-w-[120px]">
+                  <div className="inline-flex items-center gap-1">
+                    <span>Firmas Período</span>
+                    <InfoPeriodoTooltip periodoEtiqueta={periodoEtiqueta} align="center" />
+                  </div>
+                </TableHead>
+                <TableHead className="min-w-[100px]">Firmas Totales</TableHead>
+                <TableHead className="min-w-[160px]">Conexiones / Desconexiones</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="text-xs">
-              {firmasFiltradas.map((firma) => (
-                <TableRow key={firma.id} className="hover:bg-muted/30">
-                  <TableCell>
-                    <div className="font-bold text-foreground">{firma.funcionario.nombre}</div>
-                    <div className="text-[10px] font-mono text-muted-foreground">
-                      {firma.funcionario.rut}
-                    </div>
+              {filasFiltradas.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground italic">
+                    No se encontraron funcionarios o dispositivos con los filtros seleccionados.
                   </TableCell>
-                  <TableCell className="text-[11px]">{firma.funcionario.unidad}</TableCell>
-                  <TableCell>
-                    <div className="font-mono font-bold text-foreground">{firma.serialNumberToken}</div>
-                    <div className="text-[10px] font-mono text-muted-foreground">
-                      {firma.marca} {firma.modelo}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        firma.estado === 'ACTIVO'
-                          ? 'success'
-                          : firma.estado === 'POR_VENCER'
-                          ? 'warning'
-                          : 'danger'
-                      }
-                      className="text-[10px] font-mono font-bold"
-                    >
-                      {firma.estado}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-mono text-[11px] font-semibold text-foreground">
-                      {firma.fechaExpiracion}
-                    </div>
-                    <div
-                      className={`text-[10px] font-mono font-bold ${
-                        firma.diasRestantes <= 15
-                          ? 'text-rose-500'
-                          : firma.diasRestantes <= 60
-                          ? 'text-amber-500'
-                          : 'text-emerald-600 dark:text-emerald-400'
-                      }`}
-                    >
-                      {firma.tiempoExpiracionTexto}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1.5">
+                </TableRow>
+              ) : (
+                filasFiltradas.map((fila) => (
+                  <TableRow key={fila.id} className="hover:bg-muted/30 transition-colors">
+                    {/* 1. Funcionario Titular / RUT */}
+                    <TableCell>
+                      <div className="font-bold text-foreground flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5 text-primary shrink-0" />
+                        <span>{fila.funcionario.nombre}</span>
+                      </div>
+                      <div className="text-[10px] font-mono text-muted-foreground ml-5">
+                        {fila.funcionario.rut}
+                      </div>
+                    </TableCell>
+
+                    {/* 2. Unidad / Cargo */}
+                    <TableCell>
+                      <div className="text-[11px] font-medium text-foreground">{fila.funcionario.unidad}</div>
+                      {fila.funcionario.cargo && (
+                        <div className="text-[10px] text-muted-foreground truncate max-w-[160px]" title={fila.funcionario.cargo}>
+                          {fila.funcionario.cargo}
+                        </div>
+                      )}
+                    </TableCell>
+
+                    {/* 3. Token (Info) */}
+                    <TableCell>
+                      <div className="font-mono font-bold text-foreground">{fila.token.serialNumber}</div>
+                      <div className="text-[10px] font-mono text-muted-foreground">
+                        {[fila.token.marca, fila.token.modelo].filter(Boolean).join(' ') || 'SafeNet / eToken'}
+                      </div>
+                    </TableCell>
+
+                    {/* 4. Estado de Firma */}
+                    <TableCell>
                       <Badge
                         variant={
-                          firma.estadoConexion === 'FIRMANDO'
+                          fila.estadoFirma === 'ACTIVO'
                             ? 'success'
-                            : firma.estadoConexion === 'CONECTADO'
+                            : fila.estadoFirma === 'POR_VENCER'
                             ? 'warning'
                             : 'danger'
                         }
-                        className="text-[9px] font-mono"
+                        className="text-[10px] font-mono font-bold whitespace-nowrap"
                       >
-                        {firma.estadoConexion}
+                        {fila.estadoFirma === 'POR_VENCER' ? 'POR VENCER' : fila.estadoFirma}
                       </Badge>
-                      {firma.estacionActual && (
-                        <span className="text-[10px] font-mono text-muted-foreground">
-                          {firma.estacionActual}
-                        </span>
+                    </TableCell>
+
+                    {/* 5. Tiempo Vigencia Actual */}
+                    <TableCell>
+                      {fila.fechaExpiracion && (
+                        <div className="font-mono text-[11px] font-semibold text-foreground">
+                          {fila.fechaExpiracion}
+                        </div>
                       )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+                      <div
+                        className={`text-[10px] font-mono font-bold ${
+                          fila.diasRestantes !== undefined && fila.diasRestantes <= 15
+                            ? 'text-rose-500'
+                            : fila.diasRestantes !== undefined && fila.diasRestantes <= 60
+                            ? 'text-amber-500'
+                            : 'text-emerald-600 dark:text-emerald-400'
+                        }`}
+                      >
+                        {fila.tiempoExpiracionTexto || (fila.diasRestantes !== undefined ? `${fila.diasRestantes} días` : 'Vigente')}
+                      </div>
+                    </TableCell>
+
+                    {/* 6. Estado de Conexión */}
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1.5">
+                          <Badge
+                            variant={fila.estadoConexion === 'CONECTADO' ? 'success' : 'danger'}
+                            className="text-[9px] font-mono font-bold"
+                          >
+                            {fila.estadoConexion}
+                          </Badge>
+                          {fila.estacionActual && (
+                            <span className="text-[10px] font-mono font-bold text-foreground">
+                              {fila.estacionActual}
+                            </span>
+                          )}
+                        </div>
+                        {fila.dependenciaFisica && (
+                          <div className="text-[10px] text-muted-foreground truncate max-w-[140px]" title={fila.dependenciaFisica}>
+                            {fila.dependenciaFisica}
+                          </div>
+                        )}
+                      </div>
+                    </TableCell>
+
+                    {/* 7. Firmas Período */}
+                    <TableCell>
+                      <Badge variant="success" className="text-xs font-mono font-bold px-2">
+                        {fila.firmasPeriodo}
+                      </Badge>
+                    </TableCell>
+
+                    {/* 8. Firmas Totales */}
+                    <TableCell className="font-mono font-semibold text-foreground">
+                      {fila.firmasHistorico}
+                    </TableCell>
+
+                    {/* 9. Conexiones / Desconexiones */}
+                    <TableCell>
+                      <div className="font-mono text-[11px] text-muted-foreground flex flex-col gap-0.5">
+                        <span className="text-emerald-700 dark:text-emerald-400 font-medium">
+                          {fila.conexiones} conexiones
+                        </span>
+                        <span className="text-muted-foreground">
+                          {fila.desconexiones} desconexiones
+                        </span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </div>
-      </Card>
-
-      {/* 3. Tabla de Acciones por Funcionario con su Token (1 acción = 1 firma) */}
-      <Card className="border-border/80 bg-card overflow-hidden">
-        <CardHeader className="p-3.5 border-b bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <CardTitle className="text-sm font-bold">
-              Acciones por Funcionario con su Token
-            </CardTitle>
-            <Badge variant="outline" className="text-[10px] font-mono">
-              1 acción = 1 firma • Excluye {conexionesExcluidas} conex. y {desconexionesExcluidas} desconex.
-            </Badge>
-          </div>
-          <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
-            Total período: {totalAccionesPeriodo} firmas
-          </span>
-        </CardHeader>
-
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader className="bg-muted/40 text-[11px]">
-              <TableRow>
-                <TableHead>Funcionario / RUT</TableHead>
-                <TableHead>Unidad</TableHead>
-                <TableHead>Token Asignado</TableHead>
-                <TableHead>Firmas Período</TableHead>
-                <TableHead>Firmas Histórico</TableHead>
-                <TableHead>Conex./Desconex. Ignoradas</TableHead>
-                <TableHead className="text-right">Registrar Firma</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody className="text-xs">
-              {listadoAccionesFuncionarios.map((func) => (
-                <TableRow key={func.usuarioId} className="hover:bg-muted/30">
-                  <TableCell>
-                    <div className="font-bold text-foreground">{func.nombre}</div>
-                    <div className="text-[10px] font-mono text-muted-foreground">{func.rut}</div>
-                  </TableCell>
-                  <TableCell className="text-[11px]">{func.unidad}</TableCell>
-                  <TableCell className="font-mono font-bold">{func.serialNumberToken}</TableCell>
-                  <TableCell>
-                    <Badge variant="success" className="text-xs font-mono font-bold px-2">
-                      {func.accionesFirmaPeriodo}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="font-mono font-semibold">
-                    {func.accionesFirmaHistorico}
-                  </TableCell>
-                  <TableCell className="font-mono text-[11px] text-muted-foreground">
-                    {func.conexionesIgnoradasPeriodo}C / {func.desconexionesIgnoradasPeriodo}D
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={registrandoAccionId === func.usuarioId}
-                      onClick={() =>
-                        handleSimularAccionFirma({
-                          idKey: func.usuarioId,
-                          rutFuncionario: func.rut,
-                          nombreFuncionario: func.nombre,
-                          serialNumber: func.serialNumberToken,
-                          codigoPc: func.codigoPcUltimaSesion || undefined,
-                        })
-                      }
-                      className="h-7 px-2.5 text-[11px] font-bold border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
-                    >
-                      +1 Firma
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </Card>
-
-      {/* 4. Estado de Conexión de Dispositivos en Sesión */}
-      <Card className="border-border/80 bg-card overflow-hidden">
-        <CardHeader className="p-3.5 border-b bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <CardTitle className="text-sm font-bold">
-            Estado de Conexión en Sesión ({estacionesFiltradas.length})
-          </CardTitle>
-
-          <div className="flex items-center gap-1.5">
-            <Button
-              variant={filtroEstadoSesion === 'TODOS' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFiltroEstadoSesion('TODOS')}
-              className="h-7 text-xs"
-            >
-              Todos ({estaciones.length})
-            </Button>
-            <Button
-              variant={filtroEstadoSesion === 'FIRMANDO' ? 'success' : 'outline'}
-              size="sm"
-              onClick={() => setFiltroEstadoSesion('FIRMANDO')}
-              className="h-7 text-xs"
-            >
-              Firmando ({firmando})
-            </Button>
-            <Button
-              variant={filtroEstadoSesion === 'CONECTADO' ? 'warning' : 'outline'}
-              size="sm"
-              onClick={() => setFiltroEstadoSesion('CONECTADO')}
-              className="h-7 text-xs"
-            >
-              Conectados ({conectados})
-            </Button>
-            <Button
-              variant={filtroEstadoSesion === 'DESCONECTADO' ? 'destructive' : 'outline'}
-              size="sm"
-              onClick={() => setFiltroEstadoSesion('DESCONECTADO')}
-              className="h-7 text-xs"
-            >
-              Sin Token ({desconectados})
-            </Button>
-          </div>
-        </CardHeader>
-
-        <CardContent className="p-3.5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {estacionesFiltradas.map((est) => (
-              <div
-                key={est.codigoPc}
-                className="p-3 rounded-lg border bg-background/70 flex flex-col justify-between gap-2 text-xs"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono font-bold text-foreground truncate">{est.codigoPc}</span>
-                  <Badge
-                    variant={
-                      est.estadoEnVivo === 'FIRMANDO'
-                        ? 'success'
-                        : est.estadoEnVivo === 'CONECTADO'
-                        ? 'warning'
-                        : 'danger'
-                    }
-                    className="text-[9px] font-mono"
-                  >
-                    {est.estadoEnVivo}
-                  </Badge>
-                </div>
-                <div className="text-[11px] text-muted-foreground truncate">{est.dependenciaFisica}</div>
-                <div className="text-[11px] font-mono text-foreground truncate">
-                  {est.tokenInfo?.serialNumber ? `SN: ${est.tokenInfo.serialNumber}` : 'Sin token conectado'}
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
       </Card>
     </div>
   );

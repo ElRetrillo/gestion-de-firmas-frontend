@@ -1,10 +1,8 @@
 import React from 'react';
-import { useTelemetriaStore } from '../store/useTelemetriaStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { ThemeToggle } from './ThemeToggle';
 import { LogoMunicipalidad } from './LogoMunicipalidad';
 import { Button } from './ui/button';
-import { Badge } from './ui/badge';
 import { NavTab } from './Sidebar';
 
 interface TopHeaderProps {
@@ -15,8 +13,8 @@ interface TopHeaderProps {
 
 const TAB_TITLES: Record<NavTab, string> = {
   DASHBOARD: 'Control de Tokens, Firmas Asignadas y Acciones por Funcionario',
-  ALERTAS: 'Vigencia de Tokens (15, 30 y 60 días) y Avisos por Correo',
-  METRICAS: 'Estadísticas y Exportación Summary PDF / LaTeX',
+  ALERTAS: 'Alertas de Vencimientos',
+  METRICAS: 'Estadisticas',
   USUARIOS_CUSTODIA: 'Contratos de Obtención de Tokens y Asignación a Funcionarios',
   AUDITORIA: 'Bitácora de Acciones de Firma',
 };
@@ -25,7 +23,6 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   tabActiva,
   onOpenMobileSidebar,
 }) => {
-  const { cargarEstaciones, cargarMetricas } = useTelemetriaStore();
   const { usuario, logout } = useAuthStore();
   const currentTitle = TAB_TITLES[tabActiva] || TAB_TITLES.DASHBOARD;
 
@@ -51,26 +48,14 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
       </div>
 
       <div className="flex items-center space-x-2">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            cargarEstaciones();
-            cargarMetricas();
-          }}
-          className="text-xs h-8 px-2.5 font-medium hidden sm:inline-flex"
-        >
-          ↻ Sincronizar
-        </Button>
-
         {usuario && (
           <div className="hidden md:flex items-center space-x-2 px-2.5 py-1 rounded-md bg-muted/40 border border-border/60 text-xs">
             <span className="font-bold text-foreground truncate max-w-[150px]">
               {usuario.nombre}
             </span>
-            <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0">
-              {usuario.rol}
-            </Badge>
+            <span className="text-[10px] font-mono text-muted-foreground uppercase">
+              • {usuario.rol}
+            </span>
           </div>
         )}
 

@@ -29,7 +29,7 @@ interface DocumentoFuncionario {
 export const MisDocumentosFuncionarioView: React.FC = () => {
   const { usuario } = useAuthStore();
   const { estaciones } = useTelemetriaStore();
-  const estacionConectada = estaciones.find((e) => e.estadoEnVivo === 'CONECTADO' || e.estadoEnVivo === 'FIRMANDO');
+  const estacionConectada = estaciones.find((e) => e.estadoEnVivo === 'CONECTADO');
   const tokenActivo = estacionConectada?.tokenInfo;
 
   const [modalIngestaAbierto, setModalIngestaAbierto] = useState(false);

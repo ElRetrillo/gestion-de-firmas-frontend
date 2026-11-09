@@ -7,7 +7,6 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '.
 import { useAuthStore } from '../store/useAuthStore';
 import { useTelemetriaStore, ContratoTokenItem } from '../store/useTelemetriaStore';
 import { formatRut, matchesRutSearch } from '../lib/rut';
-import { MetricasTrazabilidadPanel } from './MetricasTrazabilidadPanel';
 
 interface UsuarioItem {
   id: string;
@@ -83,16 +82,12 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
   // Modal de Comprobante de Emisión generado
   const [comprobanteEmitido, setComprobanteEmitido] = useState<ComprobanteEmitidoModal | null>(null);
 
-  // Formulario Nuevo Contrato de Obtención de Tokens (Req 7)
-  const [codigoContrato, setCodigoContrato] = useState('CT-TOKENS-2026-04');
-  const [tituloContrato, setTituloContrato] = useState('Suministro de Tokens Criptográficos PKCS#11 y Certificados FEA');
-  const [proveedorContrato, setProveedorContrato] = useState('E-Certchile / Empresa Nacional de Certificación');
-  const [ordenCompraContrato, setOrdenCompraContrato] = useState('OC-2598-142-SE26');
-  const [resolucionContrato, setResolucionContrato] = useState('Decreto Alcaldicio N° 1.480/2026');
+  // Formulario Nuevo Contrato Individual de Obtención de Token (Flujo: el funcionario firma la obtención de su token)
+  const [codigoContrato, setCodigoContrato] = useState('CT-OBT-2026-009');
+  const [contratoRut, setContratoRut] = useState('');
+  const [contratoTokenSerial, setContratoTokenSerial] = useState('SAFENET-5110-CQ09');
   const [fechaInicioContrato, setFechaInicioContrato] = useState('2026-01-15');
   const [fechaTerminoContrato, setFechaTerminoContrato] = useState('2027-01-15');
-  const [cantidadTokensContrato, setCantidadTokensContrato] = useState('50');
-  const [obsContrato, setObsContrato] = useState('Contrato institucional con soporte técnico y reposición de dispositivos USB.');
 
   // Formulario Asignar Token / Firma a Funcionario
   const [asigRut, setAsigRut] = useState('');
@@ -141,6 +136,7 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
         if (resUsers.length > 0) {
           setActaUsuarioRut((prev) => prev || resUsers[0].rut);
           setAsigRut((prev) => prev || resUsers[0].rut);
+          setContratoRut((prev) => prev || resUsers[0].rut);
         }
       }
       if (Array.isArray(resTokens)) {
@@ -167,35 +163,46 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
     if (!q) return true;
     return (
       c.codigoContrato.toLowerCase().includes(q) ||
-      c.titulo.toLowerCase().includes(q) ||
-      c.proveedor.toLowerCase().includes(q) ||
-      (c.ordenCompra || '').toLowerCase().includes(q)
+      (c.funcionarioNombre || '').toLowerCase().includes(q) ||
+      (c.funcionarioRut || '').toLowerCase().includes(q) ||
+      (c.funcionarioUnidad || '').toLowerCase().includes(q) ||
+      (c.serialNumberToken || '').toLowerCase().includes(q) ||
+      c.titulo.toLowerCase().includes(q)
     );
   });
 
   const handleCrearContrato = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!codigoContrato.trim() || !tituloContrato.trim()) return;
+    if (!codigoContrato.trim()) return;
+    const funcObj = usuarios.find((u) => u.rut === contratoRut);
+    const nombreTitular = funcObj?.nombre || 'Funcionario Municipal';
+    const rutTitular = funcObj?.rut || contratoRut || '-';
+    const unidadTitular = funcObj?.unidad || 'Municipalidad de Coquimbo';
+    const cargoTitular = funcObj?.cargo || 'Profesional Municipal';
+
     try {
       const res = await fetch('/api/v1/equipamiento/contratos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           codigoContrato: codigoContrato.trim(),
-          titulo: tituloContrato.trim(),
-          proveedor: proveedorContrato.trim(),
-          ordenCompra: ordenCompraContrato.trim(),
-          resolucionAprueba: resolucionContrato.trim(),
+          titulo: `Contrato de Obtención de Token — ${nombreTitular}`,
+          proveedor: 'E-Certchile / Municipalidad de Coquimbo',
+          funcionarioNombre: nombreTitular,
+          funcionarioRut: rutTitular,
+          funcionarioUnidad: unidadTitular,
+          funcionarioCargo: cargoTitular,
+          serialNumberToken: contratoTokenSerial.trim(),
+          firmadoObtencion: true,
           fechaInicio: fechaInicioContrato,
           fechaTermino: fechaTerminoContrato,
-          cantidadTokensContratados: Number(cantidadTokensContrato) || 25,
-          observaciones: obsContrato.trim(),
+          cantidadTokensContratados: 1,
         }),
       });
       if (res.ok) {
         const nuevo = await res.json();
         setMensajeOperacion(
-          `Contrato de Obtención de Tokens (${nuevo.codigoContrato || codigoContrato}) registrado con copia PDF oficial.`,
+          `Contrato de Obtención (${nuevo.codigoContrato || codigoContrato}) firmado por ${nombreTitular} para el token ${contratoTokenSerial}.`,
         );
         await Promise.all([cargarDatos(), cargarMetricas()]);
         if (nuevo?.id) {
@@ -419,9 +426,13 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-[10px] font-mono border-primary/40 text-primary">
-              APARTADO 7 • CONTRATOS Y ASIGNACIÓN DE TOKENS
-            </Badge>
+            <span className="text-[11px] font-mono font-bold text-primary">
+              Contratos y Asignación Institucional
+            </span>
+            <span className="text-muted-foreground">•</span>
+            <span className="text-[11px] font-mono text-muted-foreground">
+              Decretos, custodias y equipamiento
+            </span>
           </div>
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground mt-1">
             Contratos de Obtención de Tokens, Asignación de Firmas y Custodia
@@ -472,17 +483,19 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
         </div>
       )}
 
-      {/* SECCIÓN 1 (Req 7): CONTRATOS DE OBTENCIÓN DE TOKENS CON FECHA INICIO/TÉRMINO, CADUCIDAD Y PREVISUALIZACIÓN PDF */}
+      {/* SECCIÓN 1: CONTRATOS INDIVIDUALES DE OBTENCIÓN DE TOKEN POR FUNCIONARIO */}
       {subTab === 'CONTRATOS' && (
-        <div className="space-y-6">
-          {/* Resumen KPI de Contratos */}
-          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div className="space-y-5">
+          {/* Resumen conciso de Contratos de Obtención */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Card className="p-4 border-border/80">
               <div className="text-[10px] font-bold uppercase text-muted-foreground">
-                Total Contratos de Tokens
+                Contratos Firmados
               </div>
               <div className="text-2xl font-bold text-foreground mt-1">{contratos.length}</div>
-              <div className="text-[11px] text-muted-foreground">Con copia PDF respaldada</div>
+              <div className="text-[11px] text-muted-foreground">
+                1 contrato por funcionario con token
+              </div>
             </Card>
             <Card className="p-4 border-emerald-500/30 bg-emerald-500/5">
               <div className="text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400">
@@ -491,224 +504,210 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
               <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-400 mt-1">
                 {contratos.filter((c) => c.estadoContrato === 'VIGENTE').length}
               </div>
-              <div className="text-[11px] text-muted-foreground">Suministro activo</div>
+              <div className="text-[11px] text-muted-foreground">Obtención activa</div>
             </Card>
             <Card className="p-4 border-amber-500/30 bg-amber-500/5">
               <div className="text-[10px] font-bold uppercase text-amber-600 dark:text-amber-400">
-                Próximos a Caducar
+                Por Caducar / Caducados
               </div>
               <div className="text-2xl font-bold text-amber-700 dark:text-amber-400 mt-1">
-                {contratos.filter((c) => c.estadoContrato === 'POR_CADUCAR').length}
+                {contratos.filter((c) => c.estadoContrato !== 'VIGENTE').length}
               </div>
-              <div className="text-[11px] text-muted-foreground">Menos de 90 días restantes</div>
-            </Card>
-            <Card className="p-4 border-primary/30 bg-primary/5">
-              <div className="text-[10px] font-bold uppercase text-primary">
-                Total Tokens Contratados
-              </div>
-              <div className="text-2xl font-bold text-foreground mt-1">
-                {contratos.reduce((acc, c) => acc + (c.cantidadTokensContratados || 0), 0)}
-              </div>
-              <div className="text-[11px] text-muted-foreground">Unidades criptográficas USB</div>
+              <div className="text-[11px] text-muted-foreground">Requieren renovación</div>
             </Card>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-            {/* Listado de Contratos de Obtención de Tokens */}
+            {/* Listado Simple de Contratos Individuales de Obtención */}
             <Card className="lg:col-span-8 border-border/80 bg-card overflow-hidden">
               <CardHeader className="p-4 border-b bg-muted/20 space-y-2">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div>
-                    <CardTitle className="text-sm sm:text-base font-bold">
-                      Registro de Contratos de Obtención de Tokens ({contratosFiltrados.length})
-                    </CardTitle>
-                    <CardDescription className="text-xs">
-                      Incluye fecha de inicio, fecha de término, tiempo de caducidad y previsualización de copia del documento en PDF.
-                    </CardDescription>
-                  </div>
+                <div>
+                  <CardTitle className="text-sm sm:text-base font-bold">
+                    Contratos Individuales de Obtención de Token ({contratosFiltrados.length})
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Cada funcionario firma su contrato individual de obtención al recibir su dispositivo token.
+                  </CardDescription>
                 </div>
 
                 <Input
                   value={busquedaContratos}
                   onChange={(e) => setBusquedaContratos(e.target.value)}
-                  placeholder="Buscar por código de contrato, proveedor, título u orden de compra..."
+                  placeholder="Buscar por funcionario, RUT, unidad, token o código de contrato..."
                   className="h-8 text-xs bg-background"
                 />
               </CardHeader>
 
-              <CardContent className="p-4 space-y-4">
+              <CardContent className="p-4">
                 {contratosFiltrados.length === 0 ? (
                   <div className="p-8 text-center text-xs text-muted-foreground border border-dashed rounded-lg">
                     No se encontraron contratos con el criterio indicado.
                   </div>
                 ) : (
-                  contratosFiltrados.map((contrato) => {
-                    const pdfUrl = contrato.pdfUrl || `/api/v1/equipamiento/contratos/${contrato.id}/pdf`;
-                    const isSelected = contratoPreview?.id === contrato.id;
-                    return (
-                      <div
-                        key={contrato.id}
-                        className={`p-4 rounded-xl border transition-all space-y-3 ${
-                          isSelected
-                            ? 'border-primary bg-primary/5 shadow-md'
-                            : 'border-border/80 bg-background/60 hover:border-primary/40'
-                        }`}
-                      >
-                        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/30">
-                                {contrato.codigoContrato}
-                              </span>
-                              <Badge
-                                variant={
-                                  contrato.estadoContrato === 'VIGENTE'
-                                    ? 'success'
-                                    : contrato.estadoContrato === 'POR_CADUCAR'
-                                    ? 'warning'
-                                    : 'danger'
-                                }
-                                className="text-[10px] font-mono font-bold"
-                              >
-                                {contrato.estadoContrato}
-                              </Badge>
-                              {contrato.ordenCompra && (
-                                <span className="text-[10px] font-mono text-muted-foreground">
-                                  OC: {contrato.ordenCompra}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    {contratosFiltrados.map((contrato) => {
+                      const pdfUrl =
+                        contrato.pdfUrl || `/api/v1/equipamiento/contratos/${contrato.id}/pdf`;
+                      const isSelected = contratoPreview?.id === contrato.id;
+                      const titularNombre =
+                        contrato.funcionarioNombre ||
+                        contrato.titulo.replace(/^Contrato.*?—\s*/i, '') ||
+                        'Funcionario Municipal';
+                      const titularRut = contrato.funcionarioRut || '-';
+                      const titularUnidad =
+                        contrato.funcionarioUnidad || 'Municipalidad de Coquimbo';
+                      const tokenSerial = contrato.serialNumberToken || 'TOKEN-ASIGNADO';
+
+                      return (
+                        <div
+                          key={contrato.id}
+                          className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
+                            isSelected
+                              ? 'border-primary bg-primary/5 shadow-sm md:col-span-2'
+                              : 'border-border/80 bg-background/60 hover:border-primary/40'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-mono text-[11px] font-bold text-primary">
+                                  {contrato.codigoContrato}
                                 </span>
-                              )}
+                                <span
+                                  className={`inline-flex items-center gap-1 font-semibold text-[11px] ${
+                                    contrato.estadoContrato === 'VIGENTE'
+                                      ? 'text-emerald-600 dark:text-emerald-400'
+                                      : contrato.estadoContrato === 'POR_CADUCAR'
+                                      ? 'text-amber-600 dark:text-amber-400'
+                                      : 'text-rose-600 dark:text-rose-400'
+                                  }`}
+                                >
+                                  <span
+                                    className={`w-1.5 h-1.5 rounded-full ${
+                                      contrato.estadoContrato === 'VIGENTE'
+                                        ? 'bg-emerald-500'
+                                        : contrato.estadoContrato === 'POR_CADUCAR'
+                                        ? 'bg-amber-500'
+                                        : 'bg-rose-500'
+                                    }`}
+                                  />
+                                  {contrato.estadoContrato === 'POR_CADUCAR'
+                                    ? 'Por caducar'
+                                    : contrato.estadoContrato === 'VIGENTE'
+                                    ? 'Vigente'
+                                    : 'Caducado'}
+                                </span>
+                              </div>
+                              <h3 className="text-sm font-bold text-foreground mt-1 truncate">
+                                {titularNombre}
+                              </h3>
+                              <p className="text-[11px] text-muted-foreground truncate">
+                                RUT: <span className="font-mono">{titularRut}</span> • {titularUnidad}
+                              </p>
                             </div>
-                            <h3 className="text-sm font-bold text-foreground">{contrato.titulo}</h3>
-                            <p className="text-xs text-muted-foreground">
-                              Proveedor: <strong className="text-foreground">{contrato.proveedor}</strong>
-                              {contrato.resolucionAprueba ? ` • ${contrato.resolucionAprueba}` : ''}
-                            </p>
+
+                            <span className="font-mono text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 shrink-0">
+                              ✓ Obtención firmada
+                            </span>
                           </div>
 
-                          <div className="flex items-center gap-2 shrink-0">
+                          {/* Datos precisos del contrato individual */}
+                          <div className="grid grid-cols-3 gap-2 p-2.5 rounded-lg bg-muted/30 border text-[11px]">
+                            <div>
+                              <span className="text-[10px] text-muted-foreground block">
+                                Token Asignado
+                              </span>
+                              <span className="font-mono font-bold text-foreground truncate block">
+                                {tokenSerial}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-muted-foreground block">
+                                Vigencia
+                              </span>
+                              <span className="font-mono font-semibold text-foreground block">
+                                {contrato.fechaInicio} → {contrato.fechaTermino}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-muted-foreground block">
+                                Caducidad
+                              </span>
+                              <span
+                                className={`font-mono font-bold block ${
+                                  contrato.diasRestantes <= 0
+                                    ? 'text-rose-500'
+                                    : contrato.diasRestantes <= 60
+                                    ? 'text-amber-500'
+                                    : 'text-emerald-600 dark:text-emerald-400'
+                                }`}
+                              >
+                                {contrato.diasRestantes > 0
+                                  ? `${contrato.diasRestantes} días`
+                                  : 'Caducado'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-end gap-2">
                             <Button
                               size="sm"
                               variant={isSelected ? 'default' : 'outline'}
                               onClick={() => setContratoPreview(isSelected ? null : contrato)}
-                              className="h-8 text-xs font-bold"
+                              className="h-7 text-xs font-bold"
                             >
-                              {isSelected ? 'Ocultar Visor PDF' : 'Previsualizar Copia Contrato (PDF)'}
+                              {isSelected ? 'Ocultar PDF' : 'Ver Contrato PDF'}
                             </Button>
                             <a
                               href={`${pdfUrl}?download=1`}
                               target="_blank"
                               rel="noreferrer"
-                              className="inline-flex items-center justify-center rounded-md border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary h-8 px-2.5 text-xs font-bold"
+                              className="inline-flex items-center justify-center rounded-md border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary h-7 px-2.5 text-xs font-bold"
                             >
-                              Descargar PDF
+                              Descargar
                             </a>
                           </div>
-                        </div>
 
-                        {/* Fechas de Inicio, Fecha de Término y Tiempo de Caducidad */}
-                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5 p-3 rounded-lg bg-muted/30 border text-xs">
-                          <div>
-                            <span className="text-[10px] uppercase text-muted-foreground font-semibold block">
-                              Fecha de Inicio
-                            </span>
-                            <span className="font-mono font-bold text-foreground">{contrato.fechaInicio}</span>
-                          </div>
-                          <div>
-                            <span className="text-[10px] uppercase text-muted-foreground font-semibold block">
-                              Fecha de Término / Caducidad
-                            </span>
-                            <span className="font-mono font-bold text-foreground">{contrato.fechaTermino}</span>
-                          </div>
-                          <div>
-                            <span className="text-[10px] uppercase text-muted-foreground font-semibold block">
-                              Tiempo de Caducidad
-                            </span>
-                            <span
-                              className={`font-mono font-bold ${
-                                contrato.diasRestantes <= 0
-                                  ? 'text-rose-500'
-                                  : contrato.diasRestantes <= 90
-                                  ? 'text-amber-500'
-                                  : 'text-emerald-600 dark:text-emerald-400'
-                              }`}
-                            >
-                              {contrato.tiempoCaducidadTexto}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="text-[10px] uppercase text-muted-foreground font-semibold block">
-                              Dotación del Contrato
-                            </span>
-                            <span className="font-mono font-bold text-foreground">
-                              {contrato.cantidadTokensContratados} Tokens USB
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Barra de Progreso de Vigencia */}
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-[10px] font-mono text-muted-foreground">
-                            <span>Vigencia transcurrida: {contrato.porcentajeVigenciaTranscurrida}%</span>
-                            <span>
-                              {contrato.diasRestantes > 0
-                                ? `${contrato.diasRestantes} días restantes para caducar`
-                                : `Caducado hace ${Math.abs(contrato.diasRestantes)} días`}
-                            </span>
-                          </div>
-                          <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden">
-                            <div
-                              className={`h-full transition-all ${
-                                contrato.estadoContrato === 'CADUCADO'
-                                  ? 'bg-rose-500'
-                                  : contrato.estadoContrato === 'POR_CADUCAR'
-                                  ? 'bg-amber-500'
-                                  : 'bg-emerald-500'
-                              }`}
-                              style={{ width: `${Math.min(100, Math.max(5, contrato.porcentajeVigenciaTranscurrida))}%` }}
-                            />
-                          </div>
-                        </div>
-
-                        {/* Previsualización Embebida de la Copia del Contrato en PDF */}
-                        {isSelected && (
-                          <div className="pt-2 space-y-2">
-                            <div className="flex items-center justify-between bg-muted/50 px-3 py-1.5 rounded border text-xs">
-                              <span className="font-bold font-mono">
-                                Previsualización Copia Oficial de Contrato: {contrato.codigoContrato}.pdf
-                              </span>
-                              <a
-                                href={pdfUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-primary underline font-semibold text-[11px]"
-                              >
-                                Abrir en pestaña completa ↗
-                              </a>
+                          {isSelected && (
+                            <div className="pt-2 space-y-2 border-t">
+                              <div className="flex items-center justify-between bg-muted/50 px-3 py-1.5 rounded border text-xs">
+                                <span className="font-bold font-mono">
+                                  Contrato de Obtención: {contrato.codigoContrato}.pdf
+                                </span>
+                                <a
+                                  href={pdfUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-primary underline font-semibold text-[11px]"
+                                >
+                                  Abrir en pestaña ↗
+                                </a>
+                              </div>
+                              <div className="w-full h-[380px] rounded-lg border bg-background overflow-hidden">
+                                <iframe
+                                  src={pdfUrl}
+                                  title={`Contrato ${contrato.codigoContrato}`}
+                                  className="w-full h-full border-0"
+                                />
+                              </div>
                             </div>
-                            <div className="w-full h-[420px] rounded-lg border bg-background overflow-hidden">
-                              <iframe
-                                src={pdfUrl}
-                                title={`Copia Contrato ${contrato.codigoContrato}`}
-                                className="w-full h-full border-0"
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </CardContent>
             </Card>
 
-            {/* Formulario para Registrar Nuevo Contrato de Obtención de Tokens */}
+            {/* Formulario Simple: Firmar / Registrar Contrato de Obtención de Token */}
             <Card className="lg:col-span-4 border-border/80 bg-card h-fit">
               <CardHeader className="p-4 border-b">
                 <CardTitle className="text-sm font-bold">
-                  Registrar Contrato de Obtención de Tokens
+                  Nuevo Contrato de Obtención de Token
                 </CardTitle>
                 <CardDescription className="text-xs">
-                  Genera automáticamente la copia digital en PDF del contrato con sus fechas de inicio y caducidad.
+                  Paso inicial: el funcionario firma el contrato de obtención de su dispositivo token.
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-4">
@@ -723,26 +722,31 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="font-semibold">Título / Objeto del Contrato:</label>
-                    <Input
-                      value={tituloContrato}
-                      onChange={(e) => setTituloContrato(e.target.value)}
-                      required
-                      className="h-8 text-xs"
-                    />
+                    <label className="font-semibold">Funcionario Solicitante:</label>
+                    <select
+                      value={contratoRut}
+                      onChange={(e) => setContratoRut(e.target.value)}
+                      className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs font-mono"
+                    >
+                      {usuarios.map((u) => (
+                        <option key={u.id} value={u.rut}>
+                          {u.rut} — {u.nombre}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div className="space-y-1">
-                    <label className="font-semibold">Proveedor Adjudicado:</label>
+                    <label className="font-semibold">Token Asignado (N° Serie):</label>
                     <Input
-                      value={proveedorContrato}
-                      onChange={(e) => setProveedorContrato(e.target.value)}
+                      value={contratoTokenSerial}
+                      onChange={(e) => setContratoTokenSerial(e.target.value)}
                       required
-                      className="h-8 text-xs"
+                      className="h-8 text-xs font-mono"
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
-                      <label className="font-semibold">Fecha de Inicio:</label>
+                      <label className="font-semibold">Fecha Inicio:</label>
                       <Input
                         type="date"
                         value={fechaInicioContrato}
@@ -752,7 +756,7 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="font-semibold">Fecha de Término:</label>
+                      <label className="font-semibold">Fecha Término:</label>
                       <Input
                         type="date"
                         value={fechaTerminoContrato}
@@ -762,45 +766,8 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <label className="font-semibold">Cantidad Tokens:</label>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={cantidadTokensContrato}
-                        onChange={(e) => setCantidadTokensContrato(e.target.value)}
-                        required
-                        className="h-8 text-xs font-mono"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="font-semibold">Orden de Compra:</label>
-                      <Input
-                        value={ordenCompraContrato}
-                        onChange={(e) => setOrdenCompraContrato(e.target.value)}
-                        className="h-8 text-xs font-mono"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="font-semibold">Resolución / Decreto Aprueba:</label>
-                    <Input
-                      value={resolucionContrato}
-                      onChange={(e) => setResolucionContrato(e.target.value)}
-                      className="h-8 text-xs"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="font-semibold">Observaciones / Cláusulas de Vigencia:</label>
-                    <Input
-                      value={obsContrato}
-                      onChange={(e) => setObsContrato(e.target.value)}
-                      className="h-8 text-xs"
-                    />
-                  </div>
                   <Button type="submit" className="w-full text-xs font-bold h-9 mt-2 shadow">
-                    Registrar Contrato y Generar Copia PDF
+                    Firmar Obtención y Generar Contrato PDF
                   </Button>
                 </form>
               </CardContent>
@@ -869,22 +836,36 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
                             <div className="text-[10px] text-muted-foreground">{u.unidad}</div>
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline" className="text-[10px]">
+                            <span className="font-mono text-xs font-semibold text-muted-foreground">
                               {u.rol}
-                            </Badge>
+                            </span>
                           </TableCell>
                           <TableCell>
                             <div className="flex flex-col gap-1 items-start">
-                              <Badge
-                                variant={isDesvinculado ? 'danger' : u.estado === 'ACTIVO' ? 'success' : 'warning'}
-                                className="text-[10px]"
+                              <span
+                                className={`inline-flex items-center gap-1 font-semibold text-[11px] ${
+                                  isDesvinculado
+                                    ? 'text-rose-600 dark:text-rose-400'
+                                    : u.estado === 'ACTIVO'
+                                    ? 'text-emerald-600 dark:text-emerald-400'
+                                    : 'text-amber-600 dark:text-amber-400'
+                                }`}
                               >
-                                {u.estado}
-                              </Badge>
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full ${
+                                    isDesvinculado
+                                      ? 'bg-rose-500'
+                                      : u.estado === 'ACTIVO'
+                                      ? 'bg-emerald-500'
+                                      : 'bg-amber-500'
+                                  }`}
+                                />
+                                {u.estado === 'ACTIVO' ? 'Activo' : u.estado === 'EN_LICENCIA' ? 'En licencia' : u.estado}
+                              </span>
                               {u.pinBloqueado && (
-                                <Badge variant="danger" className="text-[9px]">
-                                  PIN BLOQUEADO
-                                </Badge>
+                                <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">
+                                  PIN Bloqueado
+                                </span>
                               )}
                             </div>
                           </TableCell>
@@ -1129,9 +1110,9 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className="text-[10px] font-mono font-bold">
-                            {a.tipoActa}
-                          </Badge>
+                          <span className="font-mono text-xs font-semibold text-primary">
+                            {a.tipoActa === 'ENTREGA' ? 'Entrega' : a.tipoActa === 'DEVOLUCION' ? 'Devolución' : a.tipoActa === 'TRASPASO' ? 'Traspaso' : 'Baja'}
+                          </span>
                         </TableCell>
                         <TableCell className="font-mono text-[11px]">
                           {a.token?.serialNumber || '-'}
@@ -1230,9 +1211,6 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
           </Card>
         </div>
       )}
-
-      {/* Resumen de Métricas y Exportación Summary LaTeX / PDF */}
-      <MetricasTrazabilidadPanel vistaOrigen="CUSTODIA" compacto />
     </div>
   );
 };

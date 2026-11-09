@@ -92,12 +92,16 @@ export const AuditoriaView: React.FC = () => {
           <CardHeader className="p-5 pb-3 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <Badge variant="outline" className="text-[10px]">
-                  Historial de Actividad
-                </Badge>
+                <span className="text-[11px] font-mono font-bold text-primary">
+                  Historial de Operaciones
+                </span>
+                <span className="text-muted-foreground">•</span>
+                <span className="text-[11px] font-mono text-muted-foreground">
+                  Registro inmutable de auditoría
+                </span>
               </div>
               <CardTitle className="text-base font-bold text-foreground">
-                Historial de Operaciones
+                Trazabilidad y Bitácora de Acciones
               </CardTitle>
               <CardDescription className="text-xs text-muted-foreground mt-0.5">
                 Registro de actividades, firmas y cambios realizados en el sistema.
@@ -260,18 +264,26 @@ export const AuditoriaView: React.FC = () => {
                         <div className="text-[10px] text-muted-foreground font-mono">{ev.tablaAfectada}</div>
                       </TableCell>
                       <TableCell>
-                        <Badge
-                          variant={
+                        <span
+                          className={`inline-flex items-center gap-1 font-semibold text-[11px] font-mono ${
                             ev.accion === 'FIRMA_EJECUTADA'
-                              ? 'success'
+                              ? 'text-emerald-600 dark:text-emerald-400'
                               : ev.accion === 'UPDATE'
-                              ? 'info'
-                              : 'default'
-                          }
-                          className="text-[9px] font-mono"
+                              ? 'text-blue-600 dark:text-blue-400'
+                              : 'text-foreground'
+                          }`}
                         >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              ev.accion === 'FIRMA_EJECUTADA'
+                                ? 'bg-emerald-500'
+                                : ev.accion === 'UPDATE'
+                                ? 'bg-blue-500'
+                                : 'bg-muted-foreground'
+                            }`}
+                          />
                           {ev.accion}
-                        </Badge>
+                        </span>
                       </TableCell>
                       <TableCell className="font-mono text-xs font-medium text-foreground">
                         {ev.registroId}

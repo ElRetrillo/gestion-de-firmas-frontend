@@ -6,7 +6,7 @@ import {
   buildMockMetricas,
 } from '../lib/mockTestData';
 
-export type EstadoHardwareType = 'DESCONECTADO' | 'CONECTADO' | 'FIRMANDO';
+export type EstadoHardwareType = 'DESCONECTADO' | 'CONECTADO';
 
 export type ModoReporteType =
   | 'ULTIMOS_7_DIAS'
@@ -112,6 +112,13 @@ export interface ContratoTokenItem {
   codigoContrato: string;
   titulo: string;
   proveedor: string;
+  funcionarioNombre?: string;
+  funcionarioRut?: string;
+  funcionarioCargo?: string;
+  funcionarioUnidad?: string;
+  serialNumberToken?: string;
+  marcaModeloToken?: string;
+  firmadoObtencion?: boolean;
   ordenCompra?: string;
   resolucionAprueba?: string;
   fechaInicio: string;
@@ -209,7 +216,7 @@ export interface MetricasTrazabilidadResponse {
       codigoPc: string;
       dependenciaFisica: string;
       ipAsignada: string;
-      estadoActual: 'CONECTADO' | 'FIRMANDO' | 'DESCONECTADO';
+      estadoActual: 'CONECTADO' | 'DESCONECTADO';
       serialTokenActivo: string | null;
       totalEventos: number;
       conexiones: number;
@@ -232,7 +239,7 @@ export interface MetricasTrazabilidadResponse {
         unidad: string;
       } | null;
       estacionActual: string | null;
-      estadoEnVivo: 'CONECTADO' | 'FIRMANDO' | 'DESCONECTADO';
+      estadoEnVivo: 'CONECTADO' | 'DESCONECTADO';
       fechaExpiracion?: string;
       diasRestantes?: number;
       tiempoExpiracionTexto?: string;
@@ -469,7 +476,7 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
             ...f,
             accionesFirmaPeriodo: f.accionesFirmaPeriodo + 1,
             accionesFirmaTotal: f.accionesFirmaTotal + 1,
-            estadoConexion: 'FIRMANDO' as EstadoHardwareType,
+            estadoConexion: 'CONECTADO' as EstadoHardwareType,
           };
         }
         return f;
@@ -498,7 +505,7 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
       const nuevoLog: TelemetriaLog = {
         id: `log-${Date.now()}`,
         codigoPc: codigoPcEvento,
-        estado: 'FIRMANDO',
+        estado: 'CONECTADO',
         timestamp: ahora.toLocaleTimeString('es-CL'),
         fecha: ahora.toLocaleDateString('es-CL'),
         serialNumber: payload.serialNumber || 'SAFENET-5110-CQ01',
@@ -506,7 +513,7 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
 
       const nuevasEstaciones = state.estaciones.map((est) =>
         est.codigoPc === codigoPcEvento
-          ? { ...est, estadoEnVivo: 'FIRMANDO' as EstadoHardwareType, ultimoPing: ahora.toISOString() }
+          ? { ...est, estadoEnVivo: 'CONECTADO' as EstadoHardwareType, ultimoPing: ahora.toISOString() }
           : est,
       );
 
@@ -572,6 +579,11 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
       if (payload?.codigoPc) {
         get().actualizarEstadoEstacion(payload);
       }
+    });
+
+    socket.on('sincronizacion_automatica', () => {
+      get().cargarEstaciones();
+      get().cargarMetricas();
     });
 
     set({ socket });

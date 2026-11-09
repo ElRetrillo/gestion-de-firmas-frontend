@@ -249,18 +249,19 @@ export const AlertasCertificadosView: React.FC = () => {
         <CardHeader className="p-5 pb-3 border-b flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <Badge variant="outline" className="text-[10px] font-mono border-primary/40 text-primary">
-                APARTADO 4 • VIGENCIA Y VENCIMIENTOS DE TOKENS
-              </Badge>
-              <Badge variant="secondary" className="text-[10px] font-mono">
-                Umbrales Oficiales: 15, 30 y 60 Días
-              </Badge>
+              <span className="text-[11px] font-mono font-bold text-primary">
+                Vigencia y Vencimiento de Tokens
+              </span>
+              <span className="text-muted-foreground">•</span>
+              <span className="text-[11px] font-mono text-muted-foreground">
+                Umbrales de 15, 30 y 60 días
+              </span>
             </div>
             <CardTitle className="text-base sm:text-lg font-bold text-foreground">
               Control de Vigencia de Tokens y Aviso Preventivo por Correo Electrónico
             </CardTitle>
             <CardDescription className="text-xs text-muted-foreground mt-0.5">
-              Monitoreo de los tokens criptográficos a los que les quedan 15, 30 y 60 días para su vencimiento y envío directo de avisos por correo electrónico al funcionario titular.
+              Monitoreo de tokens criptográficos con vencimiento próximo y envío directo de avisos por correo electrónico al titular.
             </CardDescription>
           </div>
 
@@ -301,9 +302,9 @@ export const AlertasCertificadosView: React.FC = () => {
                 <span className="text-[10px] uppercase text-rose-500 font-bold">
                   Tramo ≤ 15 Días
                 </span>
-                <Badge variant="danger" className="text-[9px] font-mono">
-                  URGENTE
-                </Badge>
+                <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-400">
+                  Urgente
+                </span>
               </div>
               <div className="font-bold text-2xl text-rose-600 dark:text-rose-400">
                 {count15} <span className="text-xs font-normal text-muted-foreground">tokens</span>
@@ -325,9 +326,9 @@ export const AlertasCertificadosView: React.FC = () => {
                 <span className="text-[10px] uppercase text-amber-500 font-bold">
                   Tramo ≤ 30 Días (16–30d)
                 </span>
-                <Badge variant="warning" className="text-[9px] font-mono">
-                  RENOVACIÓN
-                </Badge>
+                <span className="text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                  Renovación
+                </span>
               </div>
               <div className="font-bold text-2xl text-amber-600 dark:text-amber-400">
                 {count30} <span className="text-xs font-normal text-muted-foreground">tokens</span>
@@ -349,9 +350,9 @@ export const AlertasCertificadosView: React.FC = () => {
                 <span className="text-[10px] uppercase text-blue-500 font-bold">
                   Tramo ≤ 60 Días (31–60d)
                 </span>
-                <Badge variant="info" className="text-[9px] font-mono">
-                  PREVENTIVO
-                </Badge>
+                <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400">
+                  Preventivo
+                </span>
               </div>
               <div className="font-bold text-2xl text-foreground">
                 {count60} <span className="text-xs font-normal text-muted-foreground">tokens</span>
@@ -373,9 +374,9 @@ export const AlertasCertificadosView: React.FC = () => {
                 <span className="text-[10px] uppercase text-muted-foreground font-bold">
                   Tokens Expirados
                 </span>
-                <Badge variant="danger" className="text-[9px] font-mono">
-                  VENCIDOS
-                </Badge>
+                <span className="text-[10px] font-semibold text-rose-600 dark:text-rose-400">
+                  Vencidos
+                </span>
               </div>
               <div className="font-bold text-2xl text-rose-600 dark:text-rose-400">
                 {countExpirados} <span className="text-xs font-normal text-muted-foreground">tokens</span>
@@ -447,11 +448,12 @@ export const AlertasCertificadosView: React.FC = () => {
           <CardHeader className="p-4 pb-2 border-b flex flex-row items-center justify-between">
             <div className="space-y-0.5">
               <div className="flex items-center gap-2">
-                <Badge variant="success" className="text-[10px] font-mono">
-                  ✓ CORREO ELECTRÓNICO DESPACHADO
-                </Badge>
+                <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  Correo electrónico despachado
+                </span>
                 <span className="text-[10px] font-mono text-muted-foreground">
-                  {correoPreview.timestamp}
+                  • {correoPreview.timestamp}
                 </span>
               </div>
               <CardTitle className="text-sm font-bold text-foreground">
@@ -513,7 +515,7 @@ export const AlertasCertificadosView: React.FC = () => {
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
           {alertasFiltradas.map((alerta) => {
             const isExpirado = alerta.diasRestantes <= 0 || alerta.tramoAlerta === 'EXPIRADO';
             const is15 = !isExpirado && (alerta.diasRestantes <= 15 || alerta.tramoAlerta === '15_DIAS');
@@ -523,7 +525,7 @@ export const AlertasCertificadosView: React.FC = () => {
             return (
               <Card
                 key={alerta.id}
-                className={`border transition-all hover:shadow-md ${
+                className={`p-4 border transition-all hover:shadow-sm flex flex-col justify-between gap-3 ${
                   isExpirado || is15
                     ? 'border-rose-500/40 bg-rose-500/5'
                     : is30
@@ -531,97 +533,73 @@ export const AlertasCertificadosView: React.FC = () => {
                     : 'border-blue-500/30 bg-card'
                 }`}
               >
-                <CardHeader className="p-4 pb-2 border-b">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Badge
-                          variant={isExpirado || is15 ? 'danger' : is30 ? 'warning' : 'info'}
-                          className="text-[10px] uppercase font-bold py-0"
-                        >
-                          {isExpirado
-                            ? `EXPIRADO (${Math.abs(alerta.diasRestantes)}d)`
-                            : `${alerta.diasRestantes} DÍAS RESTANTES`}
-                        </Badge>
-                        <Badge variant="outline" className="text-[9px] font-mono">
-                          {isExpirado
-                            ? 'EXPIRADO'
-                            : is15
-                            ? 'TRAMO ≤ 15 DÍAS'
+                {/* Nombre del Funcionario y Tiempo para Expiración */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <span
+                      className={`inline-flex items-center gap-1.5 text-xs font-bold ${
+                        isExpirado || is15
+                          ? 'text-rose-600 dark:text-rose-400'
+                          : is30
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-blue-600 dark:text-blue-400'
+                      }`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          isExpirado || is15
+                            ? 'bg-rose-500'
                             : is30
-                            ? 'TRAMO ≤ 30 DÍAS'
-                            : 'TRAMO ≤ 60 DÍAS'}
-                        </Badge>
-                        <span className="text-[10px] font-mono text-muted-foreground">
-                          VENCE: {alerta.fechaExpiracion}
-                        </span>
-                      </div>
-                      <CardTitle className="text-sm font-bold pt-1 text-foreground">
-                        {alerta.usuario.nombre}
-                      </CardTitle>
-                      <p className="text-xs text-muted-foreground">
-                        {alerta.usuario.unidad} • {alerta.usuario.cargo}
-                      </p>
-                    </div>
-
-                    <span className="font-mono text-[10px] px-2 py-0.5 rounded border border-border bg-background font-bold text-foreground">
-                      {alerta.serialNumberToken}
+                            ? 'bg-amber-500'
+                            : 'bg-blue-500'
+                        }`}
+                      />
+                      {alerta.tiempoExpiracionTexto}
                     </span>
                   </div>
-                </CardHeader>
+                  <h3 className="text-sm font-bold text-foreground truncate">
+                    {alerta.usuario.nombre}
+                  </h3>
+                </div>
 
-                <CardContent className="p-4 space-y-3 text-xs">
-                  <div className="bg-muted/40 p-2.5 rounded-md border border-border/60 space-y-1.5 text-[11px]">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Token / Dispositivo:</span>
-                      <span className="font-mono font-bold text-foreground">
-                        {alerta.serialNumberToken} ({alerta.hardwareModelo})
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Certificado Asociado:</span>
-                      <span className="font-mono text-foreground">{alerta.numeroSerieCertificado}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">RUT Funcionario:</span>
-                      <span className="text-foreground font-mono">{alerta.usuario.rut}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Correo Electrónico:</span>
-                      <span className="text-foreground font-mono truncate max-w-[210px]">
-                        {alerta.usuario.email}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Tiempo para Expiración:</span>
-                      <span className="font-bold text-foreground">{alerta.tiempoExpiracionTexto}</span>
-                    </div>
+                {/* RUT y Correo Electrónico */}
+                <div className="p-2.5 rounded-md bg-muted/40 border border-border/60 space-y-1 text-xs">
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted-foreground">RUT:</span>
+                    <span className="font-mono font-semibold text-foreground">
+                      {alerta.usuario.rut}
+                    </span>
                   </div>
-
-                  <div className="flex items-center justify-between pt-1 gap-2">
-                    <div className="text-[10px] text-muted-foreground font-mono">
-                      {avisoHora ? (
-                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-                          ✓ Aviso enviado ({avisoHora})
-                        </span>
-                      ) : (
-                        <span>Pendiente de notificación por correo</span>
-                      )}
-                    </div>
-
-                    <Button
-                      variant="default"
-                      size="sm"
-                      disabled={notificandoId === alerta.id}
-                      onClick={() => handleEnviarCorreoAviso(alerta)}
-                      className="text-xs font-bold h-8 px-3 shadow-xs"
-                    >
-                      {notificandoId === alerta.id
-                        ? 'Enviando correo...'
-                        : '✉ Enviar Aviso por Correo'}
-                    </Button>
+                  <div className="flex justify-between gap-2">
+                    <span className="text-muted-foreground">Correo:</span>
+                    <span className="font-mono text-foreground truncate">
+                      {alerta.usuario.email}
+                    </span>
                   </div>
-                </CardContent>
+                </div>
+
+                {/* Acción de Envío de Aviso por Correo */}
+                <div className="flex items-center justify-between gap-2 pt-0.5">
+                  <span className="text-[10px] font-mono text-muted-foreground truncate">
+                    {avisoHora ? (
+                      <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                        ✓ Notificado
+                      </span>
+                    ) : (
+                      'Sin notificar'
+                    )}
+                  </span>
+
+                  <Button
+                    variant="default"
+                    size="sm"
+                    disabled={notificandoId === alerta.id}
+                    onClick={() => handleEnviarCorreoAviso(alerta)}
+                    className="text-xs font-bold h-7 px-3 shadow-xs"
+                  >
+                    {notificandoId === alerta.id ? 'Enviando...' : '✉ Enviar Aviso'}
+                  </Button>
+                </div>
               </Card>
             );
           })}

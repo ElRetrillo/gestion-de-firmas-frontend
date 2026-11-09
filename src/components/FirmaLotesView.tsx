@@ -28,7 +28,7 @@ interface Solicitud {
 export const FirmaLotesView: React.FC = () => {
   const { usuario } = useAuthStore();
   const { estaciones } = useTelemetriaStore();
-  const estacionActiva = estaciones.find((e) => e.estadoEnVivo === 'CONECTADO' || e.estadoEnVivo === 'FIRMANDO');
+  const estacionActiva = estaciones.find((e) => e.estadoEnVivo === 'CONECTADO');
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([]);
   const [seleccionados, setSeleccionados] = useState<string[]>([]);
   const [procesando, setProcesando] = useState(false);

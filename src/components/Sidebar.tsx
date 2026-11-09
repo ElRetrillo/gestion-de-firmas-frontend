@@ -58,14 +58,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'ALERTAS',
       icon: BellRing,
-      label: 'Vencimientos (15, 30, 60 días)',
+      label: 'Alertas de Vencimientos',
       badge: String(alertasCount),
     },
     {
       id: 'METRICAS',
       icon: BarChart3,
-      label: 'Estadísticas y Summary PDF',
-      badge: 'LaTeX',
+      label: 'Estadisticas',
     },
     {
       id: 'USUARIOS_CUSTODIA',
@@ -140,9 +139,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <span className="truncate">{item.label}</span>
                 </div>
                 {item.badge && (
-                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-mono">
+                  <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium text-muted-foreground bg-muted/50 border border-border/40">
                     {item.badge}
-                  </Badge>
+                  </span>
                 )}
               </button>
             );
@@ -154,9 +153,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className="font-bold text-sidebar-foreground truncate">
               {usuario?.nombre || 'Operador Municipal'}
             </span>
-            <Badge variant="outline" className="text-[9px] font-mono">
-              {usuario?.rol || 'ADMIN'}
-            </Badge>
+            <span className="text-[10px] font-mono text-muted-foreground uppercase">
+              • {usuario?.rol || 'ADMIN'}
+            </span>
           </div>
           <div className="text-[10px] font-mono text-muted-foreground">
             RUT: {usuario?.rut || '11.111.111-1'}

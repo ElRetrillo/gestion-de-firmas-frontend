@@ -256,7 +256,7 @@ export const EntornoPruebasFirmaGobV2: React.FC = () => {
     }
   };
 
-  const estacionConectada = estaciones.find((e) => e.estadoEnVivo === 'CONECTADO' || e.estadoEnVivo === 'FIRMANDO');
+  const estacionConectada = estaciones.find((e) => e.estadoEnVivo === 'CONECTADO');
   const tokenActivo = estacionConectada?.tokenInfo;
 
   return (
@@ -458,7 +458,7 @@ export const EntornoPruebasFirmaGobV2: React.FC = () => {
             </div>
 
             <p className="text-[11px] text-muted-foreground">
-              Al invocar la firma con el preset del funcionario, el backend actualiza el estado de la estación a <strong className="text-foreground font-mono">FIRMANDO</strong> por WebSocket y sella la operación con el serial del hardware.
+              Al invocar la firma con el preset del funcionario, el backend valida que la estación esté <strong className="text-foreground font-mono">CONECTADA</strong> y sella la operación con el serial del hardware.
             </p>
           </CardContent>
         </Card>
