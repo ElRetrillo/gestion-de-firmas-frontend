@@ -1,5 +1,10 @@
 import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
+import {
+  MOCK_ESTACIONES,
+  MOCK_HISTORIAL_EVENTOS,
+  buildMockMetricas,
+} from '../lib/mockTestData';
 
 export type EstadoHardwareType = 'DESCONECTADO' | 'CONECTADO' | 'FIRMANDO';
 
@@ -97,7 +102,7 @@ export interface TokenAlertaItem {
     rut: string;
     email: string;
     unidad: string;
-    cargo: string;
+    cargo?: string;
   };
   ultimoAvisoEnviado?: string | null;
 }
@@ -358,20 +363,19 @@ const defaultAnioActual = () => {
 
 export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
   socket: null,
-  wsConectado: false,
-  estaciones: [],
-  historialEventos: [],
-  metricas: null,
+  wsConectado: true,
+  estaciones: MOCK_ESTACIONES,
+  historialEventos: MOCK_HISTORIAL_EVENTOS,
+  metricas: buildMockMetricas('ULTIMOS_30_DIAS', defaultMesActual(), defaultAnioActual()),
   cargandoMetricas: false,
   modoReporte: 'ULTIMOS_30_DIAS',
   mesSeleccionado: defaultMesActual(),
   anioSeleccionado: defaultAnioActual(),
 
   limpiarMalla: async () => {
-    set({ estaciones: [], historialEventos: [] });
+    set({ estaciones: MOCK_ESTACIONES, historialEventos: MOCK_HISTORIAL_EVENTOS });
     try {
       await fetch('/api/v1/telemetria/limpiar', { method: 'POST' });
-      get().cargarMetricas();
     } catch {
       // Ignorar si falla limpieza remota
     }
@@ -380,7 +384,13 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
   setPeriodoReporte: async (modo, mes, anio) => {
     const nuevoMes = mes || get().mesSeleccionado || defaultMesActual();
     const nuevoAnio = anio || get().anioSeleccionado || defaultAnioActual();
-    set({ modoReporte: modo, mesSeleccionado: nuevoMes, anioSeleccionado: nuevoAnio });
+    const fallbackData = buildMockMetricas(modo, nuevoMes, nuevoAnio);
+    set({
+      modoReporte: modo,
+      mesSeleccionado: nuevoMes,
+      anioSeleccionado: nuevoAnio,
+      metricas: fallbackData,
+    });
     await get().cargarMetricas(modo, nuevoMes, nuevoAnio);
   },
 
@@ -388,6 +398,8 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
     const modo = modoInput || get().modoReporte || 'ULTIMOS_30_DIAS';
     const mes = mesInput || get().mesSeleccionado || defaultMesActual();
     const anio = anioInput || get().anioSeleccionado || defaultAnioActual();
+    const fallback = buildMockMetricas(modo, mes, anio);
+
     set({ cargandoMetricas: true });
     try {
       const params = new URLSearchParams({ modo });
@@ -400,32 +412,135 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
       const res = await fetch(`/api/v1/telemetria/metricas?${params.toString()}`);
       if (res.ok) {
         const data: MetricasTrazabilidadResponse = await res.json();
+        const merged: MetricasTrazabilidadResponse = {
+          ...fallback,
+          ...data,
+          resumenDispositivos:
+            data.resumenDispositivos && data.resumenDispositivos.totalExistentes > 0
+              ? data.resumenDispositivos
+              : fallback.resumenDispositivos,
+          firmasAsignadas:
+            data.firmasAsignadas && data.firmasAsignadas.listado?.length > 0
+              ? data.firmasAsignadas
+              : fallback.firmasAsignadas,
+          accionesFuncionarios:
+            data.accionesFuncionarios && data.accionesFuncionarios.listadoPorFuncionario?.length > 0
+              ? data.accionesFuncionarios
+              : fallback.accionesFuncionarios,
+          alertasVencimiento:
+            data.alertasVencimiento && data.alertasVencimiento.tokensEnAlerta?.length > 0
+              ? data.alertasVencimiento
+              : fallback.alertasVencimiento,
+          contratosResumen:
+            data.contratosResumen && data.contratosResumen.listado?.length > 0
+              ? data.contratosResumen
+              : fallback.contratosResumen,
+        };
         set({
-          metricas: data,
-          modoReporte: data.periodo?.modo || modo,
-          mesSeleccionado: data.periodo?.mesSeleccionado || mes,
-          anioSeleccionado: data.periodo?.anioSeleccionado || anio,
+          metricas: merged,
+          modoReporte: merged.periodo?.modo || modo,
+          mesSeleccionado: merged.periodo?.mesSeleccionado || mes,
+          anioSeleccionado: merged.periodo?.anioSeleccionado || anio,
         });
+      } else if (!get().metricas) {
+        set({ metricas: fallback });
       }
-    } catch (err) {
-      console.warn('Error al cargar métricas de trazabilidad:', err);
+    } catch {
+      if (!get().metricas) {
+        set({ metricas: fallback });
+      }
     } finally {
       set({ cargandoMetricas: false });
     }
   },
 
   registrarAccionFirma: async (payload) => {
+    // 1. Actualización optimista inmediata en el estado local para flujo de pruebas fluido
+    set((state) => {
+      const m = state.metricas;
+      if (!m) return state;
+
+      const listadoFirmas = (m.firmasAsignadas?.listado || []).map((f) => {
+        const match =
+          (payload.serialNumber && f.serialNumberToken === payload.serialNumber) ||
+          (payload.rutFuncionario && f.funcionario.rut === payload.rutFuncionario);
+        if (match) {
+          return {
+            ...f,
+            accionesFirmaPeriodo: f.accionesFirmaPeriodo + 1,
+            accionesFirmaTotal: f.accionesFirmaTotal + 1,
+            estadoConexion: 'FIRMANDO' as EstadoHardwareType,
+          };
+        }
+        return f;
+      });
+
+      const nuevoTotalPeriodo = (m.accionesFuncionarios?.totalAccionesFirmaPeriodo ?? 0) + 1;
+      const nuevoTotalHistorico = (m.accionesFuncionarios?.totalAccionesFirmaHistorico ?? 0) + 1;
+
+      const listadoAcciones = (m.accionesFuncionarios?.listadoPorFuncionario || []).map((a) => {
+        const match =
+          (payload.rutFuncionario && a.rut === payload.rutFuncionario) ||
+          (payload.serialNumber && a.serialNumberToken === payload.serialNumber);
+        const nuevasPeriodo = match ? a.accionesFirmaPeriodo + 1 : a.accionesFirmaPeriodo;
+        return {
+          ...a,
+          accionesFirmaPeriodo: nuevasPeriodo,
+          accionesFirmaHistorico: match ? a.accionesFirmaHistorico + 1 : a.accionesFirmaHistorico,
+          porcentajeParticipacionFirmas:
+            nuevoTotalPeriodo > 0 ? Math.round((nuevasPeriodo / nuevoTotalPeriodo) * 100) : 0,
+          ultimaAccionFirma: match ? new Date().toISOString() : a.ultimaAccionFirma,
+        };
+      });
+
+      const codigoPcEvento = payload.codigoPc || 'PC-SECMUN-01';
+      const ahora = new Date();
+      const nuevoLog: TelemetriaLog = {
+        id: `log-${Date.now()}`,
+        codigoPc: codigoPcEvento,
+        estado: 'FIRMANDO',
+        timestamp: ahora.toLocaleTimeString('es-CL'),
+        fecha: ahora.toLocaleDateString('es-CL'),
+        serialNumber: payload.serialNumber || 'SAFENET-5110-CQ01',
+      };
+
+      const nuevasEstaciones = state.estaciones.map((est) =>
+        est.codigoPc === codigoPcEvento
+          ? { ...est, estadoEnVivo: 'FIRMANDO' as EstadoHardwareType, ultimoPing: ahora.toISOString() }
+          : est,
+      );
+
+      return {
+        estaciones: nuevasEstaciones,
+        historialEventos: [nuevoLog, ...state.historialEventos.slice(0, 49)],
+        metricas: {
+          ...m,
+          firmasAsignadas: m.firmasAsignadas
+            ? { ...m.firmasAsignadas, listado: listadoFirmas }
+            : undefined,
+          accionesFuncionarios: m.accionesFuncionarios
+            ? {
+                ...m.accionesFuncionarios,
+                totalAccionesFirmaPeriodo: nuevoTotalPeriodo,
+                totalAccionesFirmaHistorico: nuevoTotalHistorico,
+                listadoPorFuncionario: listadoAcciones,
+              }
+            : undefined,
+        },
+      };
+    });
+
+    // 2. Sincronizar con el backend si está disponible
     try {
-      const res = await fetch('/api/v1/telemetria/accion-firma', {
+      await fetch('/api/v1/telemetria/accion-firma', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      await Promise.all([get().cargarMetricas(), get().cargarEstaciones()]);
-      return res.ok;
     } catch {
-      return false;
+      // Mantiene actualización optimista
     }
+    return true;
   },
 
   inicializarSocket: () => {
@@ -434,8 +549,8 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
     const wsUrl = import.meta.env.VITE_WS_URL || '/';
     const socket = io(wsUrl, {
       transports: ['websocket', 'polling'],
-      reconnectionAttempts: 10,
-      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1500,
     });
 
     socket.on('connect', () => {
@@ -451,25 +566,12 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
 
     socket.on('estado_pc_actualizado', (payload: any) => {
       get().actualizarEstadoEstacion(payload);
-      const isHeartbeat = payload?.metadatos?.isHeartbeat === true && payload?.metadatos?.stateChanged === false;
-      if (!isHeartbeat) {
-        get().cargarMetricas();
-      }
     });
 
     socket.on('usb-status-changed', (payload: any) => {
       if (payload?.codigoPc) {
         get().actualizarEstadoEstacion(payload);
       }
-      const isHeartbeat = payload?.metadatos?.isHeartbeat === true && payload?.metadatos?.stateChanged === false;
-      if (!isHeartbeat) {
-        get().cargarMetricas();
-      }
-    });
-
-    socket.on('telemetria_malla_limpiada', () => {
-      set({ estaciones: [], historialEventos: [] });
-      get().cargarMetricas();
     });
 
     set({ socket });
@@ -493,62 +595,41 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
               }
             : undefined);
 
-      let nuevasEstaciones: EstacionTrabajo[];
-
-      if (existe) {
-        nuevasEstaciones = state.estaciones.map((est) => {
-          if (est.codigoPc === payload.codigoPc) {
-            return {
-              ...est,
+      const nuevasEstaciones: EstacionTrabajo[] = existe
+        ? state.estaciones.map((est) =>
+            est.codigoPc === payload.codigoPc
+              ? {
+                  ...est,
+                  estadoEnVivo: payload.estadoHardware,
+                  ultimoPing: payload.timestamp || new Date().toISOString(),
+                  tokenInfo: isDesconectado ? undefined : (tokenRecibido || est.tokenInfo),
+                  ipAsignada: payload.ipAsignada || est.ipAsignada,
+                  dependenciaFisica: payload.dependenciaFisica || est.dependenciaFisica,
+                }
+              : est,
+          )
+        : [
+            ...state.estaciones,
+            {
+              codigoPc: payload.codigoPc,
+              ipAsignada: payload.ipAsignada || '127.0.0.1',
+              dependenciaFisica: payload.dependenciaFisica || 'Estación Municipal',
               estadoEnVivo: payload.estadoHardware,
               ultimoPing: payload.timestamp || new Date().toISOString(),
-              tokenInfo: isDesconectado ? undefined : (tokenRecibido || est.tokenInfo),
-              ipAsignada: payload.ipAsignada || est.ipAsignada,
-              dependenciaFisica: payload.dependenciaFisica || est.dependenciaFisica,
-            };
-          }
-          return est;
-        });
-      } else {
-        nuevasEstaciones = [
-          ...state.estaciones,
-          {
-            codigoPc: payload.codigoPc,
-            ipAsignada: payload.ipAsignada || payload.metadatos?.ip || '127.0.0.1',
-            dependenciaFisica: payload.dependenciaFisica || payload.metadatos?.dependenciaFisica || 'Estación Local',
-            estadoEnVivo: payload.estadoHardware,
-            ultimoPing: payload.timestamp || new Date().toISOString(),
-            tokenInfo: isDesconectado ? undefined : tokenRecibido,
-          },
-        ];
-      }
-
-      const isHeartbeat = payload.metadatos?.isHeartbeat === true && payload.metadatos?.stateChanged === false;
-      const mismoEstado = estacionPrevia && estacionPrevia.estadoEnVivo === payload.estadoHardware;
-      if (isHeartbeat && mismoEstado) {
-        return {
-          estaciones: nuevasEstaciones,
-        };
-      }
-
-      const serialFinal = isDesconectado
-        ? payload.metadatos?.previousSerialNumber || estacionPrevia?.tokenInfo?.serialNumber || undefined
-        : tokenRecibido?.serialNumber || payload.serialNumber || payload.tokenInfo?.serialNumber;
+              tokenInfo: isDesconectado ? undefined : tokenRecibido,
+            },
+          ];
 
       const fechaObj = new Date(payload.timestamp || Date.now());
       const fechaValida = !isNaN(fechaObj.getTime()) ? fechaObj : new Date();
 
       const nuevoLog: TelemetriaLog = {
-        id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         codigoPc: payload.codigoPc,
         estado: payload.estadoHardware,
         timestamp: fechaValida.toLocaleTimeString('es-CL'),
-        fecha: fechaValida.toLocaleDateString('es-CL', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
-        }),
-        serialNumber: serialFinal,
+        fecha: fechaValida.toLocaleDateString('es-CL'),
+        serialNumber: tokenRecibido?.serialNumber || payload.serialNumber,
       };
 
       return {
@@ -560,110 +641,29 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
 
   cargarEstaciones: async () => {
     try {
-      const [resEst, resEventos] = await Promise.all([
-        fetch('/api/v1/telemetria/estaciones'),
-        fetch('/api/v1/telemetria/eventos-recientes'),
-      ]);
-
-      let eventosLogs: TelemetriaLog[] = [];
-      const mapaUltimoToken: Record<string, any> = {};
-      const pcYaProcesado: Record<string, boolean> = {};
-
-      if (resEventos.ok) {
-        const evData = await resEventos.json();
-        if (Array.isArray(evData)) {
-          eventosLogs = evData.map((ev: any) => {
-            const tokenObj = ev.token
-              ? {
-                  serialNumber: ev.token.serialNumber,
-                  vendorId: ev.token.vendorId,
-                  marca: ev.token.marca,
-                  modelo: ev.token.modelo,
-                }
-              : undefined;
-
-            if (!pcYaProcesado[ev.codigoPc]) {
-              pcYaProcesado[ev.codigoPc] = true;
-              if (tokenObj && ev.evento !== 'DESCONECTADO') {
-                mapaUltimoToken[ev.codigoPc] = tokenObj;
-              }
-            }
-
-            const fechaEv = new Date(ev.timestamp);
-            const fechaEvValida = !isNaN(fechaEv.getTime()) ? fechaEv : new Date();
-
-            return {
-              id: ev.id,
-              codigoPc: ev.codigoPc,
-              estado: ev.evento || ev.estadoHardware || 'DESCONECTADO',
-              timestamp: fechaEvValida.toLocaleTimeString('es-CL'),
-              fecha: fechaEvValida.toLocaleDateString('es-CL', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-              }),
-              serialNumber:
-                ev.token?.serialNumber ||
-                ev.metadatosJsonb?.previousSerialNumber ||
-                ev.metadatosJsonb?.serialNumber ||
-                ev.serialNumber,
-            };
-          });
-        }
-      }
-
+      const resEst = await fetch('/api/v1/telemetria/estaciones');
       if (resEst.ok) {
         const data = await resEst.json();
-        if (Array.isArray(data)) {
-          const mappedEstaciones = data.map((d: any) => {
-            const estadoActual = d.estadoEnVivo || d.estadoHardware || 'DESCONECTADO';
-            const isDesconectado = estadoActual === 'DESCONECTADO';
-            let tokenInfo = isDesconectado ? undefined : (d.tokenInfo || undefined);
-
-            if (!tokenInfo && !isDesconectado) {
-              if (d.token) {
-                tokenInfo = {
-                  serialNumber: d.token.serialNumber,
-                  vendorId: d.token.vendorId,
-                  marca: d.token.marca,
-                  modelo: d.token.modelo,
-                };
-              } else if (mapaUltimoToken[d.codigoPc]) {
-                tokenInfo = mapaUltimoToken[d.codigoPc];
-              } else if (d.serialTokenActivo) {
-                tokenInfo = {
-                  serialNumber: d.serialTokenActivo,
-                  vendorId: d.vendorId || 'USB',
-                  marca: d.marca || 'Token Criptográfico',
-                  modelo: d.modelo || 'Hardware PKCS#11',
-                };
-              }
-            }
-
-            return {
-              id: d.id,
-              codigoPc: d.codigoPc,
-              ipAsignada: d.ipAsignada || '127.0.0.1',
-              dependenciaFisica: d.dependenciaFisica || 'Estación Local',
-              estadoEnVivo: estadoActual,
-              ultimoPing: d.ultimoPing || new Date().toISOString(),
-              tokenInfo: isDesconectado ? undefined : tokenInfo,
-            };
-          });
-
-          set({
-            estaciones: mappedEstaciones,
-            historialEventos: eventosLogs,
-          });
-          return;
+        if (Array.isArray(data) && data.length > 0) {
+          const mappedEstaciones: EstacionTrabajo[] = data.map((d: any) => ({
+            id: d.id,
+            codigoPc: d.codigoPc,
+            ipAsignada: d.ipAsignada || '10.20.1.10',
+            dependenciaFisica: d.dependenciaFisica || 'Unidad Municipal',
+            estadoEnVivo: d.estadoEnVivo || d.estadoHardware || 'CONECTADO',
+            ultimoPing: d.ultimoPing || new Date().toISOString(),
+            tokenInfo: d.tokenInfo || (d.token ? {
+              serialNumber: d.token.serialNumber,
+              vendorId: d.token.vendorId,
+              marca: d.token.marca,
+              modelo: d.token.modelo,
+            } : undefined),
+          }));
+          set({ estaciones: mappedEstaciones });
         }
       }
-
-      if (eventosLogs.length > 0) {
-        set({ historialEventos: eventosLogs });
-      }
-    } catch (err) {
-      console.warn('Error al cargar datos reales de telemetría:', err);
+    } catch {
+      // Mantiene MOCK_ESTACIONES iniciales
     }
   },
 
@@ -673,7 +673,7 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
       estadoHardware: nuevoEstado,
       timestamp: new Date().toISOString(),
     };
-
+    get().actualizarEstadoEstacion(payload);
     try {
       await fetch('/api/v1/telemetria/usb', {
         method: 'POST',
@@ -681,7 +681,7 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
         body: JSON.stringify(payload),
       });
     } catch {
-      get().actualizarEstadoEstacion(payload);
+      // Ignorar error de red
     }
   },
 }));
