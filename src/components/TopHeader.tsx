@@ -17,47 +17,31 @@ interface TopHeaderProps {
 const TAB_TITLES: Record<NavTab, { title: string; subtitle: string }> = {
   LANDING: {
     title: 'Portada Institucional',
-    subtitle: 'Plataforma oficial de gestión y firma electrónica de Coquimbo',
-  },
-  MIS_DOCUMENTOS: {
-    title: 'Mis Documentos',
-    subtitle: 'Gestión personal y firma de decretos, resoluciones y oficios',
-  },
-  FIRMAGOB_V2: {
-    title: 'Ambiente de Pruebas FirmaGob v2',
-    subtitle: 'Protocolo Oficial de Conexión a Repositorio de Firmas (Manual Versión 18)',
-  },
-  FE_PUBLICA: {
-    title: 'Fe Pública y Decretos',
-    subtitle: 'Revisión, visación y certificación oficial de documentos',
+    subtitle: 'Sistema de Control y Seguimiento de Tokens de Firma Electrónica — Municipalidad de Coquimbo',
   },
   DASHBOARD: {
-    title: 'Dispositivos Conectados',
-    subtitle: 'Supervisión en tiempo real de los equipos y dispositivos de firma',
-  },
-  FIRMAS: {
-    title: 'Firma Masiva de Documentos',
-    subtitle: 'Firma simultánea de múltiples documentos en segundo plano',
-  },
-  USUARIOS_CUSTODIA: {
-    title: 'Gestión de Funcionarios y Custodia',
-    subtitle: 'Administración de usuarios y registro de entrega de dispositivos',
-  },
-  CHECKSIGN: {
-    title: 'Verificación de Documentos',
-    subtitle: 'Comprobación de autenticidad y validez de firmas en documentos PDF',
+    title: 'Control de Tokens y Firmas Asignadas',
+    subtitle: 'Dispositivos existentes/activos/expirados, firmas asignadas, acciones por funcionario y estado en sesión',
   },
   ALERTAS: {
-    title: 'Alertas y Vencimientos',
-    subtitle: 'Avisos preventivos sobre la vigencia de certificados digitales',
+    title: 'Vigencia y Vencimientos de Tokens (15, 30 y 60 días)',
+    subtitle: 'Seguimiento de tokens próximos a vencer y despacho de avisos preventivos por correo electrónico',
+  },
+  METRICAS: {
+    title: 'Estadísticas, Métricas y Summary PDF (LaTeX)',
+    subtitle: 'Indicadores integrales por período (7, 15, 30 días, Mes y Año) con previsualización LaTeX y descarga PDF',
+  },
+  USUARIOS_CUSTODIA: {
+    title: 'Contratos de Obtención de Tokens, Asignación y Custodia',
+    subtitle: 'Control de caducidad de contratos (con visor PDF), asignación de firmas/tokens a funcionarios y actas',
   },
   AUDITORIA: {
-    title: 'Historial de Actividad',
-    subtitle: 'Registro y seguimiento de todas las acciones realizadas en la plataforma',
+    title: 'Bitácora de Actividad de Tokens',
+    subtitle: 'Registro inalterable de acciones de firma, entregas y telemetría desde sesión y dispositivo',
   },
   CONFIGURACION: {
-    title: 'Configuración del Sistema',
-    subtitle: 'Parámetros generales y preferencias de la plataforma',
+    title: 'Parámetros de Control de Tokens',
+    subtitle: 'Configuración de alertas de vigencia, agente USB y parámetros del entorno de test',
   },
 };
 
@@ -65,13 +49,10 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   tabActiva,
   onOpenMobileSidebar,
   onGoToLanding,
-  onSelectTab,
 }) => {
-  const { wsConectado, cargarEstaciones } = useTelemetriaStore();
+  const { cargarEstaciones, cargarMetricas } = useTelemetriaStore();
   const { usuario, logout } = useAuthStore();
   const current = TAB_TITLES[tabActiva] || TAB_TITLES.DASHBOARD;
-
-  const esAdmin = usuario?.rol === 'ADMIN' || usuario?.rol === 'SUPERVISOR';
 
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b bg-background/95 backdrop-blur-md px-4 sm:px-6">
@@ -96,26 +77,30 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
             <h1 className="text-xs sm:text-sm font-bold tracking-tight text-foreground">
               {current.title}
             </h1>
+            <Badge variant="outline" className="text-[9px] font-mono border-primary/40 text-primary hidden xl:inline-flex">
+              CONTROL DE TOKENS
+            </Badge>
           </div>
-          <p className="text-[10px] text-muted-foreground truncate max-w-md">
+          <p className="text-[10px] text-muted-foreground truncate max-w-xl">
             {current.subtitle}
           </p>
         </div>
       </div>
 
-      {/* Acciones Superiores: Perfil Real, Recargar Telemetría, Tema y Logout */}
+      {/* Acciones Superiores: Sincronizar Telemetría, Perfil Real, Tema y Logout */}
       <div className="flex items-center space-x-2.5">
-        {esAdmin && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => cargarEstaciones()}
-            className="text-xs h-8 px-2.5 font-medium hidden sm:inline-flex"
-            title="Actualizar estado de conexión"
-          >
-            Actualizar Estado
-          </Button>
-        )}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            cargarEstaciones();
+            cargarMetricas();
+          }}
+          className="text-xs h-8 px-2.5 font-medium hidden sm:inline-flex"
+          title="Sincronizar estado de tokens y métricas desde sesión/dispositivo"
+        >
+          ↻ Sincronizar Tokens
+        </Button>
 
         {usuario && (
           <div className="flex items-center space-x-2 px-2.5 py-1 rounded-md bg-muted/40 border border-border/60">

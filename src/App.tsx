@@ -3,13 +3,9 @@ import { Sidebar, NavTab } from './components/Sidebar';
 import { TopHeader } from './components/TopHeader';
 import { LandingPage } from './components/LandingPage';
 import { LoginModal } from './components/LoginModal';
-import { MisDocumentosFuncionarioView } from './components/MisDocumentosFuncionarioView';
-import { EntornoPruebasFirmaGobV2 } from './components/EntornoPruebasFirmaGobV2';
-import { FePublicaDecretosView } from './components/FePublicaDecretosView';
 import { DashboardSupervisores } from './components/DashboardSupervisores';
-import { FirmaLotesView } from './components/FirmaLotesView';
-import { ChecksignView } from './components/ChecksignView';
 import { AlertasCertificadosView } from './components/AlertasCertificadosView';
+import { MetricasTrazabilidadPanel } from './components/MetricasTrazabilidadPanel';
 import { AuditoriaView } from './components/AuditoriaView';
 import { ConfiguracionSistemaView } from './components/ConfiguracionSistemaView';
 import { GestionUsuariosEquipamientoView } from './components/GestionUsuariosEquipamientoView';
@@ -21,49 +17,22 @@ export const App: React.FC = () => {
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
 
-  const { inicializarSocket, cargarEstaciones } = useTelemetriaStore();
+  const { inicializarSocket, cargarEstaciones, cargarMetricas } = useTelemetriaStore();
   const { isAutenticado, usuario, verificarSesion, cargandoSesion, debeCambiarPassword } = useAuthStore();
-
-  const esAdmin = usuario?.rol === 'ADMIN';
-  const esSupervisor = usuario?.rol === 'SUPERVISOR';
-  const esMinistro = usuario?.rol === 'MINISTRO_DE_FE';
-  const tieneAccesoGestion = esAdmin || esSupervisor;
-
-  // Garantizar que la pestaña activa corresponda a los permisos del rol (RBAC)
-  useEffect(() => {
-    if (isAutenticado && usuario) {
-      if (!tieneAccesoGestion) {
-        // Rutas no permitidas para FUNCIONARIO sin permisos de gestión
-        const rutasGestion: NavTab[] = [
-          'DASHBOARD',
-          'FIRMAS',
-          'USUARIOS_CUSTODIA',
-          'ALERTAS',
-          'AUDITORIA',
-          'CONFIGURACION',
-        ];
-        if (rutasGestion.includes(tabActiva)) {
-          setTabActiva('MIS_DOCUMENTOS');
-        }
-        if (tabActiva === 'FE_PUBLICA' && !esMinistro && !esAdmin) {
-          setTabActiva('MIS_DOCUMENTOS');
-        }
-      }
-    }
-  }, [tabActiva, isAutenticado, usuario, tieneAccesoGestion, esMinistro, esAdmin]);
 
   // Verificar si hay sesión activa almacenada al cargar
   useEffect(() => {
     verificarSesion();
   }, [verificarSesion]);
 
-  // Si está autenticado, conectar telemetría en tiempo real
+  // Si está autenticado, conectar telemetría en tiempo real y cargar métricas de tokens
   useEffect(() => {
     if (isAutenticado) {
       inicializarSocket();
       cargarEstaciones();
+      cargarMetricas();
     }
-  }, [isAutenticado, inicializarSocket, cargarEstaciones]);
+  }, [isAutenticado, inicializarSocket, cargarEstaciones, cargarMetricas]);
 
   // Pantalla de carga inicial si hay token previo
   if (cargandoSesion && localStorage.getItem('access_token')) {
@@ -71,7 +40,7 @@ export const App: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
         <div className="flex flex-col items-center space-y-3">
           <div className="w-8 h-8 border-3 border-amber-400 border-t-transparent rounded-full animate-spin" />
-          <span className="text-xs font-mono text-muted-foreground">Verificando credenciales institucionales...</span>
+          <span className="text-xs font-mono text-muted-foreground">Verificando sesión y telemetría de tokens...</span>
         </div>
       </div>
     );
@@ -84,8 +53,7 @@ export const App: React.FC = () => {
         <LandingPage
           onGoToApp={() => {
             if (isAutenticado && usuario) {
-              const esAdmin = usuario.rol === 'ADMIN' || usuario.rol === 'SUPERVISOR';
-              setTabActiva(esAdmin ? 'DASHBOARD' : 'MIS_DOCUMENTOS');
+              setTabActiva('DASHBOARD');
             } else {
               setLoginModalOpen(true);
             }
@@ -97,19 +65,17 @@ export const App: React.FC = () => {
           isOpen={loginModalOpen || debeCambiarPassword}
           onClose={() => setLoginModalOpen(false)}
           onLoginSuccess={() => {
-            const u = useAuthStore.getState().usuario;
-            const esAdmin = u?.rol === 'ADMIN' || u?.rol === 'SUPERVISOR';
-            setTabActiva(esAdmin ? 'DASHBOARD' : 'MIS_DOCUMENTOS');
+            setTabActiva('DASHBOARD');
           }}
         />
       </>
     );
   }
 
-  // 2. Vista interna corporativa con navegación según rol
+  // 2. Vista interna enfocada exclusivamente en Control y Seguimiento de Tokens
   return (
     <div className="min-h-screen flex w-full bg-background text-foreground transition-colors duration-200">
-      {/* Barra Lateral con Navegación filtrada por Rol Real */}
+      {/* Barra Lateral de Control y Seguimiento de Tokens */}
       <Sidebar
         tabActiva={tabActiva}
         onSelectTab={setTabActiva}
@@ -130,21 +96,12 @@ export const App: React.FC = () => {
         {/* Área de Contenido Principal */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-background">
           <div className="max-w-7xl mx-auto space-y-6">
-            {/* Vistas Personales del Funcionario */}
-            {tabActiva === 'MIS_DOCUMENTOS' && <MisDocumentosFuncionarioView />}
-            {tabActiva === 'FIRMAGOB_V2' && esAdmin && <EntornoPruebasFirmaGobV2 />}
-            {tabActiva === 'FE_PUBLICA' && (esMinistro || esAdmin) && <FePublicaDecretosView />}
-
-            {/* Vistas de Administrador / Supervisor protegidas con RBAC */}
-            {tabActiva === 'DASHBOARD' && tieneAccesoGestion && <DashboardSupervisores />}
-            {tabActiva === 'FIRMAS' && tieneAccesoGestion && <FirmaLotesView />}
-            {tabActiva === 'USUARIOS_CUSTODIA' && tieneAccesoGestion && <GestionUsuariosEquipamientoView />}
-            {tabActiva === 'ALERTAS' && tieneAccesoGestion && <AlertasCertificadosView />}
-            {tabActiva === 'AUDITORIA' && tieneAccesoGestion && <AuditoriaView />}
-            {tabActiva === 'CONFIGURACION' && tieneAccesoGestion && <ConfiguracionSistemaView />}
-
-            {/* Compartida */}
-            {tabActiva === 'CHECKSIGN' && <ChecksignView />}
+            {tabActiva === 'DASHBOARD' && <DashboardSupervisores onNavigateTab={setTabActiva} />}
+            {tabActiva === 'ALERTAS' && <AlertasCertificadosView />}
+            {tabActiva === 'METRICAS' && <MetricasTrazabilidadPanel vistaOrigen="DISPOSITIVOS" vistaCompleta />}
+            {tabActiva === 'USUARIOS_CUSTODIA' && <GestionUsuariosEquipamientoView />}
+            {tabActiva === 'AUDITORIA' && <AuditoriaView />}
+            {tabActiva === 'CONFIGURACION' && <ConfiguracionSistemaView />}
           </div>
         </main>
 
@@ -152,12 +109,14 @@ export const App: React.FC = () => {
         <footer className="border-t bg-card py-3 px-6 text-xs text-muted-foreground">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
             <div>
-              © 2026 Ilustre Municipalidad de Coquimbo
+              © 2026 Ilustre Municipalidad de Coquimbo — Control y Seguimiento de Tokens de Firma Electrónica
             </div>
             <div className="flex items-center space-x-3 text-[11px]">
-              <span>Plataforma Oficial de Firma Electrónica</span>
+              <span>Telemetría de Sesión y Dispositivo</span>
               <span>•</span>
-              <span>Seguridad Institucional</span>
+              <span>Vigencia 15/30/60 Días</span>
+              <span>•</span>
+              <span>Summary LaTeX / PDF</span>
             </div>
           </div>
         </footer>
@@ -169,9 +128,7 @@ export const App: React.FC = () => {
           isOpen={true}
           onClose={() => {}}
           onLoginSuccess={() => {
-            const u = useAuthStore.getState().usuario;
-            const esAdmin = u?.rol === 'ADMIN' || u?.rol === 'SUPERVISOR';
-            setTabActiva(esAdmin ? 'DASHBOARD' : 'MIS_DOCUMENTOS');
+            setTabActiva('DASHBOARD');
           }}
         />
       )}

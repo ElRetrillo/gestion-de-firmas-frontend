@@ -1,54 +1,98 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { Separator } from './ui/separator';
+import { Input } from './ui/input';
+import { useTelemetriaStore } from '../store/useTelemetriaStore';
 
-interface Alerta {
+interface AlertaToken {
   id: string;
-  tipo: string;
-  custodia: string;
+  numeroSerieCertificado: string;
+  serialNumberToken: string;
   hardwareModelo: string;
   diasRestantes: number;
+  tramoAlerta: '15_DIAS' | '30_DIAS' | '60_DIAS' | 'EXPIRADO';
   severidad: 'ALTA' | 'MEDIA' | 'BAJA';
+  fechaInicio: string;
   fechaExpiracion: string;
+  tiempoExpiracionTexto: string;
+  ultimoAvisoEnviado?: string | null;
   usuario: {
     nombre: string;
     unidad: string;
+    cargo: string;
     email: string;
     rut: string;
   };
 }
 
+interface CorreoDespachadoPreview {
+  emailDestino: string;
+  funcionarioNombre: string;
+  serialNumber: string;
+  diasRestantes: number;
+  asunto: string;
+  cuerpoCorreo: string;
+  timestamp: string;
+  esMasivo?: boolean;
+}
+
 export const AlertasCertificadosView: React.FC = () => {
-  const [alertas, setAlertas] = useState<Alerta[]>([]);
+  const { metricas, cargarMetricas } = useTelemetriaStore();
+  const [alertasRemotas, setAlertasRemotas] = useState<AlertaToken[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [filtroTramo, setFiltroTramo] = useState<'TODOS' | '15_DIAS' | '30_DIAS' | '60_DIAS' | 'EXPIRADO'>('TODOS');
+  const [busqueda, setBusqueda] = useState('');
 
-  const [notificando, setNotificando] = useState<string | null>(null);
-  const [despachoMasivoExitoso, setDespachoMasivoExitoso] = useState(false);
+  const [notificandoId, setNotificandoId] = useState<string | null>(null);
+  const [avisosEnviadosMap, setAvisosEnviadosMap] = useState<Record<string, string>>({});
+  const [correoPreview, setCorreoPreview] = useState<CorreoDespachadoPreview | null>(null);
 
-  useEffect(() => {
+  const cargarAlertas = async () => {
     setCargando(true);
-    fetch('/api/v1/usuarios/alertas-vencimiento')
-      .then((res) => res.json())
-      .then((data) => {
+    try {
+      const res = await fetch('/api/v1/usuarios/alertas-vencimiento');
+      if (res.ok) {
+        const data = await res.json();
         if (Array.isArray(data)) {
-          setAlertas(
+          setAlertasRemotas(
             data.map((item: any) => {
-              const dias = item.diasRestantes ?? (item.validoHasta ? Math.max(0, Math.ceil((new Date(item.validoHasta).getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : 0);
+              const dias =
+                item.diasRestantes ??
+                (item.validoHasta
+                  ? Math.ceil((new Date(item.validoHasta).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+                  : 0);
+              const tramo: AlertaToken['tramoAlerta'] =
+                item.tramoAlerta ||
+                (dias <= 0 ? 'EXPIRADO' : dias <= 15 ? '15_DIAS' : dias <= 30 ? '30_DIAS' : '60_DIAS');
               return {
-                id: item.id || item.numeroSerie || 'CERT',
-                tipo: `${item.tipo || 'FEA'} (${item.numeroSerie || 'X.509'})`,
-                custodia: item.custodia || 'TOKEN_FISICO',
-                hardwareModelo: item.tokenHardware?.modelo || item.tokenHardware?.marca || 'Dispositivo de firma USB',
+                id: item.id || item.numeroSerie || 'CERT-TOKEN',
+                numeroSerieCertificado: item.numeroSerie || item.id || 'SN-CERT',
+                serialNumberToken:
+                  item.serialNumberToken ||
+                  item.tokenHardware?.serialNumber ||
+                  item.numeroSerie ||
+                  'TOKEN-USB',
+                hardwareModelo:
+                  item.hardwareModelo ||
+                  (item.tokenHardware
+                    ? `${item.tokenHardware.marca || ''} ${item.tokenHardware.modelo || ''}`.trim()
+                    : 'Token Criptográfico USB'),
                 diasRestantes: dias,
+                tramoAlerta: tramo,
                 severidad: item.severidad || (dias <= 15 ? 'ALTA' : dias <= 30 ? 'MEDIA' : 'BAJA'),
-                fechaExpiracion: item.validoHasta
-                  ? new Date(item.validoHasta).toISOString().substring(0, 10)
-                  : 'Sin fecha',
+                fechaInicio: item.fechaInicio || (item.validoDesde ? String(item.validoDesde).substring(0, 10) : '2025-01-15'),
+                fechaExpiracion:
+                  item.fechaExpiracion ||
+                  (item.validoHasta ? new Date(item.validoHasta).toISOString().substring(0, 10) : 'Sin fecha'),
+                tiempoExpiracionTexto:
+                  item.tiempoExpiracionTexto ||
+                  (dias <= 0 ? `Expirado hace ${Math.abs(dias)} días` : `Quedan ${dias} días para vencer`),
+                ultimoAvisoEnviado: item.ultimoAvisoEnviado || null,
                 usuario: {
                   nombre: item.usuario?.nombre || 'Funcionario Municipal',
                   unidad: item.usuario?.unidad || 'Municipalidad de Coquimbo',
+                  cargo: item.usuario?.cargo || 'Profesional Municipal',
                   email: item.usuario?.email || 'firma@municoquimbo.cl',
                   rut: item.usuario?.rut || '-',
                 },
@@ -56,250 +100,532 @@ export const AlertasCertificadosView: React.FC = () => {
             }),
           );
         }
-      })
-      .catch(() => {})
-      .finally(() => setCargando(false));
+      }
+    } catch {
+      // Fallback a metricas.alertasVencimiento
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  useEffect(() => {
+    cargarAlertas();
   }, []);
 
-  const handleNotificar = async (id: string, email: string) => {
-    setNotificando(id);
+  // Consolidar fuente de alertas (endpoint directo o metricas.alertasVencimiento)
+  const alertas: AlertaToken[] =
+    alertasRemotas.length > 0
+      ? alertasRemotas
+      : (metricas?.alertasVencimiento?.tokensEnAlerta || []).map((t) => ({
+          id: t.id,
+          numeroSerieCertificado: t.numeroSerie,
+          serialNumberToken: t.serialNumberToken,
+          hardwareModelo: t.hardwareModelo,
+          diasRestantes: t.diasRestantes,
+          tramoAlerta: t.tramoAlerta,
+          severidad: t.severidad,
+          fechaInicio: t.fechaInicio,
+          fechaExpiracion: t.fechaExpiracion,
+          tiempoExpiracionTexto: t.tiempoExpiracionTexto,
+          ultimoAvisoEnviado: t.ultimoAvisoEnviado,
+          usuario: {
+            nombre: t.usuario.nombre,
+            unidad: t.usuario.unidad,
+            cargo: t.usuario.cargo || 'Funcionario',
+            email: t.usuario.email,
+            rut: t.usuario.rut,
+          },
+        }));
+
+  const count15 = alertas.filter((a) => a.tramoAlerta === '15_DIAS' || (a.diasRestantes > 0 && a.diasRestantes <= 15)).length;
+  const count30 = alertas.filter((a) => a.tramoAlerta === '30_DIAS' || (a.diasRestantes > 15 && a.diasRestantes <= 30)).length;
+  const count60 = alertas.filter((a) => a.tramoAlerta === '60_DIAS' || (a.diasRestantes > 30 && a.diasRestantes <= 60)).length;
+  const countExpirados = alertas.filter((a) => a.tramoAlerta === 'EXPIRADO' || a.diasRestantes <= 0).length;
+
+  const alertasFiltradas = alertas.filter((a) => {
+    const q = busqueda.trim().toLowerCase();
+    const coincideBusqueda =
+      !q ||
+      a.usuario.nombre.toLowerCase().includes(q) ||
+      a.usuario.rut.toLowerCase().includes(q) ||
+      a.usuario.email.toLowerCase().includes(q) ||
+      a.serialNumberToken.toLowerCase().includes(q) ||
+      a.numeroSerieCertificado.toLowerCase().includes(q);
+
+    const coincideTramo =
+      filtroTramo === 'TODOS'
+        ? true
+        : filtroTramo === '15_DIAS'
+        ? a.tramoAlerta === '15_DIAS' || (a.diasRestantes > 0 && a.diasRestantes <= 15)
+        : filtroTramo === '30_DIAS'
+        ? a.tramoAlerta === '30_DIAS' || (a.diasRestantes > 15 && a.diasRestantes <= 30)
+        : filtroTramo === '60_DIAS'
+        ? a.tramoAlerta === '60_DIAS' || (a.diasRestantes > 30 && a.diasRestantes <= 60)
+        : a.tramoAlerta === 'EXPIRADO' || a.diasRestantes <= 0;
+
+    return coincideBusqueda && coincideTramo;
+  });
+
+  const handleEnviarCorreoAviso = async (alerta: AlertaToken) => {
+    setNotificandoId(alerta.id);
+    const ahoraStr = new Date().toLocaleString('es-CL');
+    let asunto = `[AVISO VENCIMIENTO TOKEN FEA] Quedan ${alerta.diasRestantes} días de vigencia (${alerta.serialNumberToken})`;
+    let cuerpoCorreo = `Estimado(a) ${alerta.usuario.nombre} (${alerta.usuario.rut}),\n\nEl Sistema de Control y Seguimiento de Tokens de Firma Electrónica de la Ilustre Municipalidad de Coquimbo le informa que su dispositivo token N° Serie ${alerta.serialNumberToken} (${alerta.hardwareModelo}) asignado a la unidad "${alerta.usuario.unidad}" presenta fecha de expiración el ${alerta.fechaExpiracion} (${alerta.tiempoExpiracionTexto}).\n\nPor favor coordine la renovación de su token criptográfico con el Departamento de Gestión de Sistemas y TICs antes de su caducidad.\n\nAtentamente,\nUnidad de Control de Tokens FEA — I. Municipalidad de Coquimbo`;
+
     try {
-      await fetch('/api/v1/usuarios/alertas-vencimiento/despachar', { method: 'POST' });
+      const res = await fetch('/api/v1/usuarios/alertas-vencimiento/despachar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          certificadoId: alerta.id,
+          serialNumber: alerta.serialNumberToken,
+          email: alerta.usuario.email,
+          diasRestantes: alerta.diasRestantes,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.asunto) asunto = data.asunto;
+        if (data?.cuerpoCorreo) cuerpoCorreo = data.cuerpoCorreo;
+      }
     } catch {
-      // Fallback
+      // Usa plantilla institucional local si no hay respuesta
     }
-    setTimeout(() => {
-      setNotificando(null);
-      setDespachoMasivoExitoso(true);
-    }, 350);
+
+    setAvisosEnviadosMap((prev) => ({ ...prev, [alerta.id]: ahoraStr }));
+    setCorreoPreview({
+      emailDestino: alerta.usuario.email,
+      funcionarioNombre: alerta.usuario.nombre,
+      serialNumber: alerta.serialNumberToken,
+      diasRestantes: alerta.diasRestantes,
+      asunto,
+      cuerpoCorreo,
+      timestamp: ahoraStr,
+    });
+    setNotificandoId(null);
+    cargarMetricas();
   };
 
   const handleDespachoMasivo = async () => {
+    setNotificandoId('MASIVO');
+    const ahoraStr = new Date().toLocaleString('es-CL');
     try {
-      await fetch('/api/v1/usuarios/alertas-vencimiento/despachar', { method: 'POST' });
+      await fetch('/api/v1/usuarios/alertas-vencimiento/despachar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ masivo: true }),
+      });
     } catch {
       // Fallback
     }
-    setDespachoMasivoExitoso(true);
-    setTimeout(() => setDespachoMasivoExitoso(false), 4000);
-  };
 
-  const criticosCount = alertas.filter((a) => a.severidad === 'ALTA').length;
-  const mediosCount = alertas.filter((a) => a.severidad === 'MEDIA').length;
-  const preventivosCount = alertas.filter((a) => a.severidad === 'BAJA').length;
-  const tokensFisicosCount = alertas.filter((a) => a.custodia === 'TOKEN_FISICO').length;
-  const certificadosCloudCount = alertas.filter((a) => a.custodia !== 'TOKEN_FISICO').length;
+    const nuevosAvisos: Record<string, string> = {};
+    alertasFiltradas.forEach((a) => {
+      nuevosAvisos[a.id] = ahoraStr;
+    });
+    setAvisosEnviadosMap((prev) => ({ ...prev, ...nuevosAvisos }));
+    setCorreoPreview({
+      emailDestino: `${alertasFiltradas.length} funcionarios notificados (${alertasFiltradas
+        .slice(0, 3)
+        .map((a) => a.usuario.email)
+        .join(', ')}${alertasFiltradas.length > 3 ? '...' : ''})`,
+      funcionarioNombre: 'Despacho Masivo de Vigencia (15, 30 y 60 días)',
+      serialNumber: 'Múltiples Tokens en Umbral',
+      diasRestantes: 60,
+      asunto: '[AVISO PREVENTIVO INSTITUCIONAL] Vencimiento de Tokens de Firma Electrónica (Umbrales 15, 30 y 60 días)',
+      cuerpoCorreo: `Se han despachado exitosamente ${alertasFiltradas.length} correos electrónicos preventivos a los funcionarios cuyos dispositivos tokens se encuentran en los tramos de 15, 30 y 60 días para su vencimiento.\n\nDestinatarios incluidos:\n${alertasFiltradas
+        .map((a) => `• ${a.usuario.nombre} (${a.usuario.email}) — Token ${a.serialNumberToken} — ${a.tiempoExpiracionTexto}`)
+        .join('\n')}`,
+      timestamp: ahoraStr,
+      esMasivo: true,
+    });
+    setNotificandoId(null);
+  };
 
   return (
     <div className="space-y-6">
-      {/* 1. Bento Asimétrico: Monitor de Ciclo de Vida & Resumen de Custodia */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Columna Izquierda: Monitor de Vigencia */}
-        <Card className="lg:col-span-8 border-border/80 bg-card">
-          <CardHeader className="p-5 pb-3 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <Badge variant="outline" className="text-[10px]">
-                  Vencimientos
-                </Badge>
-                <Badge variant="secondary" className="text-[10px]">
-                  Avisos a 60, 30 y 15 días
-                </Badge>
-              </div>
-              <CardTitle className="text-base font-bold text-foreground">
-                Vigilancia de Certificados Digitales
-              </CardTitle>
-              <CardDescription className="text-xs text-muted-foreground mt-0.5">
-                Monitoreo preventivo del estado y vencimiento de certificados digitales de funcionarios.
-              </CardDescription>
+      {/* 1. Panel Superior de Vigilancia de Vencimiento a 15, 30 y 60 Días (Req 4) */}
+      <Card className="border-border/80 bg-card">
+        <CardHeader className="p-5 pb-3 border-b flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <Badge variant="outline" className="text-[10px] font-mono border-primary/40 text-primary">
+                APARTADO 4 • VIGENCIA Y VENCIMIENTOS DE TOKENS
+              </Badge>
+              <Badge variant="secondary" className="text-[10px] font-mono">
+                Umbrales Oficiales: 15, 30 y 60 Días
+              </Badge>
             </div>
+            <CardTitle className="text-base sm:text-lg font-bold text-foreground">
+              Control de Vigencia de Tokens y Aviso Preventivo por Correo Electrónico
+            </CardTitle>
+            <CardDescription className="text-xs text-muted-foreground mt-0.5">
+              Monitoreo de los tokens criptográficos a los que les quedan 15, 30 y 60 días para su vencimiento y envío directo de avisos por correo electrónico al funcionario titular.
+            </CardDescription>
+          </div>
 
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={cargarAlertas}
+              className="h-9 text-xs font-semibold"
+            >
+              ↻ Actualizar Vigencias
+            </Button>
             <Button
               onClick={handleDespachoMasivo}
               size="sm"
-              disabled={alertas.length === 0}
+              disabled={alertasFiltradas.length === 0 || notificandoId === 'MASIVO'}
               className="font-bold text-xs h-9 px-4 shrink-0 shadow-xs"
             >
-              Enviar Notificaciones
+              {notificandoId === 'MASIVO'
+                ? 'Enviando Correos...'
+                : `Enviar Aviso por Correo a Todos (${alertasFiltradas.length})`}
+            </Button>
+          </div>
+        </CardHeader>
+
+        <CardContent className="p-5 space-y-4">
+          {/* Tarjetas por Tramo: 15 días, 30 días, 60 días y Expirados */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div
+              onClick={() => setFiltroTramo('15_DIAS')}
+              className={`p-3.5 rounded-lg border cursor-pointer transition-all space-y-1 ${
+                filtroTramo === '15_DIAS'
+                  ? 'border-rose-500 bg-rose-500/15 shadow-xs'
+                  : 'border-rose-500/30 bg-rose-500/5 hover:border-rose-500/60'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase text-rose-500 font-bold">
+                  Tramo ≤ 15 Días
+                </span>
+                <Badge variant="danger" className="text-[9px] font-mono">
+                  URGENTE
+                </Badge>
+              </div>
+              <div className="font-bold text-2xl text-rose-600 dark:text-rose-400">
+                {count15} <span className="text-xs font-normal text-muted-foreground">tokens</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground">
+                Les quedan 15 días o menos para vencer
+              </div>
+            </div>
+
+            <div
+              onClick={() => setFiltroTramo('30_DIAS')}
+              className={`p-3.5 rounded-lg border cursor-pointer transition-all space-y-1 ${
+                filtroTramo === '30_DIAS'
+                  ? 'border-amber-500 bg-amber-500/15 shadow-xs'
+                  : 'border-amber-500/30 bg-amber-500/5 hover:border-amber-500/60'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase text-amber-500 font-bold">
+                  Tramo ≤ 30 Días (16–30d)
+                </span>
+                <Badge variant="warning" className="text-[9px] font-mono">
+                  RENOVACIÓN
+                </Badge>
+              </div>
+              <div className="font-bold text-2xl text-amber-600 dark:text-amber-400">
+                {count30} <span className="text-xs font-normal text-muted-foreground">tokens</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground">
+                Les quedan entre 16 y 30 días de vigencia
+              </div>
+            </div>
+
+            <div
+              onClick={() => setFiltroTramo('60_DIAS')}
+              className={`p-3.5 rounded-lg border cursor-pointer transition-all space-y-1 ${
+                filtroTramo === '60_DIAS'
+                  ? 'border-blue-500 bg-blue-500/15 shadow-xs'
+                  : 'border-blue-500/30 bg-blue-500/5 hover:border-blue-500/60'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase text-blue-500 font-bold">
+                  Tramo ≤ 60 Días (31–60d)
+                </span>
+                <Badge variant="info" className="text-[9px] font-mono">
+                  PREVENTIVO
+                </Badge>
+              </div>
+              <div className="font-bold text-2xl text-foreground">
+                {count60} <span className="text-xs font-normal text-muted-foreground">tokens</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground">
+                Les quedan entre 31 y 60 días de vigencia
+              </div>
+            </div>
+
+            <div
+              onClick={() => setFiltroTramo('EXPIRADO')}
+              className={`p-3.5 rounded-lg border cursor-pointer transition-all space-y-1 ${
+                filtroTramo === 'EXPIRADO'
+                  ? 'border-rose-600 bg-rose-600/15 shadow-xs'
+                  : 'border-border bg-muted/30 hover:border-rose-500/40'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] uppercase text-muted-foreground font-bold">
+                  Tokens Expirados
+                </span>
+                <Badge variant="danger" className="text-[9px] font-mono">
+                  VENCIDOS
+                </Badge>
+              </div>
+              <div className="font-bold text-2xl text-rose-600 dark:text-rose-400">
+                {countExpirados} <span className="text-xs font-normal text-muted-foreground">tokens</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground">
+                Vigencia finalizada (requiere reemplazo)
+              </div>
+            </div>
+          </div>
+
+          {/* Barra de Filtros por Tramo y Búsqueda */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button
+                size="sm"
+                variant={filtroTramo === 'TODOS' ? 'default' : 'outline'}
+                onClick={() => setFiltroTramo('TODOS')}
+                className="h-8 text-xs font-semibold"
+              >
+                Todos ({alertas.length})
+              </Button>
+              <Button
+                size="sm"
+                variant={filtroTramo === '15_DIAS' ? 'destructive' : 'outline'}
+                onClick={() => setFiltroTramo('15_DIAS')}
+                className="h-8 text-xs font-semibold"
+              >
+                ≤ 15 Días ({count15})
+              </Button>
+              <Button
+                size="sm"
+                variant={filtroTramo === '30_DIAS' ? 'warning' : 'outline'}
+                onClick={() => setFiltroTramo('30_DIAS')}
+                className="h-8 text-xs font-semibold"
+              >
+                ≤ 30 Días ({count30})
+              </Button>
+              <Button
+                size="sm"
+                variant={filtroTramo === '60_DIAS' ? 'default' : 'outline'}
+                onClick={() => setFiltroTramo('60_DIAS')}
+                className="h-8 text-xs font-semibold"
+              >
+                ≤ 60 Días ({count60})
+              </Button>
+              <Button
+                size="sm"
+                variant={filtroTramo === 'EXPIRADO' ? 'destructive' : 'outline'}
+                onClick={() => setFiltroTramo('EXPIRADO')}
+                className="h-8 text-xs font-semibold"
+              >
+                Expirados ({countExpirados})
+              </Button>
+            </div>
+
+            <Input
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar por funcionario, RUT, correo o N° serie token..."
+              className="h-8 text-xs sm:w-72"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Confirmación y Vista Previa del Correo Electrónico Enviado */}
+      {correoPreview && (
+        <Card className="border-2 border-emerald-500/60 bg-emerald-500/5 shadow-lg">
+          <CardHeader className="p-4 pb-2 border-b flex flex-row items-center justify-between">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2">
+                <Badge variant="success" className="text-[10px] font-mono">
+                  ✓ CORREO ELECTRÓNICO DESPACHADO
+                </Badge>
+                <span className="text-[10px] font-mono text-muted-foreground">
+                  {correoPreview.timestamp}
+                </span>
+              </div>
+              <CardTitle className="text-sm font-bold text-foreground">
+                Comprobante de Envío de Aviso de Vencimiento por Correo
+              </CardTitle>
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setCorreoPreview(null)}
+              className="h-7 text-xs font-bold"
+            >
+              ✕ Cerrar
             </Button>
           </CardHeader>
-
-          <CardContent className="p-5 space-y-4">
-            {/* Niveles de Severidad */}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="p-3 rounded-lg border border-rose-500/30 bg-rose-500/5 space-y-1">
-                <div className="text-[10px] uppercase text-rose-500 font-bold">
-                  Menos de 15 días
-                </div>
-                <div className="font-bold text-xl text-rose-600 dark:text-rose-400">
-                  {criticosCount}
-                </div>
-                <div className="text-[10px] text-muted-foreground">Requiere gestión inmediata</div>
+          <CardContent className="p-4 space-y-2 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-2.5 rounded bg-background/80 border font-mono text-[11px]">
+              <div>
+                <span className="text-muted-foreground block text-[10px]">PARA (DESTINATARIO):</span>
+                <span className="font-bold text-foreground">{correoPreview.emailDestino}</span>
               </div>
-
-              <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/5 space-y-1">
-                <div className="text-[10px] uppercase text-amber-500 font-bold">
-                  Menos de 30 días
-                </div>
-                <div className="font-bold text-xl text-amber-600 dark:text-amber-400">
-                  {mediosCount}
-                </div>
-                <div className="text-[10px] text-muted-foreground">Proceso de renovación abierto</div>
+              <div>
+                <span className="text-muted-foreground block text-[10px]">FUNCIONARIO / ALCANCE:</span>
+                <span className="font-bold text-foreground">{correoPreview.funcionarioNombre}</span>
               </div>
-
-              <div className="p-3 rounded-lg border border-blue-500/30 bg-blue-500/5 space-y-1">
-                <div className="text-[10px] uppercase text-blue-500 font-bold">
-                  Menos de 60 días
-                </div>
-                <div className="font-bold text-xl text-foreground">
-                  {preventivosCount}
-                </div>
-                <div className="text-[10px] text-muted-foreground">Monitoreo programado</div>
+              <div>
+                <span className="text-muted-foreground block text-[10px]">TOKEN NOTIFICADO:</span>
+                <span className="font-bold text-primary">{correoPreview.serialNumber}</span>
               </div>
             </div>
-
-            {despachoMasivoExitoso && (
-              <div className="p-3 rounded border border-emerald-500/40 bg-emerald-500/10 text-xs text-foreground">
-                ✓ Alertas transmitidas exitosamente por correo institucional a los funcionarios respectivos.
+            <div className="p-3 rounded bg-background border space-y-1.5">
+              <div className="text-[11px] font-semibold text-foreground border-b pb-1">
+                Asunto: {correoPreview.asunto}
               </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Columna Derecha: Resumen de Dispositivos */}
-        <Card className="lg:col-span-4 border-border/80 bg-card flex flex-col justify-between">
-          <CardHeader className="p-5 pb-3 border-b">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
-              TIPO DE DISPOSITIVOS
-            </span>
-            <CardTitle className="text-sm font-bold text-foreground">
-              Inventario de Certificados
-            </CardTitle>
-          </CardHeader>
-
-          <CardContent className="p-5 space-y-3 text-xs">
-            <div className="flex items-center justify-between p-2.5 rounded bg-muted/30 border">
-              <div>
-                <div className="font-semibold text-foreground text-[11px]">Dispositivos Físicos (USB)</div>
-                <div className="text-[10px] text-muted-foreground">Pendrives criptográficos de firma</div>
-              </div>
-              <span className="font-bold text-foreground">{tokensFisicosCount} {tokensFisicosCount === 1 ? 'unidad' : 'unidades'}</span>
-            </div>
-
-            <div className="flex items-center justify-between p-2.5 rounded bg-muted/30 border">
-              <div>
-                <div className="font-semibold text-foreground text-[11px]">Firma Centralizada</div>
-                <div className="text-[10px] text-muted-foreground">Custodiados en servidor municipal</div>
-              </div>
-              <span className="font-bold text-foreground">{certificadosCloudCount} {certificadosCloudCount === 1 ? 'certificado' : 'certificados'}</span>
+              <pre className="text-[11px] font-mono whitespace-pre-wrap text-muted-foreground leading-relaxed">
+                {correoPreview.cuerpoCorreo}
+              </pre>
             </div>
           </CardContent>
         </Card>
-      </div>
+      )}
 
-      {/* 2. Grid de Certificados con Vencimiento Monitoreado */}
-      {cargando ? (
+      {/* 2. Listado de Tokens en Umbral de Vencimiento (15, 30, 60 días y Expirados) */}
+      {cargando && alertas.length === 0 ? (
         <Card className="p-8 text-center border-dashed">
           <p className="text-sm text-muted-foreground animate-pulse">
-            Consultando registros de certificados y vigencias...
+            Consultando vigencias de tokens y certificados...
           </p>
         </Card>
-      ) : alertas.length === 0 ? (
+      ) : alertasFiltradas.length === 0 ? (
         <Card className="p-8 text-center border-dashed bg-card/50">
           <div className="space-y-2">
             <div className="text-sm font-semibold text-foreground">
-              Sin certificados próximos a vencer
+              No hay tokens en este tramo de vencimiento
             </div>
             <p className="text-xs text-muted-foreground max-w-md mx-auto">
-              Todos los certificados de firma de los funcionarios se encuentran al día con vigencia suficiente.
+              Seleccione otro tramo (15, 30 o 60 días) para visualizar los dispositivos monitoreados.
             </p>
           </div>
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {alertas.map((alerta) => {
-          const isAlta = alerta.severidad === 'ALTA';
-          const isMedia = alerta.severidad === 'MEDIA';
+          {alertasFiltradas.map((alerta) => {
+            const isExpirado = alerta.diasRestantes <= 0 || alerta.tramoAlerta === 'EXPIRADO';
+            const is15 = !isExpirado && (alerta.diasRestantes <= 15 || alerta.tramoAlerta === '15_DIAS');
+            const is30 = !isExpirado && !is15 && (alerta.diasRestantes <= 30 || alerta.tramoAlerta === '30_DIAS');
+            const avisoHora = avisosEnviadosMap[alerta.id] || alerta.ultimoAvisoEnviado;
 
-          return (
-            <Card
-              key={alerta.id}
-              className={`border transition-all hover:shadow-md ${
-                isAlta
-                  ? 'border-rose-500/40 bg-rose-500/5'
-                  : isMedia
-                  ? 'border-amber-500/40 bg-amber-500/5'
-                  : 'border-border/80 bg-card'
-              }`}
-            >
-              <CardHeader className="p-4 pb-2 border-b">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Badge
-                        variant={isAlta ? 'danger' : isMedia ? 'warning' : 'info'}
-                        className="text-[10px] uppercase font-bold py-0"
-                      >
-                        {alerta.diasRestantes} DÍAS RESTANTES
-                      </Badge>
-                      <span className="text-[10px] font-mono text-muted-foreground">
-                        EXPIRA: {alerta.fechaExpiracion}
-                      </span>
+            return (
+              <Card
+                key={alerta.id}
+                className={`border transition-all hover:shadow-md ${
+                  isExpirado || is15
+                    ? 'border-rose-500/40 bg-rose-500/5'
+                    : is30
+                    ? 'border-amber-500/40 bg-amber-500/5'
+                    : 'border-blue-500/30 bg-card'
+                }`}
+              >
+                <CardHeader className="p-4 pb-2 border-b">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Badge
+                          variant={isExpirado || is15 ? 'danger' : is30 ? 'warning' : 'info'}
+                          className="text-[10px] uppercase font-bold py-0"
+                        >
+                          {isExpirado
+                            ? `EXPIRADO (${Math.abs(alerta.diasRestantes)}d)`
+                            : `${alerta.diasRestantes} DÍAS RESTANTES`}
+                        </Badge>
+                        <Badge variant="outline" className="text-[9px] font-mono">
+                          {isExpirado
+                            ? 'EXPIRADO'
+                            : is15
+                            ? 'TRAMO ≤ 15 DÍAS'
+                            : is30
+                            ? 'TRAMO ≤ 30 DÍAS'
+                            : 'TRAMO ≤ 60 DÍAS'}
+                        </Badge>
+                        <span className="text-[10px] font-mono text-muted-foreground">
+                          VENCE: {alerta.fechaExpiracion}
+                        </span>
+                      </div>
+                      <CardTitle className="text-sm font-bold pt-1 text-foreground">
+                        {alerta.usuario.nombre}
+                      </CardTitle>
+                      <p className="text-xs text-muted-foreground">
+                        {alerta.usuario.unidad} • {alerta.usuario.cargo}
+                      </p>
                     </div>
-                    <CardTitle className="text-sm font-bold pt-1 text-foreground">
-                      {alerta.usuario.nombre}
-                    </CardTitle>
-                    <p className="text-xs text-muted-foreground">{alerta.usuario.unidad}</p>
-                  </div>
 
-                  <span className="font-mono text-[10px] px-1.5 py-0.5 rounded border border-border text-muted-foreground">
-                    {alerta.id}
-                  </span>
-                </div>
-              </CardHeader>
-
-              <CardContent className="p-4 space-y-3 text-xs">
-                <div className="bg-muted/40 p-2.5 rounded-md border border-border/60 space-y-1.5 text-[11px]">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Certificado:</span>
-                    <span className="font-medium text-foreground">{alerta.tipo}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Dispositivo:</span>
-                    <span className="text-foreground">{alerta.hardwareModelo}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">RUT Funcionario:</span>
-                    <span className="text-foreground font-mono">{alerta.usuario.rut}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Correo Notificación:</span>
-                    <span className="text-muted-foreground truncate max-w-[180px]">
-                      {alerta.usuario.email}
+                    <span className="font-mono text-[10px] px-2 py-0.5 rounded border border-border bg-background font-bold text-foreground">
+                      {alerta.serialNumberToken}
                     </span>
                   </div>
-                </div>
+                </CardHeader>
 
-                <div className="flex items-center justify-between pt-1">
-                  <span className="text-[10px] text-muted-foreground">
-                    TIPO: {alerta.custodia === 'TOKEN_FISICO' ? 'Dispositivo Físico' : 'Centralizado'}
-                  </span>
+                <CardContent className="p-4 space-y-3 text-xs">
+                  <div className="bg-muted/40 p-2.5 rounded-md border border-border/60 space-y-1.5 text-[11px]">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Token / Dispositivo:</span>
+                      <span className="font-mono font-bold text-foreground">
+                        {alerta.serialNumberToken} ({alerta.hardwareModelo})
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Certificado Asociado:</span>
+                      <span className="font-mono text-foreground">{alerta.numeroSerieCertificado}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">RUT Funcionario:</span>
+                      <span className="text-foreground font-mono">{alerta.usuario.rut}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Correo Electrónico:</span>
+                      <span className="text-foreground font-mono truncate max-w-[210px]">
+                        {alerta.usuario.email}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Tiempo para Expiración:</span>
+                      <span className="font-bold text-foreground">{alerta.tiempoExpiracionTexto}</span>
+                    </div>
+                  </div>
 
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={notificando === alerta.id}
-                    onClick={() => handleNotificar(alerta.id, alerta.usuario.email)}
-                    className="text-xs font-semibold h-8"
-                  >
-                    {notificando === alerta.id ? 'Enviando aviso...' : 'Enviar Aviso'}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+                  <div className="flex items-center justify-between pt-1 gap-2">
+                    <div className="text-[10px] text-muted-foreground font-mono">
+                      {avisoHora ? (
+                        <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                          ✓ Aviso enviado ({avisoHora})
+                        </span>
+                      ) : (
+                        <span>Pendiente de notificación por correo</span>
+                      )}
+                    </div>
+
+                    <Button
+                      variant="default"
+                      size="sm"
+                      disabled={notificandoId === alerta.id}
+                      onClick={() => handleEnviarCorreoAviso(alerta)}
+                      className="text-xs font-bold h-8 px-3 shadow-xs"
+                    >
+                      {notificandoId === alerta.id
+                        ? 'Enviando correo...'
+                        : '✉ Enviar Aviso por Correo'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       )}
     </div>
   );

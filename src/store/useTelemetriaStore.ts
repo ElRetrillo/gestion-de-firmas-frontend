@@ -3,6 +3,13 @@ import { io, Socket } from 'socket.io-client';
 
 export type EstadoHardwareType = 'DESCONECTADO' | 'CONECTADO' | 'FIRMANDO';
 
+export type ModoReporteType =
+  | 'ULTIMOS_7_DIAS'
+  | 'ULTIMOS_15_DIAS'
+  | 'ULTIMOS_30_DIAS'
+  | 'POR_MES'
+  | 'POR_ANIO';
+
 export interface EstacionTrabajo {
   id?: string;
   codigoPc: string;
@@ -27,10 +34,101 @@ export interface TelemetriaLog {
   serialNumber?: string;
 }
 
+export interface FirmaAsignadaItem {
+  id: string;
+  numeroSerieCertificado: string;
+  serialNumberToken: string;
+  marca: string;
+  modelo: string;
+  funcionario: {
+    id: string;
+    rut: string;
+    nombre: string;
+    email: string;
+    cargo: string;
+    unidad: string;
+  };
+  fechaAsignacion: string;
+  fechaExpiracion: string;
+  diasRestantes: number;
+  tiempoExpiracionTexto: string;
+  estado: 'ACTIVO' | 'POR_VENCER' | 'EXPIRADO';
+  accionesFirmaPeriodo: number;
+  accionesFirmaTotal: number;
+  estacionActual: string | null;
+  estadoConexion: EstadoHardwareType;
+  codigoContrato?: string;
+}
+
+export interface AccionFuncionarioItem {
+  usuarioId: string;
+  rut: string;
+  nombre: string;
+  email: string;
+  cargo: string;
+  unidad: string;
+  serialNumberToken: string;
+  modeloToken: string;
+  estadoToken: 'ACTIVO' | 'POR_VENCER' | 'EXPIRADO';
+  diasRestantesToken: number;
+  accionesFirmaPeriodo: number;
+  accionesFirmaHistorico: number;
+  conexionesIgnoradasPeriodo: number;
+  desconexionesIgnoradasPeriodo: number;
+  porcentajeParticipacionFirmas: number;
+  ultimaAccionFirma: string | null;
+  codigoPcUltimaSesion: string | null;
+}
+
+export interface TokenAlertaItem {
+  id: string;
+  numeroSerie: string;
+  serialNumberToken: string;
+  hardwareModelo: string;
+  diasRestantes: number;
+  tramoAlerta: '15_DIAS' | '30_DIAS' | '60_DIAS' | 'EXPIRADO';
+  severidad: 'ALTA' | 'MEDIA' | 'BAJA';
+  fechaInicio: string;
+  fechaExpiracion: string;
+  tiempoExpiracionTexto: string;
+  usuario: {
+    id: string;
+    nombre: string;
+    rut: string;
+    email: string;
+    unidad: string;
+    cargo: string;
+  };
+  ultimoAvisoEnviado?: string | null;
+}
+
+export interface ContratoTokenItem {
+  id: string;
+  codigoContrato: string;
+  titulo: string;
+  proveedor: string;
+  ordenCompra?: string;
+  resolucionAprueba?: string;
+  fechaInicio: string;
+  fechaTermino: string;
+  diasRestantes: number;
+  mesesRestantes?: number;
+  tiempoCaducidadTexto: string;
+  porcentajeVigenciaTranscurrida: number;
+  estadoContrato: 'VIGENTE' | 'POR_CADUCAR' | 'CADUCADO';
+  cantidadTokensContratados: number;
+  cantidadTokensActivos?: number;
+  montoTotalClp?: number;
+  administradorContrato?: string;
+  observaciones?: string;
+  pdfUrl?: string;
+}
+
 export interface MetricasTrazabilidadResponse {
   periodo: {
-    modo: 'ULTIMOS_30_DIAS' | 'POR_MES';
+    modo: ModoReporteType;
     mesSeleccionado: string;
+    anioSeleccionado?: string;
     etiquetaPeriodo: string;
     fechaInicio: string;
     fechaFin: string;
@@ -38,6 +136,52 @@ export interface MetricasTrazabilidadResponse {
       valor: string;
       etiqueta: string;
     }>;
+    aniosDisponibles?: Array<{
+      valor: string;
+      etiqueta: string;
+    }>;
+  };
+  resumenDispositivos?: {
+    totalExistentes: number;
+    activos: number;
+    expirados: number;
+    porcentajeActivos: number;
+    porcentajeExpirados: number;
+    conectadosEnSesion: number;
+    firmandoEnSesion: number;
+  };
+  firmasAsignadas?: {
+    totalAsignadas: number;
+    vigentes: number;
+    porVencer: number;
+    expiradas: number;
+    listado: FirmaAsignadaItem[];
+  };
+  accionesFuncionarios?: {
+    totalAccionesFirmaPeriodo: number;
+    totalAccionesFirmaHistorico: number;
+    conexionesExcluidasPeriodo: number;
+    desconexionesExcluidasPeriodo: number;
+    listadoPorFuncionario: AccionFuncionarioItem[];
+  };
+  alertasVencimiento?: {
+    menosDe15Dias: number;
+    entre16Y30Dias: number;
+    entre31Y60Dias: number;
+    totalEnUmbral60Dias: number;
+    expirados: number;
+    tokensEnAlerta: TokenAlertaItem[];
+  };
+  contratosResumen?: {
+    totalContratos: number;
+    contratosVigentes: number;
+    contratosPorCaducar: number;
+    contratosCaducados: number;
+    totalTokensContratados: number;
+    listado: ContratoTokenItem[];
+  };
+  latexPreview?: {
+    codigoLatex: string;
   };
   telemetria: {
     totalEstaciones: number;
@@ -54,6 +198,7 @@ export interface MetricasTrazabilidadResponse {
     porcentajeEventosDesconectado: number;
     tokensRegistrados: number;
     tokensOperativos: number;
+    tokensExpirados?: number;
     porcentajeTokensOperativos: number;
     rankingEstaciones: Array<{
       codigoPc: string;
@@ -75,7 +220,7 @@ export interface MetricasTrazabilidadResponse {
       marca: string;
       modelo: string;
       vendorId: string;
-      estadoPatrimonial: 'OPERATIVO' | 'ASIGNADO' | 'EN_REVISION' | 'DADO_DE_BAJA';
+      estadoPatrimonial: 'OPERATIVO' | 'ASIGNADO' | 'EN_REVISION' | 'DADO_DE_BAJA' | 'EXPIRADO';
       funcionarioAsignado: {
         nombre: string;
         rut: string;
@@ -83,6 +228,9 @@ export interface MetricasTrazabilidadResponse {
       } | null;
       estacionActual: string | null;
       estadoEnVivo: 'CONECTADO' | 'FIRMANDO' | 'DESCONECTADO';
+      fechaExpiracion?: string;
+      diasRestantes?: number;
+      tiempoExpiracionTexto?: string;
       totalEventosPeriodo: number;
       conexionesPeriodo: number;
       firmasPeriodo: number;
@@ -169,8 +317,9 @@ interface TelemetriaState {
   historialEventos: TelemetriaLog[];
   metricas: MetricasTrazabilidadResponse | null;
   cargandoMetricas: boolean;
-  modoReporte: 'ULTIMOS_30_DIAS' | 'POR_MES';
+  modoReporte: ModoReporteType;
   mesSeleccionado: string;
+  anioSeleccionado: string;
   inicializarSocket: () => void;
   actualizarEstadoEstacion: (payload: {
     codigoPc: string;
@@ -186,15 +335,25 @@ interface TelemetriaState {
     metadatos?: any;
   }) => void;
   cargarEstaciones: () => Promise<void>;
-  cargarMetricas: (modo?: 'ULTIMOS_30_DIAS' | 'POR_MES', mes?: string) => Promise<void>;
-  setPeriodoReporte: (modo: 'ULTIMOS_30_DIAS' | 'POR_MES', mes?: string) => Promise<void>;
+  cargarMetricas: (modo?: ModoReporteType, mes?: string, anio?: string) => Promise<void>;
+  setPeriodoReporte: (modo: ModoReporteType, mes?: string, anio?: string) => Promise<void>;
   simularEventoHardware: (codigoPc: string, nuevoEstado: EstadoHardwareType) => Promise<void>;
+  registrarAccionFirma: (payload: {
+    rutFuncionario?: string;
+    serialNumber?: string;
+    codigoPc?: string;
+    glosaAccion?: string;
+  }) => Promise<boolean>;
   limpiarMalla: () => void;
 }
 
 const defaultMesActual = () => {
   const ahora = new Date();
   return `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const defaultAnioActual = () => {
+  return String(new Date().getFullYear());
 };
 
 export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
@@ -206,6 +365,7 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
   cargandoMetricas: false,
   modoReporte: 'ULTIMOS_30_DIAS',
   mesSeleccionado: defaultMesActual(),
+  anioSeleccionado: defaultAnioActual(),
 
   limpiarMalla: async () => {
     set({ estaciones: [], historialEventos: [] });
@@ -217,20 +377,25 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
     }
   },
 
-  setPeriodoReporte: async (modo, mes) => {
+  setPeriodoReporte: async (modo, mes, anio) => {
     const nuevoMes = mes || get().mesSeleccionado || defaultMesActual();
-    set({ modoReporte: modo, mesSeleccionado: nuevoMes });
-    await get().cargarMetricas(modo, nuevoMes);
+    const nuevoAnio = anio || get().anioSeleccionado || defaultAnioActual();
+    set({ modoReporte: modo, mesSeleccionado: nuevoMes, anioSeleccionado: nuevoAnio });
+    await get().cargarMetricas(modo, nuevoMes, nuevoAnio);
   },
 
-  cargarMetricas: async (modoInput, mesInput) => {
+  cargarMetricas: async (modoInput, mesInput, anioInput) => {
     const modo = modoInput || get().modoReporte || 'ULTIMOS_30_DIAS';
     const mes = mesInput || get().mesSeleccionado || defaultMesActual();
+    const anio = anioInput || get().anioSeleccionado || defaultAnioActual();
     set({ cargandoMetricas: true });
     try {
       const params = new URLSearchParams({ modo });
       if (modo === 'POR_MES' && mes) {
         params.set('mes', mes);
+      }
+      if (modo === 'POR_ANIO' && anio) {
+        params.set('anio', anio);
       }
       const res = await fetch(`/api/v1/telemetria/metricas?${params.toString()}`);
       if (res.ok) {
@@ -239,6 +404,7 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
           metricas: data,
           modoReporte: data.periodo?.modo || modo,
           mesSeleccionado: data.periodo?.mesSeleccionado || mes,
+          anioSeleccionado: data.periodo?.anioSeleccionado || anio,
         });
       }
     } catch (err) {
@@ -248,10 +414,23 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
     }
   },
 
+  registrarAccionFirma: async (payload) => {
+    try {
+      const res = await fetch('/api/v1/telemetria/accion-firma', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      await Promise.all([get().cargarMetricas(), get().cargarEstaciones()]);
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
   inicializarSocket: () => {
     if (get().socket) return;
 
-    // Conexión dinámica con WebSocket usando variable de entorno o proxy relativo
     const wsUrl = import.meta.env.VITE_WS_URL || '/';
     const socket = io(wsUrl, {
       transports: ['websocket', 'polling'],
@@ -302,7 +481,6 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
       const estacionPrevia = state.estaciones.find((e) => e.codigoPc === payload.codigoPc);
       const existe = Boolean(estacionPrevia);
 
-      // Determinar info del token recibida (se limpia inmediatamente al desconectar el USB)
       const tokenRecibido = isDesconectado
         ? undefined
         : payload.tokenInfo ||
@@ -345,7 +523,6 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
         ];
       }
 
-      // Evitar duplicar eventos en el feed si es solo un heartbeat periódico sin cambio de estado
       const isHeartbeat = payload.metadatos?.isHeartbeat === true && payload.metadatos?.stateChanged === false;
       const mismoEstado = estacionPrevia && estacionPrevia.estadoEnVivo === payload.estadoHardware;
       if (isHeartbeat && mismoEstado) {
@@ -405,7 +582,6 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
                 }
               : undefined;
 
-            // Solo usar el evento más reciente de cada PC; si el más reciente es DESCONECTADO, no asociar token
             if (!pcYaProcesado[ev.codigoPc]) {
               pcYaProcesado[ev.codigoPc] = true;
               if (tokenObj && ev.evento !== 'DESCONECTADO') {

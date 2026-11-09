@@ -26,7 +26,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToApp, onOpenLogin
                 ILUSTRE MUNICIPALIDAD DE COQUIMBO
               </span>
               <span className="text-xs font-bold tracking-tight text-foreground">
-                Sistema Interno de Gestión de Firmas y Trazabilidad
+                Sistema de Control y Seguimiento de Tokens de Firma Electrónica
               </span>
             </div>
           </div>
@@ -45,7 +45,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToApp, onOpenLogin
                   size="sm"
                   className="font-bold text-xs px-4 h-9 shadow-sm"
                 >
-                  Ir al Sistema →
+                  Ir al Panel de Control →
                 </Button>
                 <Button
                   onClick={logout}
@@ -74,13 +74,21 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToApp, onOpenLogin
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           {/* Mensaje de Bienvenida Institucional */}
           <div className="lg:col-span-7 space-y-6 text-left">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge variant="outline" className="text-[10px] font-mono border-primary/50 text-primary bg-primary/5">
+                TELEMETRÍA DE SESIÓN Y DISPOSITIVOS USB
+              </Badge>
+              <Badge variant="secondary" className="text-[10px] font-mono">
+                ENTORNO DE CONTROL DE TOKENS FEA
+              </Badge>
+            </div>
 
             <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-foreground leading-[1.15]">
-              Plataforma de Gestión y Firma Electrónica
+              Control y Seguimiento de Tokens de Firma Electrónica
             </h1>
 
             <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-              Gestión integral de firmas de documentos, control de dispositivos conectados, firma masiva y seguimiento de decretos y resoluciones municipales de manera simple y segura.
+              Plataforma institucional dedicada al monitoreo de dispositivos criptográficos (existentes, activos y expirados), control de firmas asignadas por funcionario, conteo exacto de acciones de firma realizadas desde la sesión activa, alertas de vencimiento a 15, 30 y 60 días, y gestión de contratos de obtención de tokens.
             </p>
 
             {/* Llamado a la Acción Directo al Sistema */}
@@ -91,7 +99,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToApp, onOpenLogin
                   onClick={onGoToApp}
                   className="font-bold text-sm h-12 px-7 shadow-md flex items-center justify-center gap-2.5"
                 >
-                  <span>Ingresar como {usuario.nombre} ({usuario.rol})</span>
+                  <span>Ingresar al Control de Tokens ({usuario.nombre})</span>
                   <span>→</span>
                 </Button>
               ) : (
@@ -100,7 +108,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToApp, onOpenLogin
                   onClick={onOpenLogin}
                   className="font-bold text-sm h-12 px-7 shadow-md flex items-center justify-center gap-2.5 bg-primary hover:bg-primary/90 text-primary-foreground"
                 >
-                  <span>Iniciar Sesión</span>
+                  <span>Iniciar Sesión Institucional</span>
                 </Button>
               )}
             </div>
@@ -108,9 +116,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToApp, onOpenLogin
             {/* Aviso institucional */}
             <div className="p-3.5 rounded-lg border border-border/70 bg-muted/30 text-xs text-muted-foreground flex items-start gap-3">
               <div className="space-y-0.5">
-                <span className="font-semibold text-foreground block">Acceso seguro y protegido</span>
+                <span className="font-semibold text-foreground block">Trazabilidad desde la sesión y el dispositivo</span>
                 <p className="text-[11px] leading-relaxed">
-                  El acceso a esta plataforma es exclusivo para funcionarios autorizados de la Municipalidad de Coquimbo. Todas las operaciones y firmas quedan respaldadas en el registro institucional.
+                  Los datos de estado, vigencia y acciones de firma son capturados desde la sesión activa y el token conectado al equipo municipal, contabilizando exclusivamente las firmas efectuadas como acciones operativas.
                 </p>
               </div>
             </div>
@@ -128,41 +136,40 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToApp, onOpenLogin
                     Ilustre Municipalidad de Coquimbo
                   </h3>
                   <p className="text-xs text-muted-foreground">
-                    Gestor documental de la Unidad de Gestión de Firmas del Departamento de Gestión de Sistemas y TICS
+                    Departamento de Gestión de Sistemas y TICs • Unidad de Control de Tokens FEA
                   </p>
                 </div>
               </div>
 
-              <CardContent className="p-6 space-y-4">
-                <div className="space-y-3">
+              <CardContent className="p-6 space-y-3.5">
+                <div className="space-y-2.5">
                   <div className="flex items-start gap-3 p-3 rounded-lg border bg-background/60">
                     <div className="space-y-0.5 text-xs">
-                      <div className="font-semibold text-foreground">Monitoreo de Dispositivos y Usuarios</div>
+                      <div className="font-semibold text-foreground">1. Firmas Asignadas y Dispositivos (Total / Activos / Expirados)</div>
                       <p className="text-muted-foreground text-[11px]">
-                        Supervisión del estado de los dispositivos de firma en los equipos municipales de trabajo.
+                        Visualización de titularidad, estado de vigencia, tiempo restante de expiración y conexión en vivo desde la sesión.
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-start gap-3 p-3 rounded-lg border bg-background/60">
                     <div className="space-y-0.5 text-xs">
-                      <div className="font-semibold text-foreground">Firma Digital de Documentos</div>
+                      <div className="font-semibold text-foreground">2. Acciones por Funcionario (1 Acción = 1 Firma)</div>
                       <p className="text-muted-foreground text-[11px]">
-                        Firma de documentos digitalmente con validez legal, individual o masivamente.
+                        Métrica depurada de firmas realizadas con cada token, excluyendo eventos de conexión y desconexión USB.
                       </p>
                     </div>
                   </div>
 
                   <div className="flex items-start gap-3 p-3 rounded-lg border bg-background/60">
                     <div className="space-y-0.5 text-xs">
-                      <div className="font-semibold text-foreground">Seguridad y Registro de Actividad</div>
+                      <div className="font-semibold text-foreground">3. Alertas de Vencimiento (15, 30 y 60 días) y Contratos</div>
                       <p className="text-muted-foreground text-[11px]">
-                        Control de permisos por funcionario y registro completo de operaciones para respaldo y transparencia.
+                        Despacho de avisos por correo electrónico, control de caducidad de contratos con visor PDF y exportación de Summary en LaTeX / PDF.
                       </p>
                     </div>
                   </div>
                 </div>
-
               </CardContent>
             </Card>
           </div>
@@ -177,17 +184,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToApp, onOpenLogin
             <div>
               <p className="font-bold text-foreground">Ilustre Municipalidad de Coquimbo</p>
               <p className="text-[11px] text-muted-foreground">
-                Departamento de Gestión de Sistemas y TICs • Plataforma Corporativa Interna
+                Departamento de Gestión de Sistemas y TICs • Control y Seguimiento de Tokens
               </p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
-            <span>Firma Electrónica</span>
+            <span>Control de Tokens FEA</span>
             <span>•</span>
-            <span>Seguridad y Transparencia</span>
+            <span>Vigencia 15/30/60 Días</span>
             <span>•</span>
-            <span>Gestión Documental</span>
+            <span>Summary PDF / LaTeX</span>
           </div>
         </div>
       </footer>

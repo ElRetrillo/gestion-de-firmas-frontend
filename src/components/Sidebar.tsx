@@ -1,16 +1,12 @@
 import React from 'react';
 import {
   Monitor,
-  Files,
   Users,
   BellRing,
   History,
   Settings,
-  FileText,
-  ShieldCheck,
-  CheckCircle2,
+  BarChart3,
   Home,
-  FlaskConical,
   LucideIcon,
 } from 'lucide-react';
 import { useTelemetriaStore } from '../store/useTelemetriaStore';
@@ -22,14 +18,10 @@ import { Button } from './ui/button';
 
 export type NavTab =
   | 'LANDING'
-  | 'MIS_DOCUMENTOS'
-  | 'FIRMAGOB_V2'
-  | 'FE_PUBLICA'
   | 'DASHBOARD'
-  | 'FIRMAS'
-  | 'USUARIOS_CUSTODIA'
-  | 'CHECKSIGN'
   | 'ALERTAS'
+  | 'METRICAS'
+  | 'USUARIOS_CUSTODIA'
   | 'AUDITORIA'
   | 'CONFIGURACION';
 
@@ -55,94 +47,63 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpenMobile,
   onCloseMobile,
 }) => {
-  const { estaciones, wsConectado } = useTelemetriaStore();
+  const { estaciones, wsConectado, metricas } = useTelemetriaStore();
   const { usuario, logout } = useAuthStore();
 
-  const total = estaciones.length;
+  const totalEstaciones = estaciones.length;
   const conectados = estaciones.filter((e) => e.estadoEnVivo === 'CONECTADO').length;
   const firmando = estaciones.filter((e) => e.estadoEnVivo === 'FIRMANDO').length;
   const desconectados = estaciones.filter((e) => e.estadoEnVivo === 'DESCONECTADO').length;
 
+  const totalDispositivos = metricas?.resumenDispositivos?.totalExistentes ?? metricas?.telemetria?.tokensRegistrados ?? 0;
+  const dispositivosActivos = metricas?.resumenDispositivos?.activos ?? metricas?.telemetria?.tokensOperativos ?? 0;
+  const alertasCount = metricas?.alertasVencimiento?.totalEnUmbral60Dias ?? 0;
+  const contratosCount = metricas?.contratosResumen?.totalContratos ?? 0;
+
   const rol = usuario?.rol || 'FUNCIONARIO';
   const esAdmin = rol === 'ADMIN';
   const esSupervisor = rol === 'SUPERVISOR';
-  const esMinistro = rol === 'MINISTRO_DE_FE';
-  const tieneAccesoGestion = esAdmin || esSupervisor;
 
-  // Módulos según el Rol Institucional Real
-  const itemsGestion: NavItemConfig[] = [
+  const itemsControlTokens: NavItemConfig[] = [
     {
       id: 'DASHBOARD',
       icon: Monitor,
-      label: 'Dispositivos Conectados',
-      badge: total > 0 ? `${conectados + firmando}/${total}` : undefined,
-      description: 'Estado y conexión de dispositivos de firma',
-    },
-    {
-      id: 'FIRMAS',
-      icon: Files,
-      label: 'Firma Masiva',
-      description: 'Envío y procesamiento masivo de firmas',
-    },
-    {
-      id: 'USUARIOS_CUSTODIA',
-      icon: Users,
-      label: 'Funcionarios y Custodia',
-      description: 'Asignación y entrega de dispositivos',
+      label: 'Control de Tokens y Firmas',
+      badge: totalDispositivos > 0 ? `${dispositivosActivos}/${totalDispositivos}` : (totalEstaciones > 0 ? `${conectados + firmando}/${totalEstaciones}` : undefined),
+      description: 'Firmas asignadas, dispositivos existentes/activos/expirados y acciones por funcionario',
     },
     {
       id: 'ALERTAS',
       icon: BellRing,
-      label: 'Alertas y Vencimientos',
-      description: 'Avisos de vigencia de certificados',
+      label: 'Vigencia (15, 30 y 60 días)',
+      badge: alertasCount > 0 ? String(alertasCount) : '15/30/60d',
+      description: 'Tokens próximos a vencer y envío de avisos por correo electrónico',
+    },
+    {
+      id: 'METRICAS',
+      icon: BarChart3,
+      label: 'Estadísticas y Summary PDF',
+      badge: 'LaTeX',
+      description: 'Métricas integrales (7d, 15d, 30d, Mes, Año) y exportación LaTeX / PDF',
+    },
+    {
+      id: 'USUARIOS_CUSTODIA',
+      icon: Users,
+      label: 'Contratos y Asignación',
+      badge: contratosCount > 0 ? `${contratosCount} Cont.` : undefined,
+      description: 'Contratos de obtención de tokens (visor PDF), asignación a funcionarios y custodia',
     },
     {
       id: 'AUDITORIA',
       icon: History,
-      label: 'Historial de Actividad',
-      description: 'Registro de operaciones del sistema',
+      label: 'Bitácora de Actividad',
+      description: 'Historial de firmas y eventos de tokens desde sesión y dispositivo',
     },
     {
       id: 'CONFIGURACION',
       icon: Settings,
-      label: 'Configuración del Sistema',
-      description: 'Parámetros generales de la plataforma',
-    },
-  ];
-
-  const itemsPersonales: NavItemConfig[] = [
-    {
-      id: 'MIS_DOCUMENTOS',
-      icon: FileText,
-      label: 'Mis Documentos',
-      description: 'Documentos pendientes y firmados',
-    },
-    ...(esAdmin
-      ? [
-          {
-            id: 'FIRMAGOB_V2' as NavTab,
-            icon: FlaskConical,
-            label: 'Entorno FirmaGob v2',
-            badge: 'TEST',
-            description: 'Pruebas y simulación protocolo REST v2',
-          },
-        ]
-      : []),
-    ...(esAdmin || esMinistro
-      ? [
-          {
-            id: 'FE_PUBLICA' as NavTab,
-            icon: ShieldCheck,
-            label: 'Fe Pública y Decretos',
-            description: 'Revisión y validación oficial',
-          },
-        ]
-      : []),
-    {
-      id: 'CHECKSIGN',
-      icon: CheckCircle2,
-      label: 'Verificar Documento',
-      description: 'Validar autenticidad de un documento',
+      label: 'Parámetros de Control',
+      description: 'Configuración de umbrales de vigencia y agente de sesión USB',
     },
   ];
 
@@ -153,7 +114,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {/* Fondo semitransparente para móvil */}
       {isOpenMobile && (
         <div
           className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs lg:hidden"
@@ -161,7 +121,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
       )}
 
-      {/* Barra Lateral Principal */}
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r bg-sidebar text-sidebar-foreground transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 ${
           isOpenMobile ? 'translate-x-0' : '-translate-x-full'
@@ -172,11 +131,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="flex items-center space-x-3 cursor-pointer" onClick={() => handleNavClick('LANDING')}>
             <LogoMunicipalidad variant="sidebar" className="h-9 w-9 shrink-0" />
             <div className="flex flex-col text-left">
-              <span className="font-bold text-xs tracking-tight text-sidebar-foreground truncate max-w-[170px]">
+              <span className="font-bold text-xs tracking-tight text-sidebar-foreground truncate max-w-[175px]">
                 Municipalidad de Coquimbo
               </span>
               <span className="text-[10px] text-muted-foreground font-mono">
-                Gestión de Firmas FEA
+                Control y Seguimiento de Tokens
               </span>
             </div>
           </div>
@@ -185,7 +144,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Información del Rol del Usuario */}
         <div className="p-3 mx-3 mt-3 rounded-lg bg-sidebar-accent/50 border border-sidebar-border/80 space-y-1">
           <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground">
-            <span>PERFIL INSTITUCIONAL:</span>
+            <span>SESIÓN ACTIVA:</span>
             <Badge
               variant="outline"
               className={`text-[9px] font-mono font-bold ${
@@ -207,95 +166,51 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         </div>
 
-        {/* Semáforo de hardware USB para Administradores y Supervisores */}
-        {tieneAccesoGestion && (
-          <div className="px-3 py-2 mx-3 mt-2 rounded-lg bg-sidebar-accent/30 border border-sidebar-border/60">
-            <div className="flex items-center justify-between text-xs mb-1.5">
-              <span className="font-semibold text-sidebar-foreground/90 flex items-center gap-1.5 text-[11px]">
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    wsConectado ? 'bg-emerald-400 live-indicator' : 'bg-rose-400'
-                  }`}
-                />
-                {wsConectado ? 'Dispositivos' : 'Sin conexión'}
-              </span>
-              <span className="text-[9px] text-muted-foreground">{total} Equipos</span>
-            </div>
+        {/* Semáforo de hardware USB desde sesión/dispositivo */}
+        <div className="px-3 py-2 mx-3 mt-2 rounded-lg bg-sidebar-accent/30 border border-sidebar-border/60">
+          <div className="flex items-center justify-between text-xs mb-1.5">
+            <span className="font-semibold text-sidebar-foreground/90 flex items-center gap-1.5 text-[11px]">
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  wsConectado ? 'bg-emerald-400 live-indicator' : 'bg-rose-400'
+                }`}
+              />
+              {wsConectado ? 'Telemetría de Tokens' : 'Sin conexión'}
+            </span>
+            <span className="text-[9px] text-muted-foreground">{totalEstaciones} Sesiones</span>
+          </div>
 
-            <div className="grid grid-cols-3 gap-1 text-center text-[10px]">
-              <div className="p-1 rounded bg-sidebar-background/60 border border-sidebar-border">
-                <div className="font-bold text-emerald-400">{firmando}</div>
-                <div className="text-muted-foreground text-[8px] uppercase">Firmando</div>
-              </div>
-              <div className="p-1 rounded bg-sidebar-background/60 border border-sidebar-border">
-                <div className="font-bold text-amber-400">{conectados}</div>
-                <div className="text-muted-foreground text-[8px] uppercase">Conectados</div>
-              </div>
-              <div className="p-1 rounded bg-sidebar-background/60 border border-sidebar-border">
-                <div className="font-bold text-rose-400">{desconectados}</div>
-                <div className="text-muted-foreground text-[8px] uppercase">Desconectados</div>
-              </div>
+          <div className="grid grid-cols-3 gap-1 text-center text-[10px]">
+            <div className="p-1 rounded bg-sidebar-background/60 border border-sidebar-border">
+              <div className="font-bold text-emerald-400">{firmando}</div>
+              <div className="text-muted-foreground text-[8px] uppercase">Firmando</div>
+            </div>
+            <div className="p-1 rounded bg-sidebar-background/60 border border-sidebar-border">
+              <div className="font-bold text-amber-400">{conectados}</div>
+              <div className="text-muted-foreground text-[8px] uppercase">Conectados</div>
+            </div>
+            <div className="p-1 rounded bg-sidebar-background/60 border border-sidebar-border">
+              <div className="font-bold text-rose-400">{desconectados}</div>
+              <div className="text-muted-foreground text-[8px] uppercase">Sin Token</div>
             </div>
           </div>
-        )}
+        </div>
 
-        {/* Menú de Navegación */}
+        {/* Menú de Navegación Exclusivo de Control y Seguimiento de Tokens */}
         <div className="flex-1 overflow-y-auto px-3 py-2 space-y-3 mt-1">
-          {/* Sección de Gestión para Administradores */}
-          {tieneAccesoGestion && (
-            <div className="space-y-1">
-              <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex justify-between items-center">
-                <span>Módulos de Administración</span>
-                <span className="text-[9px] font-mono text-amber-400/80">{itemsGestion.length}</span>
-              </div>
-              {itemsGestion.map((item) => {
-                const isSelected = tabActiva === item.id;
-                const IconComponent = item.icon;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => handleNavClick(item.id)}
-                    className={`group flex w-full items-center justify-between rounded-md px-3 py-2 text-xs font-medium transition-all ${
-                      isSelected
-                        ? 'bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-xs'
-                        : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-2.5 truncate">
-                      <span
-                        className={`flex items-center justify-center w-6 h-6 rounded border shrink-0 ${
-                          isSelected
-                            ? 'border-amber-400/40 text-amber-400 bg-amber-400/10'
-                            : 'border-sidebar-border text-muted-foreground group-hover:text-sidebar-foreground'
-                        }`}
-                      >
-                        <IconComponent className="h-3.5 w-3.5" />
-                      </span>
-                      <span className="truncate">{item.label}</span>
-                    </div>
-                    {item.badge && (
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-mono">
-                        {item.badge}
-                      </Badge>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Sección Personal y Documental */}
           <div className="space-y-1">
-            <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              <span>{tieneAccesoGestion ? 'Bandeja Personal' : 'Módulos del Funcionario'}</span>
+            <div className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex justify-between items-center">
+              <span>Control y Seguimiento Tokens</span>
+              <span className="text-[9px] font-mono text-amber-400/80">{itemsControlTokens.length}</span>
             </div>
-            {itemsPersonales.map((item) => {
+            {itemsControlTokens.map((item) => {
               const isSelected = tabActiva === item.id;
               const IconComponent = item.icon;
               return (
                 <button
                   key={item.id}
                   onClick={() => handleNavClick(item.id)}
+                  title={item.description}
                   className={`group flex w-full items-center justify-between rounded-md px-3 py-2 text-xs font-medium transition-all ${
                     isSelected
                       ? 'bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-xs'
@@ -314,6 +229,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </span>
                     <span className="truncate">{item.label}</span>
                   </div>
+                  {item.badge && (
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-mono">
+                      {item.badge}
+                    </Badge>
+                  )}
                 </button>
               );
             })}
@@ -330,7 +250,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span className="flex items-center justify-center w-6 h-6 rounded border border-sidebar-border shrink-0">
                 <Home className="h-3.5 w-3.5" />
               </span>
-              <span>Portada de Bienvenida</span>
+              <span>Portada Institucional</span>
             </button>
           </div>
         </div>
@@ -364,7 +284,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div className="p-2 pt-0 text-[9px] text-muted-foreground text-center font-mono">
-          Municipalidad de Coquimbo • 2026
+          Municipalidad de Coquimbo • Entorno Test 2026
         </div>
       </aside>
     </>
