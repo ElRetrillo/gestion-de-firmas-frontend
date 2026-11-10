@@ -7,6 +7,8 @@ import { AlertasCertificadosView } from './components/AlertasCertificadosView';
 import { MetricasTrazabilidadPanel } from './components/MetricasTrazabilidadPanel';
 import { AuditoriaView } from './components/AuditoriaView';
 import { GestionUsuariosEquipamientoView } from './components/GestionUsuariosEquipamientoView';
+import { MisDocumentosFuncionarioView } from './components/MisDocumentosFuncionarioView';
+import { VistaFirmaUsuario } from './components/VistaFirmaUsuario';
 import { useTelemetriaStore } from './store/useTelemetriaStore';
 import { useAuthStore } from './store/useAuthStore';
 
@@ -14,7 +16,7 @@ export const App: React.FC = () => {
   const [tabActiva, setTabActiva] = useState<NavTab>('DASHBOARD');
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
 
-  const { inicializarSocket, cargarEstaciones, cargarMetricas } = useTelemetriaStore();
+  const { inicializarSocket, cargarEstaciones, cargarEventosRecientes, cargarMetricas } = useTelemetriaStore();
   const { isAutenticado, verificarSesion, cargandoSesion, debeCambiarPassword } = useAuthStore();
 
   useEffect(() => {
@@ -25,16 +27,18 @@ export const App: React.FC = () => {
     if (isAutenticado) {
       inicializarSocket();
       cargarEstaciones();
+      cargarEventosRecientes();
       cargarMetricas();
 
       const intervalId = window.setInterval(() => {
         cargarEstaciones();
+        cargarEventosRecientes();
         cargarMetricas();
       }, 10000);
 
       return () => window.clearInterval(intervalId);
     }
-  }, [isAutenticado, inicializarSocket, cargarEstaciones, cargarMetricas]);
+  }, [isAutenticado, inicializarSocket, cargarEstaciones, cargarEventosRecientes, cargarMetricas]);
 
   if (cargandoSesion && localStorage.getItem('access_token')) {
     return (
@@ -80,6 +84,7 @@ export const App: React.FC = () => {
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-background">
           <div className="max-w-7xl mx-auto space-y-5">
             {tabActiva === 'DASHBOARD' && <DashboardSupervisores />}
+            {tabActiva === 'FIRMAR' && <VistaFirmaUsuario />}
             {tabActiva === 'ALERTAS' && <AlertasCertificadosView />}
             {tabActiva === 'METRICAS' && <MetricasTrazabilidadPanel vistaCompleta />}
             {tabActiva === 'USUARIOS_CUSTODIA' && <GestionUsuariosEquipamientoView />}

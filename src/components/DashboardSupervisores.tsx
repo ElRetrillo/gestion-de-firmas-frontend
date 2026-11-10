@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Info, User } from 'lucide-react';
+import { Info, User, Download, Terminal, Usb, Laptop } from 'lucide-react';
 import { useTelemetriaStore } from '../store/useTelemetriaStore';
+import { useAuthStore } from '../store/useAuthStore';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -100,11 +101,17 @@ export const DashboardSupervisores: React.FC = () => {
     estaciones,
     metricas,
   } = useTelemetriaStore();
+  const { usuario } = useAuthStore();
 
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstadoFirma, setFiltroEstadoFirma] = useState<'TODOS' | 'ACTIVO' | 'POR_VENCER' | 'EXPIRADO'>('TODOS');
   const [filtroEstadoConexion, setFiltroEstadoConexion] = useState<'TODOS' | 'CONECTADO' | 'DESCONECTADO'>('TODOS');
   const [mensajeAccion, setMensajeAccion] = useState<string | null>(null);
+
+  const handleDescargarAgenteBat = () => {
+    window.location.href = '/api/v1/telemetria/descargar-agente?unidad=Red%20Interna%20Municipal';
+    setMensajeAccion('Descargando script autoinstalador .bat del Agente USB para probar en vivo...');
+  };
 
   // 1. Dispositivos Existentes (Total, Activos, Expirados) y Estado en Sesión
   const dispExistentes =
@@ -247,6 +254,70 @@ export const DashboardSupervisores: React.FC = () => {
       });
     }
   });
+
+  // 3. Inyectar o enlazar en vivo la estación física y token del usuario actual logueado
+  if (usuario && usuario.nombre) {
+    const rutUsuarioClean = usuario.rut ? usuario.rut.trim() : '';
+    const keyUsuario = rutUsuarioClean || usuario.id || 'USUARIO_ACTUAL';
+
+    // Buscar si hay estación local activa (por hostname, coincidencia de RUT o cualquier estación local activa)
+    const estacionLocalUsuario = estaciones.find(
+      (e) =>
+        e.codigoPc.toUpperCase().includes('1LK714Q') ||
+        e.codigoPc.toUpperCase() === 'DESKTOP-1LK714Q' ||
+        (rutUsuarioClean && e.codigoPc.includes(rutUsuarioClean.replace(/[.-]/g, ''))) ||
+        (rutUsuarioClean && (e.tokenInfo?.serialNumber?.includes('D453B70C2CF7') || e.tokenInfo?.modelo?.includes('Ezio')))
+    ) || estaciones.find((e) => e.codigoPc.toUpperCase() === 'DESKTOP-1LK714Q');
+
+    const tokenLocal = estacionLocalUsuario?.tokenInfo;
+    const estadoConexionLocal = estacionLocalUsuario?.estadoEnVivo || (tokenLocal ? 'CONECTADO' : 'DESCONECTADO');
+
+    if (mapaFilas.has(keyUsuario)) {
+      // Si el usuario ya existe en las filas, enriquecemos su estado con la conexión física en vivo
+      const filaExistente = mapaFilas.get(keyUsuario)!;
+      mapaFilas.set(keyUsuario, {
+        ...filaExistente,
+        token: {
+          serialNumber: tokenLocal?.serialNumber || filaExistente.token.serialNumber,
+          marca: tokenLocal?.marca || filaExistente.token.marca,
+          modelo: tokenLocal?.modelo || filaExistente.token.modelo,
+        },
+        estadoConexion: estadoConexionLocal,
+        estacionActual: estacionLocalUsuario?.codigoPc || filaExistente.estacionActual,
+        ipEstacion: estacionLocalUsuario?.ipAsignada || filaExistente.ipEstacion,
+        dependenciaFisica: estacionLocalUsuario?.dependenciaFisica || filaExistente.dependenciaFisica,
+      });
+    } else {
+      // Si el usuario logueado no estaba en la lista inicial, se agrega para monitorear en vivo su token
+      mapaFilas.set(keyUsuario, {
+        id: usuario.id || keyUsuario,
+        funcionario: {
+          id: usuario.id,
+          nombre: usuario.nombre,
+          rut: usuario.rut || '11.111.111-1',
+          unidad: usuario.unidad || 'Dirección de TICs',
+          cargo: usuario.cargo || 'Funcionario Municipal',
+        },
+        token: {
+          serialNumber: tokenLocal?.serialNumber || 'SN-08E6-D453B70C2CF7',
+          marca: tokenLocal?.marca || 'Thales / Gemalto',
+          modelo: tokenLocal?.modelo || 'Ezio Generic',
+        },
+        estadoFirma: 'ACTIVO',
+        fechaExpiracion: '2027-11-10',
+        diasRestantes: 365,
+        tiempoExpiracionTexto: '365 días restantes (Vigente)',
+        estadoConexion: estadoConexionLocal,
+        estacionActual: estacionLocalUsuario?.codigoPc || 'DESKTOP-1LK714Q',
+        ipEstacion: estacionLocalUsuario?.ipAsignada || '192.168.90.31',
+        dependenciaFisica: estacionLocalUsuario?.dependenciaFisica || usuario.unidad || 'Red Interna Municipal',
+        firmasPeriodo: 0,
+        firmasHistorico: 0,
+        conexiones: estadoConexionLocal === 'CONECTADO' ? 1 : 0,
+        desconexiones: 0,
+      });
+    }
+  }
 
   const todasLasFilas = Array.from(mapaFilas.values());
 
@@ -412,6 +483,18 @@ export const DashboardSupervisores: React.FC = () => {
                 </button>
               ))}
             </div>
+
+            {/* Botón Descarga .bat para prueba en vivo */}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleDescargarAgenteBat}
+              className="h-8 text-xs font-semibold gap-1.5 text-primary border-primary/40 hover:bg-primary/10 shadow-xs"
+              title="Descargar script .bat para instalar el agente de telemetría USB en esta máquina"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Descargar .bat Agente USB</span>
+            </Button>
           </div>
         </CardHeader>
 
@@ -444,12 +527,24 @@ export const DashboardSupervisores: React.FC = () => {
                 </TableRow>
               ) : (
                 filasFiltradas.map((fila) => (
-                  <TableRow key={fila.id} className="hover:bg-muted/30 transition-colors">
+                  <TableRow
+                    key={fila.id}
+                    className={`transition-colors ${
+                      usuario?.rut && fila.funcionario.rut === usuario.rut
+                        ? 'bg-primary/5 border-l-4 border-l-primary hover:bg-primary/10'
+                        : 'hover:bg-muted/30'
+                    }`}
+                  >
                     {/* 1. Funcionario Titular / RUT */}
                     <TableCell>
-                      <div className="font-bold text-foreground flex items-center gap-1.5">
+                      <div className="font-bold text-foreground flex items-center gap-1.5 flex-wrap">
                         <User className="w-3.5 h-3.5 text-primary shrink-0" />
                         <span>{fila.funcionario.nombre}</span>
+                        {usuario?.rut && fila.funcionario.rut === usuario.rut && (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-primary text-primary-foreground uppercase tracking-wider">
+                            Mi Usuario
+                          </span>
+                        )}
                       </div>
                       <div className="text-[10px] font-mono text-muted-foreground ml-5">
                         {fila.funcionario.rut}

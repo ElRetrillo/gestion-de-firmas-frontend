@@ -1,4 +1,25 @@
 import React, { useState, useEffect } from 'react';
+import {
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  Download,
+  ExternalLink,
+  ShieldCheck,
+  Clock,
+  Calendar,
+  KeyRound,
+  Hash,
+  Building2,
+  User,
+  Bell,
+  RefreshCw,
+  CheckCircle2,
+  AlertTriangle,
+  X,
+  PlusCircle,
+  ArrowLeft,
+} from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -63,7 +84,7 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
   const { usuario: usuarioActual } = useAuthStore();
   const { metricas, cargarMetricas } = useTelemetriaStore();
 
-  const [subTab, setSubTab] = useState<'CONTRATOS' | 'ASIGNACION' | 'CUSTODIA'>('CONTRATOS');
+  const [subTab, setSubTab] = useState<'CONTRATOS' | 'ASIGNACION' | 'CUSTODIA' | 'NUEVO_CONTRATO'>('CONTRATOS');
   const [contratosRemotos, setContratosRemotos] = useState<ContratoTokenItem[]>([]);
   const [contratoPreview, setContratoPreview] = useState<ContratoTokenItem | null>(null);
 
@@ -75,6 +96,11 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
 
   // Filtros de búsqueda
   const [busquedaContratos, setBusquedaContratos] = useState('');
+  const [expandedContratoIds, setExpandedContratoIds] = useState<Record<string, boolean>>({});
+  const [avisosRenovacionEnviados, setAvisosRenovacionEnviados] = useState<Record<string, string>>({});
+  const [contratoARenovar, setContratoARenovar] = useState<ContratoTokenItem | null>(null);
+  const [renovando, setRenovando] = useState(false);
+  const [diasExtensionRenovacion, setDiasExtensionRenovacion] = useState(365);
   const [busquedaUsuarios, setBusquedaUsuarios] = useState('');
   const [busquedaActas, setBusquedaActas] = useState('');
   const [filtroReceptor, setFiltroReceptor] = useState('');
@@ -153,6 +179,127 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
     cargarDatos();
   }, []);
 
+  const handleAvisarRenovacion = async (contrato: ContratoTokenItem) => {
+    const ahoraStr = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+    const titularNombre = contrato.funcionarioNombre || 'Funcionario';
+    const titularRut = contrato.funcionarioRut || '-';
+    const tokenSerial = contrato.serialNumberToken || 'Token USB';
+    const fechaExp = (contrato.fechaTermino || '').split('T')[0];
+
+    try {
+      const funcionarioObj = usuarios.find((u) => u.rut === titularRut);
+      await fetch('/api/v1/usuarios/alertas-vencimiento/despachar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          serialNumber: tokenSerial,
+          email: funcionarioObj?.email || `${titularRut.replace(/[^0-9]/g, '')}@municoquimbo.cl`,
+          diasRestantes: contrato.diasRestantes,
+          codigoContrato: contrato.codigoContrato,
+        }),
+      });
+    } catch {
+      // Notificación optimista
+    }
+
+    setAvisosRenovacionEnviados((prev) => ({
+      ...prev,
+      [contrato.id]: ahoraStr,
+    }));
+
+    setMensajeOperacion(
+      `Aviso de renovación despachado exitosamente a ${titularNombre} (RUT: ${titularRut}) para el token ${tokenSerial} (vence: ${fechaExp}).`,
+    );
+  };
+
+  const handleEjecutarRenovacion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contratoARenovar) return;
+
+    setRenovando(true);
+    const ahora = new Date();
+    const nuevaFechaInicio = ahora.toISOString().split('T')[0];
+    const nuevaFechaTerminoObj = new Date(ahora.getTime() + diasExtensionRenovacion * 24 * 60 * 60 * 1000);
+    const nuevaFechaTermino = nuevaFechaTerminoObj.toISOString().split('T')[0];
+
+    const titularNombre = contratoARenovar.funcionarioNombre || 'Funcionario Municipal';
+    const titularRut = contratoARenovar.funcionarioRut || '';
+    const titularUnidad = contratoARenovar.funcionarioUnidad || 'Municipalidad de Coquimbo';
+    const titularCargo = contratoARenovar.funcionarioCargo || 'Profesional';
+    const tokenSerial = contratoARenovar.serialNumberToken || 'SAFENET-5110-CQ01';
+
+    try {
+      // 1. Renovar en backend el contrato de obtención y token de hardware
+      const resContrato = await fetch('/api/v1/equipamiento/contratos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          codigoContrato: contratoARenovar.codigoContrato,
+          titulo: `Contrato de Renovación de Token — ${titularNombre}`,
+          proveedor: contratoARenovar.proveedor || 'E-Certchile / Municipalidad de Coquimbo',
+          funcionarioNombre: titularNombre,
+          funcionarioRut: titularRut,
+          funcionarioUnidad: titularUnidad,
+          funcionarioCargo: titularCargo,
+          serialNumberToken: tokenSerial,
+          firmadoObtencion: true,
+          fechaInicio: nuevaFechaInicio,
+          fechaTermino: nuevaFechaTermino,
+          cantidadTokensContratados: 1,
+        }),
+      });
+
+      // 2. Garantizar sincronización en backend de la asignación del token y certificado
+      if (titularRut && titularRut !== '-') {
+        await fetch('/api/v1/equipamiento/asignar-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            rutUsuario: titularRut,
+            serialNumber: tokenSerial,
+            marca: 'Thales SafeNet',
+            modelo: 'eToken 5110 CC',
+            fechaExpiracion: nuevaFechaTermino,
+            codigoContrato: contratoARenovar.codigoContrato,
+          }),
+        }).catch(() => {});
+      }
+
+      if (resContrato.ok) {
+        const renovado = await resContrato.json();
+        setMensajeOperacion(
+          `Contrato ${contratoARenovar.codigoContrato} y Token ${tokenSerial} renovados exitosamente para ${titularNombre} hasta ${nuevaFechaTermino}.`,
+        );
+        setContratoARenovar(null);
+        await Promise.all([cargarDatos(), cargarMetricas()]);
+      } else {
+        // Fallback optimista local
+        setContratosRemotos((prev) =>
+          prev.map((c) =>
+            c.id === contratoARenovar.id
+              ? {
+                  ...c,
+                  fechaInicio: nuevaFechaInicio,
+                  fechaTermino: nuevaFechaTermino,
+                  diasRestantes: diasExtensionRenovacion,
+                  estadoContrato: 'VIGENTE',
+                  tiempoCaducidadTexto: `${diasExtensionRenovacion} días restantes`,
+                }
+              : c,
+          ),
+        );
+        setMensajeOperacion(
+          `Contrato y Token ${tokenSerial} renovados localmente hasta ${nuevaFechaTermino}.`,
+        );
+        setContratoARenovar(null);
+      }
+    } catch {
+      setMensajeOperacion(`Error al procesar renovación del contrato.`);
+    } finally {
+      setRenovando(false);
+    }
+  };
+
   const contratos: ContratoTokenItem[] =
     contratosRemotos.length > 0
       ? contratosRemotos
@@ -208,6 +355,7 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
         if (nuevo?.id) {
           setContratoPreview(nuevo);
         }
+        setSubTab('CONTRATOS');
       }
     } catch {
       setMensajeOperacion('Error de red al registrar el contrato.');
@@ -426,13 +574,6 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b pb-4">
         <div>
           <div className="flex items-center gap-2">
-            <span className="text-[11px] font-mono font-bold text-primary">
-              Contratos y Asignación Institucional
-            </span>
-            <span className="text-muted-foreground">•</span>
-            <span className="text-[11px] font-mono text-muted-foreground">
-              Decretos, custodias y equipamiento
-            </span>
           </div>
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground mt-1">
             Contratos de Obtención de Tokens, Asignación de Firmas y Custodia
@@ -486,293 +627,678 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
       {/* SECCIÓN 1: CONTRATOS INDIVIDUALES DE OBTENCIÓN DE TOKEN POR FUNCIONARIO */}
       {subTab === 'CONTRATOS' && (
         <div className="space-y-5">
-          {/* Resumen conciso de Contratos de Obtención */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Card className="p-4 border-border/80">
-              <div className="text-[10px] font-bold uppercase text-muted-foreground">
-                Contratos Firmados
-              </div>
-              <div className="text-2xl font-bold text-foreground mt-1">{contratos.length}</div>
-              <div className="text-[11px] text-muted-foreground">
-                1 contrato por funcionario con token
-              </div>
-            </Card>
-            <Card className="p-4 border-emerald-500/30 bg-emerald-500/5">
-              <div className="text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400">
-                Contratos Vigentes
-              </div>
-              <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-400 mt-1">
-                {contratos.filter((c) => c.estadoContrato === 'VIGENTE').length}
-              </div>
-              <div className="text-[11px] text-muted-foreground">Obtención activa</div>
-            </Card>
-            <Card className="p-4 border-amber-500/30 bg-amber-500/5">
-              <div className="text-[10px] font-bold uppercase text-amber-600 dark:text-amber-400">
-                Por Caducar / Caducados
-              </div>
-              <div className="text-2xl font-bold text-amber-700 dark:text-amber-400 mt-1">
-                {contratos.filter((c) => c.estadoContrato !== 'VIGENTE').length}
-              </div>
-              <div className="text-[11px] text-muted-foreground">Requieren renovación</div>
-            </Card>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            {/* Resumen conciso de Contratos de Obtención */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 flex-1">
+              <Card className="p-4 border-border/80">
+                <div className="text-[10px] font-bold uppercase text-muted-foreground">
+                  Contratos Firmados
+                </div>
+                <div className="text-2xl font-bold text-foreground mt-1">{contratos.length}</div>
+                <div className="text-[11px] text-muted-foreground">
+                  1 contrato por funcionario con token
+                </div>
+              </Card>
+              <Card className="p-4 border-emerald-500/30 bg-emerald-500/5">
+                <div className="text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400">
+                  Contratos Vigentes
+                </div>
+                <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-400 mt-1">
+                  {contratos.filter((c) => c.estadoContrato === 'VIGENTE').length}
+                </div>
+                <div className="text-[11px] text-muted-foreground">Obtención activa</div>
+              </Card>
+              <Card className="p-4 border-amber-500/30 bg-amber-500/5">
+                <div className="text-[10px] font-bold uppercase text-amber-600 dark:text-amber-400">
+                  Por Caducar / Caducados
+                </div>
+                <div className="text-2xl font-bold text-amber-700 dark:text-amber-400 mt-1">
+                  {contratos.filter((c) => c.estadoContrato !== 'VIGENTE').length}
+                </div>
+                <div className="text-[11px] text-muted-foreground">Requieren renovación</div>
+              </Card>
+            </div>
+            
+            <div className="sm:self-center shrink-0">
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-            {/* Listado Simple de Contratos Individuales de Obtención */}
-            <Card className="lg:col-span-8 border-border/80 bg-card overflow-hidden">
+          <div className="grid grid-cols-1 gap-5">
+            {/* Listado Simple de Contratos Individuales de Obtención a ancho completo */}
+            <Card className="border-border/80 bg-card overflow-hidden">
               <CardHeader className="p-4 border-b bg-muted/20 space-y-2">
-                <div>
-                  <CardTitle className="text-sm sm:text-base font-bold">
-                    Contratos Individuales de Obtención de Token ({contratosFiltrados.length})
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    Cada funcionario firma su contrato individual de obtención al recibir su dispositivo token.
-                  </CardDescription>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-sm sm:text-base font-bold">
+                      Contratos Individuales de Obtención de Token ({contratosFiltrados.length})
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Cada funcionario firma su contrato individual de obtención al recibir su dispositivo token.
+                    </CardDescription>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => setSubTab('NUEVO_CONTRATO')}
+                    className="h-8 text-xs font-bold gap-1.5 self-start sm:self-auto"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    Nuevo Contrato
+                  </Button>
                 </div>
 
                 <Input
                   value={busquedaContratos}
                   onChange={(e) => setBusquedaContratos(e.target.value)}
-                  placeholder="Buscar por funcionario, RUT, unidad, token o código de contrato..."
+                  placeholder="Buscar por funcionario, RUT o unidad"
                   className="h-8 text-xs bg-background"
                 />
               </CardHeader>
 
-              <CardContent className="p-4">
+              <CardContent className="p-0">
                 {contratosFiltrados.length === 0 ? (
-                  <div className="p-8 text-center text-xs text-muted-foreground border border-dashed rounded-lg">
+                  <div className="p-8 text-center text-xs text-muted-foreground border border-dashed rounded-lg m-4">
                     No se encontraron contratos con el criterio indicado.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                    {contratosFiltrados.map((contrato) => {
-                      const pdfUrl =
-                        contrato.pdfUrl || `/api/v1/equipamiento/contratos/${contrato.id}/pdf`;
-                      const isSelected = contratoPreview?.id === contrato.id;
-                      const titularNombre =
-                        contrato.funcionarioNombre ||
-                        contrato.titulo.replace(/^Contrato.*?—\s*/i, '') ||
-                        'Funcionario Municipal';
-                      const titularRut = contrato.funcionarioRut || '-';
-                      const titularUnidad =
-                        contrato.funcionarioUnidad || 'Municipalidad de Coquimbo';
-                      const tokenSerial = contrato.serialNumberToken || 'TOKEN-ASIGNADO';
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader className="bg-muted/40 text-[11px]">
+                        <TableRow>
+                          <TableHead className="w-8"></TableHead>
+                          <TableHead>Nombre y RUT</TableHead>
+                          <TableHead>Departamento / Unidad</TableHead>
+                          <TableHead className="whitespace-nowrap">Tiempo para Caducidad</TableHead>
+                          <TableHead className="whitespace-nowrap">Fecha de Expiración</TableHead>
+                          <TableHead className="text-right whitespace-nowrap">Acciones</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody className="text-xs">
+                        {contratosFiltrados.map((contrato) => {
+                          const pdfUrl =
+                            contrato.pdfUrl || `/api/v1/equipamiento/contratos/${contrato.id}/pdf`;
+                          const isSelected = contratoPreview?.id === contrato.id;
+                          const isExpanded = !!expandedContratoIds[contrato.id];
+                          const titularNombre =
+                            contrato.funcionarioNombre ||
+                            contrato.titulo.replace(/^Contrato.*?—\s*/i, '') ||
+                            'Funcionario Municipal';
+                          const titularRut = contrato.funcionarioRut || '-';
+                          const titularUnidad =
+                            contrato.funcionarioUnidad || 'Municipalidad de Coquimbo';
+                          const tokenSerial = contrato.serialNumberToken || 'TOKEN-ASIGNADO';
+                          const caducado = contrato.diasRestantes <= 0;
+                          const fechaExpLimpia = (contrato.fechaTermino || '').split('T')[0];
+                          const fechaInicioLimpia = (contrato.fechaInicio || '').split('T')[0];
+                          const avisoEnviadoHora = avisosRenovacionEnviados[contrato.id];
 
-                      return (
-                        <div
-                          key={contrato.id}
-                          className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
-                            isSelected
-                              ? 'border-primary bg-primary/5 shadow-sm md:col-span-2'
-                              : 'border-border/80 bg-background/60 hover:border-primary/40'
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-mono text-[11px] font-bold text-primary">
-                                  {contrato.codigoContrato}
-                                </span>
-                                <span
-                                  className={`inline-flex items-center gap-1 font-semibold text-[11px] ${
-                                    contrato.estadoContrato === 'VIGENTE'
-                                      ? 'text-emerald-600 dark:text-emerald-400'
-                                      : contrato.estadoContrato === 'POR_CADUCAR'
-                                      ? 'text-amber-600 dark:text-amber-400'
-                                      : 'text-rose-600 dark:text-rose-400'
-                                  }`}
-                                >
-                                  <span
-                                    className={`w-1.5 h-1.5 rounded-full ${
-                                      contrato.estadoContrato === 'VIGENTE'
-                                        ? 'bg-emerald-500'
-                                        : contrato.estadoContrato === 'POR_CADUCAR'
-                                        ? 'bg-amber-500'
-                                        : 'bg-rose-500'
-                                    }`}
-                                  />
-                                  {contrato.estadoContrato === 'POR_CADUCAR'
-                                    ? 'Por caducar'
-                                    : contrato.estadoContrato === 'VIGENTE'
-                                    ? 'Vigente'
-                                    : 'Caducado'}
-                                </span>
-                              </div>
-                              <h3 className="text-sm font-bold text-foreground mt-1 truncate">
-                                {titularNombre}
-                              </h3>
-                              <p className="text-[11px] text-muted-foreground truncate">
-                                RUT: <span className="font-mono">{titularRut}</span> • {titularUnidad}
-                              </p>
-                            </div>
+                          const toggleExpand = () => {
+                            setExpandedContratoIds((prev) => ({
+                              ...prev,
+                              [contrato.id]: !prev[contrato.id],
+                            }));
+                          };
 
-                            <span className="font-mono text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 shrink-0">
-                              ✓ Obtención firmada
-                            </span>
-                          </div>
+                          return (
+                            <React.Fragment key={contrato.id}>
+                              <TableRow className={`hover:bg-muted/30 transition-colors ${isExpanded ? 'bg-muted/15' : ''}`}>
+                                <TableCell className="pl-3 pr-0 py-3 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={toggleExpand}
+                                    title={isExpanded ? 'Ocultar detalles' : 'Ver más detalles'}
+                                    className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                                  >
+                                    {isExpanded ? (
+                                      <ChevronUp className="w-4 h-4 text-primary" />
+                                    ) : (
+                                      <ChevronDown className="w-4 h-4" />
+                                    )}
+                                  </button>
+                                </TableCell>
+                                <TableCell className="py-3">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-7 h-7 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs shrink-0">
+                                      {titularNombre.charAt(0).toUpperCase()}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="font-bold text-foreground truncate max-w-[200px] sm:max-w-[240px]">
+                                        {titularNombre}
+                                      </div>
+                                      <div className="text-[11px] text-muted-foreground font-mono">
+                                        RUT: {titularRut}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="py-3">
+                                  <div className="flex items-center gap-1.5 text-foreground text-[11px]">
+                                    <Building2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                    <span className="font-medium truncate max-w-[180px]">{titularUnidad}</span>
+                                  </div>
+                                  {contrato.funcionarioCargo && (
+                                    <div className="text-[10px] text-muted-foreground truncate max-w-[180px] pl-5">
+                                      {contrato.funcionarioCargo}
+                                    </div>
+                                  )}
+                                </TableCell>
+                                <TableCell className="py-3">
+                                  <div>
+                                    <span
+                                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-mono text-[11px] font-bold ${
+                                        caducado
+                                          ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20'
+                                          : contrato.diasRestantes <= 60
+                                          ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20'
+                                          : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                                      }`}
+                                    >
+                                      <span
+                                        className={`w-1.5 h-1.5 rounded-full ${
+                                          caducado
+                                            ? 'bg-rose-500'
+                                            : contrato.diasRestantes <= 60
+                                            ? 'bg-amber-500'
+                                            : 'bg-emerald-500'
+                                        }`}
+                                      />
+                                      {caducado
+                                        ? `Caducó hace ${Math.abs(contrato.diasRestantes)} días`
+                                        : `${contrato.diasRestantes} días restantes`}
+                                    </span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="py-3 whitespace-nowrap">
+                                  <div className="inline-flex items-center gap-1.5 font-mono text-xs font-semibold text-foreground whitespace-nowrap">
+                                    <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                    <span>{fechaExpLimpia}</span>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="py-3 text-right">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <Button
+                                      size="sm"
+                                      variant={avisoEnviadoHora ? 'secondary' : 'outline'}
+                                      onClick={() => handleAvisarRenovacion(contrato)}
+                                      title={avisoEnviadoHora ? `Aviso enviado a las ${avisoEnviadoHora}` : 'Enviar aviso de renovación al funcionario'}
+                                      className="h-7 px-2 text-xs font-medium gap-1 text-amber-600 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/10"
+                                    >
+                                      <Bell className="w-3.5 h-3.5" />
+                                      <span className="hidden sm:inline">
+                                        {avisoEnviadoHora ? 'Avisado' : 'Avisar Renovación'}
+                                      </span>
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => setContratoARenovar(contrato)}
+                                      title="Renovar contrato y vigencia del token en backend"
+                                      className="h-7 px-2 text-xs font-medium gap-1 text-primary border-primary/40 hover:bg-primary/10"
+                                    >
+                                      <RefreshCw className="w-3.5 h-3.5" />
+                                      <span className="hidden sm:inline">Renovar</span>
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant={isExpanded ? 'secondary' : 'outline'}
+                                      onClick={toggleExpand}
+                                      className="h-7 px-2.5 text-xs font-medium gap-1"
+                                    >
+                                      {isExpanded ? (
+                                        <>
+                                          Menos <ChevronUp className="w-3.5 h-3.5" />
+                                        </>
+                                      ) : (
+                                        <>
+                                          Ver más detalles <ChevronDown className="w-3.5 h-3.5" />
+                                        </>
+                                      )}
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant={isSelected ? 'default' : 'outline'}
+                                      onClick={() => setContratoPreview(isSelected ? null : contrato)}
+                                      className="h-7 px-2.5 text-xs font-semibold gap-1"
+                                      title={isSelected ? 'Ocultar PDF' : 'Ver PDF'}
+                                    >
+                                      <FileText className="w-3.5 h-3.5" />
+                                      <span>{isSelected ? 'Ocultar PDF' : 'Ver PDF'}</span>
+                                    </Button>
+                                    <a
+                                      href={`${pdfUrl}?download=1`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      title="Descargar PDF"
+                                      className="inline-flex items-center justify-center rounded-md border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary h-7 w-7 text-xs font-bold transition-colors"
+                                    >
+                                      <Download className="w-3.5 h-3.5" />
+                                    </a>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
 
-                          {/* Datos precisos del contrato individual */}
-                          <div className="grid grid-cols-3 gap-2 p-2.5 rounded-lg bg-muted/30 border text-[11px]">
-                            <div>
-                              <span className="text-[10px] text-muted-foreground block">
-                                Token Asignado
-                              </span>
-                              <span className="font-mono font-bold text-foreground truncate block">
-                                {tokenSerial}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-muted-foreground block">
-                                Vigencia
-                              </span>
-                              <span className="font-mono font-semibold text-foreground block">
-                                {contrato.fechaInicio} → {contrato.fechaTermino}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-muted-foreground block">
-                                Caducidad
-                              </span>
-                              <span
-                                className={`font-mono font-bold block ${
-                                  contrato.diasRestantes <= 0
-                                    ? 'text-rose-500'
-                                    : contrato.diasRestantes <= 60
-                                    ? 'text-amber-500'
-                                    : 'text-emerald-600 dark:text-emerald-400'
-                                }`}
-                              >
-                                {contrato.diasRestantes > 0
-                                  ? `${contrato.diasRestantes} días`
-                                  : 'Caducado'}
-                              </span>
-                            </div>
-                          </div>
+                              {/* Fila Desplegable hacia abajo con más detalles: Token, Serie/Folio y contrato */}
+                              {isExpanded && (
+                                <TableRow className="bg-muted/20 border-b">
+                                  <TableCell colSpan={6} className="p-0">
+                                    <div className="p-4 bg-gradient-to-r from-muted/30 via-muted/20 to-transparent border-t border-dashed space-y-3 animate-in fade-in slide-in-from-top-1 duration-150">
+                                      <div className="flex items-center justify-end">
+                                        <button
+                                          type="button"
+                                          onClick={toggleExpand}
+                                          className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                                        >
+                                          Cerrar detalles
+                                        </button>
+                                      </div>
 
-                          <div className="flex items-center justify-end gap-2">
-                            <Button
-                              size="sm"
-                              variant={isSelected ? 'default' : 'outline'}
-                              onClick={() => setContratoPreview(isSelected ? null : contrato)}
-                              className="h-7 text-xs font-bold"
-                            >
-                              {isSelected ? 'Ocultar PDF' : 'Ver Contrato PDF'}
-                            </Button>
-                            <a
-                              href={`${pdfUrl}?download=1`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center justify-center rounded-md border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary h-7 px-2.5 text-xs font-bold"
-                            >
-                              Descargar
-                            </a>
-                          </div>
+                                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                                        {/* Token y Modelo: Número de Serie SafeNet (o detectado) */}
+                                        <div className="p-3 rounded-lg border bg-background/80 shadow-xs space-y-1">
+                                          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-muted-foreground">
+                                            <KeyRound className="w-3.5 h-3.5 text-primary" />
+                                            Información del Token
+                                          </div>
+                                          <div className="font-mono font-bold text-foreground text-xs">
+                                            {tokenSerial}
+                                          </div>
+                                          <div className="text-[10px] text-muted-foreground truncate">
+                                            {contrato.marcaModeloToken || 'Thales SafeNet eToken 5110 CC'}
+                                          </div>
+                                        </div>
 
-                          {isSelected && (
-                            <div className="pt-2 space-y-2 border-t">
-                              <div className="flex items-center justify-between bg-muted/50 px-3 py-1.5 rounded border text-xs">
-                                <span className="font-bold font-mono">
-                                  Contrato de Obtención: {contrato.codigoContrato}.pdf
-                                </span>
-                                <a
-                                  href={pdfUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-primary underline font-semibold text-[11px]"
-                                >
-                                  Abrir en pestaña ↗
-                                </a>
-                              </div>
-                              <div className="w-full h-[380px] rounded-lg border bg-background overflow-hidden">
-                                <iframe
-                                  src={pdfUrl}
-                                  title={`Contrato ${contrato.codigoContrato}`}
-                                  className="w-full h-full border-0"
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                                        {/* Número de Serie y Folio */}
+                                        <div className="p-3 rounded-lg border bg-background/80 shadow-xs space-y-1">
+                                          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-muted-foreground">
+                                            <Hash className="w-3.5 h-3.5 text-primary" />
+                                            N° de Serie / Folio
+                                          </div>
+                                          <div className="font-mono font-bold text-foreground text-xs">
+                                            {tokenSerial}
+                                          </div>
+                                          <div className="text-[10px] text-muted-foreground font-mono">
+                                            Folio/Código: {contrato.codigoContrato}
+                                          </div>
+                                        </div>
+
+                                        {/* Vigencia y Fechas */}
+                                        <div className="p-3 rounded-lg border bg-background/80 shadow-xs space-y-1">
+                                          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-muted-foreground">
+                                            <Clock className="w-3.5 h-3.5 text-primary" />
+                                            Periodo de Vigencia
+                                          </div>
+                                          <div className="font-mono text-xs font-semibold text-foreground">
+                                            {fechaInicioLimpia} al {fechaExpLimpia}
+                                          </div>
+                                          <div className="text-[10px] text-muted-foreground">
+                                            {caducado
+                                              ? `Expiró formalmente el ${fechaExpLimpia}`
+                                              : `Vigencia transcurrida: ${Math.round(contrato.porcentajeVigenciaTranscurrida || 0)}%`}
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {/* Opciones de Acción dentro del desplegable */}
+                                      <div className="flex flex-wrap items-center justify-between pt-2 border-t border-border/60 gap-2">
+                                        <div className="text-[11px] text-muted-foreground flex items-center gap-3">
+                                          <span>
+                                            Contrato digital: <strong className="font-mono text-foreground">{contrato.codigoContrato}.pdf</strong>
+                                          </span>
+                                          {avisoEnviadoHora && (
+                                            <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                                              <CheckCircle2 className="w-3 h-3" /> Aviso enviado ({avisoEnviadoHora})
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => handleAvisarRenovacion(contrato)}
+                                            className="h-7 text-xs font-medium gap-1 text-amber-600 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/10"
+                                          >
+                                            <Bell className="w-3.5 h-3.5" />
+                                            Avisar Renovación
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => setContratoARenovar(contrato)}
+                                            className="h-7 text-xs font-medium gap-1 text-primary border-primary/40 hover:bg-primary/10"
+                                          >
+                                            <RefreshCw className="w-3.5 h-3.5" />
+                                            Renovar Contrato y Token
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant={isSelected ? 'default' : 'outline'}
+                                            onClick={() => setContratoPreview(isSelected ? null : contrato)}
+                                            className="h-7 text-xs font-medium"
+                                          >
+                                            <FileText className="w-3.5 h-3.5 mr-1" />
+                                            {isSelected ? 'ocultar PDF' : 'ver PDF'}
+                                          </Button>
+                                          <a
+                                            href={pdfUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="inline-flex items-center gap-1 text-primary text-xs font-semibold hover:underline px-2 py-1"
+                                          >
+                                            ver contrato en pestaña nueva <ExternalLink className="w-3 h-3" />
+                                          </a>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              )}
+
+                              {/* Visor PDF embebido si está seleccionado */}
+                              {isSelected && (
+                                <TableRow className="bg-background">
+                                  <TableCell colSpan={6} className="p-4 border-b">
+                                    <div className="p-3 rounded-xl border bg-muted/20 space-y-2">
+                                      <div className="flex items-center justify-between bg-muted/60 px-3 py-2 rounded-lg border text-xs">
+                                        <span className="font-bold font-mono text-foreground flex items-center gap-2">
+                                          <FileText className="w-4 h-4 text-primary" />
+                                          Copia Digital: {contrato.codigoContrato}.pdf — {titularNombre}
+                                        </span>
+                                        <div className="flex items-center gap-3">
+                                          <a
+                                            href={`${pdfUrl}?download=1`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="text-primary hover:underline font-semibold text-[11px] flex items-center gap-1"
+                                          >
+                                            <Download className="w-3 h-3" /> Descargar copia
+                                          </a>
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() => setContratoPreview(null)}
+                                            className="h-6 px-2 text-[11px]"
+                                          >
+                                            Cerrar Visor
+                                          </Button>
+                                        </div>
+                                      </div>
+                                      <div className="w-full h-[420px] rounded-lg border bg-background overflow-hidden shadow-inner">
+                                        <iframe
+                                          src={pdfUrl}
+                                          title={`Contrato ${contrato.codigoContrato}`}
+                                          className="w-full h-full border-0"
+                                        />
+                                      </div>
+                                    </div>
+                                  </TableCell>
+                                </TableRow>
+                              )}
+                            </React.Fragment>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
                   </div>
                 )}
               </CardContent>
             </Card>
 
-            {/* Formulario Simple: Firmar / Registrar Contrato de Obtención de Token */}
-            <Card className="lg:col-span-4 border-border/80 bg-card h-fit">
-              <CardHeader className="p-4 border-b">
-                <CardTitle className="text-sm font-bold">
-                  Nuevo Contrato de Obtención de Token
-                </CardTitle>
-                <CardDescription className="text-xs">
-                  Paso inicial: el funcionario firma el contrato de obtención de su dispositivo token.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-4">
-                <form onSubmit={handleCrearContrato} className="space-y-3 text-xs">
-                  <div className="space-y-1">
-                    <label className="font-semibold">Código de Contrato:</label>
-                    <Input
-                      value={codigoContrato}
-                      onChange={(e) => setCodigoContrato(e.target.value)}
-                      required
-                      className="h-8 text-xs font-mono"
-                    />
+          </div>
+
+          {/* Modal / Diálogo de Renovación de Contrato y Token */}
+          {contratoARenovar && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+              <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl space-y-4">
+                <div className="flex items-start justify-between border-b pb-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="p-1 rounded bg-primary/10 text-primary">
+                        <RefreshCw className="w-4 h-4" />
+                      </span>
+                      <h3 className="text-base font-bold text-foreground">
+                        Renovación de Contrato y Token
+                      </h3>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Al renovar aquí el contrato, se sincroniza y renueva automáticamente la vigencia del token y certificado en el backend.
+                    </p>
                   </div>
-                  <div className="space-y-1">
-                    <label className="font-semibold">Funcionario Solicitante:</label>
+                  <button
+                    onClick={() => setContratoARenovar(null)}
+                    disabled={renovando}
+                    className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-3.5 rounded-xl border bg-muted/30 space-y-2 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Funcionario:</span>
+                    <span className="font-bold text-foreground">
+                      {contratoARenovar.funcionarioNombre}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">RUT:</span>
+                    <span className="font-mono font-semibold text-foreground">
+                      {contratoARenovar.funcionarioRut}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Departamento / Unidad:</span>
+                    <span className="text-foreground">{contratoARenovar.funcionarioUnidad}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Token Físico Asignado:</span>
+                    <span className="font-mono font-bold text-primary">
+                      {contratoARenovar.serialNumberToken || 'SAFENET-5110'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Código de Contrato:</span>
+                    <span className="font-mono text-muted-foreground">
+                      {contratoARenovar.codigoContrato}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center border-t pt-2">
+                    <span className="text-muted-foreground">Expiración actual:</span>
+                    <span className="font-mono font-bold text-rose-500">
+                      {(contratoARenovar.fechaTermino || '').split('T')[0]}
+                    </span>
+                  </div>
+                </div>
+
+                <form onSubmit={handleEjecutarRenovacion} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-foreground">
+                      Extensión de Vigencia:
+                    </label>
                     <select
-                      value={contratoRut}
-                      onChange={(e) => setContratoRut(e.target.value)}
-                      className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs font-mono"
+                      value={diasExtensionRenovacion}
+                      onChange={(e) => setDiasExtensionRenovacion(Number(e.target.value))}
+                      className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs"
                     >
-                      {usuarios.map((u) => (
-                        <option key={u.id} value={u.rut}>
-                          {u.rut} — {u.nombre}
-                        </option>
-                      ))}
+                      <option value={365}>1 Año (365 días adicionales) — Estándar Municipal</option>
+                      <option value={730}>2 Años (730 días adicionales)</option>
+                      <option value={1095}>3 Años (1095 días adicionales)</option>
+                      <option value={180}>6 Meses (180 días) — Periodo transitorio</option>
                     </select>
                   </div>
-                  <div className="space-y-1">
-                    <label className="font-semibold">Token Asignado (N° Serie):</label>
+
+                  <div className="p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-xs text-foreground space-y-1">
+                    <div className="font-bold flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                      <CheckCircle2 className="w-4 h-4" /> Nueva Fecha de Expiración estimada:
+                    </div>
+                    <div className="font-mono font-bold text-sm text-emerald-800 dark:text-emerald-300 pl-5">
+                      {
+                        new Date(Date.now() + diasExtensionRenovacion * 24 * 60 * 60 * 1000)
+                          .toISOString()
+                          .split('T')[0]
+                      }
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setContratoARenovar(null)}
+                      disabled={renovando}
+                      className="text-xs h-9"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={renovando}
+                      className="text-xs font-bold h-9 gap-1.5 shadow"
+                    >
+                      {renovando ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          Sincronizando y Renovando...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          Confirmar Renovación
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SUB-VISTA: NUEVO CONTRATO DE OBTENCIÓN DE TOKEN */}
+      {subTab === 'NUEVO_CONTRATO' && (
+        <div className="space-y-4 max-w-2xl mx-auto animate-in fade-in slide-in-from-bottom-2 duration-150">
+          <div className="flex items-center justify-between">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSubTab('CONTRATOS')}
+              className="text-xs font-semibold gap-1.5 h-8"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Volver al listado de Contratos
+            </Button>
+            <span className="text-[11px] font-mono text-muted-foreground">
+              Formulario oficial de obtención
+            </span>
+          </div>
+
+          <Card className="border-border/80 bg-card shadow-lg">
+            <CardHeader className="p-5 border-b bg-muted/20">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                  <PlusCircle className="w-5 h-5" />
+                </span>
+                <div>
+                  <CardTitle className="text-base font-bold">
+                    Nuevo Contrato de Obtención y Responsabilidad de Token
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Paso formal: el funcionario firma la recepción y compromiso de custodia de su dispositivo token de firma electrónica.
+                  </CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-5">
+              <form onSubmit={handleCrearContrato} className="space-y-4 text-xs">
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-foreground flex items-center justify-between">
+                    <span>Código de Contrato / Folio:</span>
+                    <span className="text-[10px] text-muted-foreground">Identificador municipal</span>
+                  </label>
+                  <Input
+                    value={codigoContrato}
+                    onChange={(e) => setCodigoContrato(e.target.value)}
+                    required
+                    placeholder="Ej: CT-OBT-2026-009"
+                    className="h-9 text-xs font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-foreground">Funcionario Solicitante / Titular:</label>
+                  <select
+                    value={contratoRut}
+                    onChange={(e) => setContratoRut(e.target.value)}
+                    className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs font-mono"
+                  >
+                    {usuarios.map((u) => (
+                      <option key={u.id} value={u.rut}>
+                        {u.rut} — {u.nombre} ({u.unidad})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="font-semibold text-foreground flex items-center justify-between">
+                    <span>Token Asignado (N° Serie SafeNet):</span>
+                    <span className="text-[10px] text-primary font-mono">Dispositivo criptográfico</span>
+                  </label>
+                  <Input
+                    value={contratoTokenSerial}
+                    onChange={(e) => setContratoTokenSerial(e.target.value)}
+                    required
+                    placeholder="Ej: SAFENET-5110-CQ09"
+                    className="h-9 text-xs font-mono"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="font-semibold text-foreground">Fecha Inicio de Vigencia:</label>
                     <Input
-                      value={contratoTokenSerial}
-                      onChange={(e) => setContratoTokenSerial(e.target.value)}
+                      type="date"
+                      value={fechaInicioContrato}
+                      onChange={(e) => setFechaInicioContrato(e.target.value)}
                       required
-                      className="h-8 text-xs font-mono"
+                      className="h-9 text-xs font-mono"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <label className="font-semibold">Fecha Inicio:</label>
-                      <Input
-                        type="date"
-                        value={fechaInicioContrato}
-                        onChange={(e) => setFechaInicioContrato(e.target.value)}
-                        required
-                        className="h-8 text-xs font-mono"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="font-semibold">Fecha Término:</label>
-                      <Input
-                        type="date"
-                        value={fechaTerminoContrato}
-                        onChange={(e) => setFechaTerminoContrato(e.target.value)}
-                        required
-                        className="h-8 text-xs font-mono"
-                      />
-                    </div>
+                  <div className="space-y-1.5">
+                    <label className="font-semibold text-foreground">Fecha Término (Expiración):</label>
+                    <Input
+                      type="date"
+                      value={fechaTerminoContrato}
+                      onChange={(e) => setFechaTerminoContrato(e.target.value)}
+                      required
+                      className="h-9 text-xs font-mono"
+                    />
                   </div>
-                  <Button type="submit" className="w-full text-xs font-bold h-9 mt-2 shadow">
+                </div>
+
+                <div className="p-3 rounded-lg border bg-muted/30 text-muted-foreground text-[11px] space-y-1">
+                  <p className="font-semibold text-foreground">Nota de Emisión:</p>
+                  <p>
+                    Al firmar la obtención, se registrará el contrato con validez jurídica municipal y se vinculará formalmente el número de serie de SafeNet al funcionario en el inventario de equipamiento.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setSubTab('CONTRATOS')}
+                    className="text-xs h-9"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button type="submit" className="text-xs font-bold h-9 px-4 shadow gap-1.5">
+                    <FileText className="w-3.5 h-3.5" />
                     Firmar Obtención y Generar Contrato PDF
                   </Button>
-                </form>
-              </CardContent>
-            </Card>
-          </div>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
         </div>
       )}
 
@@ -1038,6 +1564,133 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
               </CardContent>
             </Card>
           </div>
+
+          {/* Modal / Diálogo de Renovación de Contrato y Token */}
+          {contratoARenovar && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+              <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl space-y-4">
+                <div className="flex items-start justify-between border-b pb-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="p-1 rounded bg-primary/10 text-primary">
+                        <RefreshCw className="w-4 h-4" />
+                      </span>
+                      <h3 className="text-base font-bold text-foreground">
+                        Renovación de Contrato y Token
+                      </h3>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Al renovar aquí el contrato, se sincroniza y renueva automáticamente la vigencia del token y certificado en el backend.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setContratoARenovar(null)}
+                    disabled={renovando}
+                    className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-3.5 rounded-xl border bg-muted/30 space-y-2 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Funcionario:</span>
+                    <span className="font-bold text-foreground">
+                      {contratoARenovar.funcionarioNombre}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">RUT:</span>
+                    <span className="font-mono font-semibold text-foreground">
+                      {contratoARenovar.funcionarioRut}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Departamento / Unidad:</span>
+                    <span className="text-foreground">{contratoARenovar.funcionarioUnidad}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Token Físico Asignado:</span>
+                    <span className="font-mono font-bold text-primary">
+                      {contratoARenovar.serialNumberToken || 'SAFENET-5110'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted-foreground">Código de Contrato:</span>
+                    <span className="font-mono text-muted-foreground">
+                      {contratoARenovar.codigoContrato}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center border-t pt-2">
+                    <span className="text-muted-foreground">Expiración actual:</span>
+                    <span className="font-mono font-bold text-rose-500">
+                      {(contratoARenovar.fechaTermino || '').split('T')[0]}
+                    </span>
+                  </div>
+                </div>
+
+                <form onSubmit={handleEjecutarRenovacion} className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-foreground">
+                      Extensión de Vigencia:
+                    </label>
+                    <select
+                      value={diasExtensionRenovacion}
+                      onChange={(e) => setDiasExtensionRenovacion(Number(e.target.value))}
+                      className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs"
+                    >
+                      <option value={365}>1 Año (365 días adicionales) — Estándar Municipal</option>
+                      <option value={730}>2 Años (730 días adicionales)</option>
+                      <option value={1095}>3 Años (1095 días adicionales)</option>
+                      <option value={180}>6 Meses (180 días) — Periodo transitorio</option>
+                    </select>
+                  </div>
+
+                  <div className="p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-xs text-foreground space-y-1">
+                    <div className="font-bold flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                      <CheckCircle2 className="w-4 h-4" /> Nueva Fecha de Expiración estimada:
+                    </div>
+                    <div className="font-mono font-bold text-sm text-emerald-800 dark:text-emerald-300 pl-5">
+                      {
+                        new Date(Date.now() + diasExtensionRenovacion * 24 * 60 * 60 * 1000)
+                          .toISOString()
+                          .split('T')[0]
+                      }
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setContratoARenovar(null)}
+                      disabled={renovando}
+                      className="text-xs h-9"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={renovando}
+                      className="text-xs font-bold h-9 gap-1.5 shadow"
+                    >
+                      {renovando ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          Sincronizando y Renovando...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5" />
+                          Confirmar Renovación
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

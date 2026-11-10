@@ -347,11 +347,13 @@ interface TelemetriaState {
     metadatos?: any;
   }) => void;
   cargarEstaciones: () => Promise<void>;
+  cargarEventosRecientes: () => Promise<void>;
   cargarMetricas: (modo?: ModoReporteType, mes?: string, anio?: string) => Promise<void>;
   setPeriodoReporte: (modo: ModoReporteType, mes?: string, anio?: string) => Promise<void>;
   simularEventoHardware: (codigoPc: string, nuevoEstado: EstadoHardwareType) => Promise<void>;
   registrarAccionFirma: (payload: {
     rutFuncionario?: string;
+    usuarioId?: string;
     serialNumber?: string;
     codigoPc?: string;
     glosaAccion?: string;
@@ -419,38 +421,12 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
       const res = await fetch(`/api/v1/telemetria/metricas?${params.toString()}`);
       if (res.ok) {
         const data: MetricasTrazabilidadResponse = await res.json();
-        const merged: MetricasTrazabilidadResponse = {
-          ...fallback,
-          ...data,
-          resumenDispositivos:
-            data.resumenDispositivos && data.resumenDispositivos.totalExistentes > 0
-              ? data.resumenDispositivos
-              : fallback.resumenDispositivos,
-          firmasAsignadas:
-            data.firmasAsignadas && data.firmasAsignadas.listado?.length > 0
-              ? data.firmasAsignadas
-              : fallback.firmasAsignadas,
-          accionesFuncionarios:
-            data.accionesFuncionarios && data.accionesFuncionarios.listadoPorFuncionario?.length > 0
-              ? data.accionesFuncionarios
-              : fallback.accionesFuncionarios,
-          alertasVencimiento:
-            data.alertasVencimiento && data.alertasVencimiento.tokensEnAlerta?.length > 0
-              ? data.alertasVencimiento
-              : fallback.alertasVencimiento,
-          contratosResumen:
-            data.contratosResumen && data.contratosResumen.listado?.length > 0
-              ? data.contratosResumen
-              : fallback.contratosResumen,
-        };
         set({
-          metricas: merged,
-          modoReporte: merged.periodo?.modo || modo,
-          mesSeleccionado: merged.periodo?.mesSeleccionado || mes,
-          anioSeleccionado: merged.periodo?.anioSeleccionado || anio,
+          metricas: data,
+          modoReporte: data.periodo?.modo || modo,
+          mesSeleccionado: data.periodo?.mesSeleccionado || mes,
+          anioSeleccionado: data.periodo?.anioSeleccionado || anio,
         });
-      } else if (!get().metricas) {
-        set({ metricas: fallback });
       }
     } catch {
       if (!get().metricas) {
@@ -564,6 +540,7 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
       set({ wsConectado: true });
       socket.emit('unirse_dashboard');
       get().cargarEstaciones();
+      get().cargarEventosRecientes();
       get().cargarMetricas();
     });
 
@@ -583,6 +560,7 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
 
     socket.on('sincronizacion_automatica', () => {
       get().cargarEstaciones();
+      get().cargarEventosRecientes();
       get().cargarMetricas();
     });
 
@@ -675,7 +653,33 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
         }
       }
     } catch {
-      // Mantiene MOCK_ESTACIONES iniciales
+      // Error de red
+    }
+  },
+
+  cargarEventosRecientes: async () => {
+    try {
+      const resEventos = await fetch('/api/v1/telemetria/eventos-recientes');
+      if (resEventos.ok) {
+        const data = await resEventos.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const mappedEventos: TelemetriaLog[] = data.map((e: any) => {
+            const fechaObj = new Date(e.timestamp || Date.now());
+            const fechaValida = !isNaN(fechaObj.getTime()) ? fechaObj : new Date();
+            return {
+              id: e.id,
+              codigoPc: e.codigoPc,
+              estado: e.evento || 'CONECTADO',
+              timestamp: fechaValida.toLocaleTimeString('es-CL'),
+              fecha: fechaValida.toLocaleDateString('es-CL'),
+              serialNumber: e.token?.serialNumber || e.serialNumber,
+            };
+          });
+          set({ historialEventos: mappedEventos });
+        }
+      }
+    } catch {
+      // Error de red
     }
   },
 

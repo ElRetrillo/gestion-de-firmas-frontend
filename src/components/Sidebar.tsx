@@ -5,6 +5,8 @@ import {
   BellRing,
   History,
   BarChart3,
+  FileCheck2,
+  PenTool,
   LucideIcon,
 } from 'lucide-react';
 import { useTelemetriaStore } from '../store/useTelemetriaStore';
@@ -15,6 +17,7 @@ import { Button } from './ui/button';
 
 export type NavTab =
   | 'DASHBOARD'
+  | 'FIRMAR'
   | 'ALERTAS'
   | 'METRICAS'
   | 'USUARIOS_CUSTODIA'
@@ -40,13 +43,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpenMobile,
   onCloseMobile,
 }) => {
-  const { metricas } = useTelemetriaStore();
+  const { metricas, estaciones } = useTelemetriaStore();
   const { usuario, logout } = useAuthStore();
 
   const totalDispositivos = metricas?.resumenDispositivos?.totalExistentes ?? 8;
   const dispositivosActivos = metricas?.resumenDispositivos?.activos ?? 6;
   const alertasCount = metricas?.alertasVencimiento?.totalEnUmbral60Dias ?? 4;
   const contratosCount = metricas?.contratosResumen?.totalContratos ?? 3;
+  const conectadosEnVivo = estaciones.filter((e) => e.estadoEnVivo === 'CONECTADO').length;
 
   const itemsControlTokens: NavItemConfig[] = [
     {
@@ -54,6 +58,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: Monitor,
       label: 'Control de Tokens y Firmas',
       badge: `${dispositivosActivos}/${totalDispositivos}`,
+    },
+    {
+      id: 'FIRMAR',
+      icon: PenTool,
+      label: 'Firmar Documento',
+      badge: conectadosEnVivo > 0 ? 'Token Listo' : undefined,
     },
     {
       id: 'ALERTAS',
