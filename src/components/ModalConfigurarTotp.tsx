@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import QRCode from 'qrcode';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -15,6 +16,7 @@ export const ModalConfigurarTotp: React.FC<ModalConfigurarTotpProps> = ({ isOpen
   const { usuario } = useAuthStore();
   const [totpData, setTotpData] = useState<any | null>(null);
   const [cargando, setCargando] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [codigoPrueba, setCodigoPrueba] = useState('');
   const [verificando, setVerificando] = useState(false);
   const [resultadoVerificacion, setResultadoVerificacion] = useState<{ valido: boolean; mensaje: string } | null>(null);
@@ -23,6 +25,7 @@ export const ModalConfigurarTotp: React.FC<ModalConfigurarTotpProps> = ({ isOpen
   const cargarSetup = async () => {
     setCargando(true);
     setResultadoVerificacion(null);
+    setQrDataUrl(null);
     try {
       const token = localStorage.getItem('access_token');
       const res = await fetch('/api/v1/auth/totp/setup', {
@@ -31,6 +34,14 @@ export const ModalConfigurarTotp: React.FC<ModalConfigurarTotpProps> = ({ isOpen
       if (res.ok) {
         const data = await res.json();
         setTotpData(data);
+        if (data.otpauthUrl) {
+          const url = await QRCode.toDataURL(data.otpauthUrl, {
+            width: 200,
+            margin: 2,
+            errorCorrectionLevel: 'M',
+          });
+          setQrDataUrl(url);
+        }
       } else {
         // Fallback local si el endpoint no responde
         const rutLimpio = (usuario.rut || '11111111').replace(/[^0-9kK]/g, '').toUpperCase();
@@ -43,6 +54,12 @@ export const ModalConfigurarTotp: React.FC<ModalConfigurarTotpProps> = ({ isOpen
           secretBase32: fallbackSecret,
           otpauthUrl: fallbackUrl,
         });
+        const url = await QRCode.toDataURL(fallbackUrl, {
+          width: 200,
+          margin: 2,
+          errorCorrectionLevel: 'M',
+        });
+        setQrDataUrl(url);
       }
     } catch {
       const rutLimpio = (usuario.rut || '11111111').replace(/[^0-9kK]/g, '').toUpperCase();
@@ -55,6 +72,16 @@ export const ModalConfigurarTotp: React.FC<ModalConfigurarTotpProps> = ({ isOpen
         secretBase32: fallbackSecret,
         otpauthUrl: fallbackUrl,
       });
+      try {
+        const url = await QRCode.toDataURL(fallbackUrl, {
+          width: 200,
+          margin: 2,
+          errorCorrectionLevel: 'M',
+        });
+        setQrDataUrl(url);
+      } catch {
+        // Fallback si falla render local
+      }
     } finally {
       setCargando(false);
     }
@@ -113,6 +140,14 @@ export const ModalConfigurarTotp: React.FC<ModalConfigurarTotpProps> = ({ isOpen
       if (res.ok) {
         const data = await res.json();
         setTotpData(data);
+        if (data.otpauthUrl) {
+          const url = await QRCode.toDataURL(data.otpauthUrl, {
+            width: 200,
+            margin: 2,
+            errorCorrectionLevel: 'M',
+          });
+          setQrDataUrl(url);
+        }
         setResultadoVerificacion(null);
       }
     } catch {
@@ -159,24 +194,19 @@ export const ModalConfigurarTotp: React.FC<ModalConfigurarTotpProps> = ({ isOpen
                   <span className="text-[10px] font-mono font-semibold text-muted-foreground uppercase mb-2">
                     Escanear con App Móvil
                   </span>
-                  <div className="w-40 h-40 bg-white p-2 rounded-lg flex items-center justify-center shadow-xs">
-                    <img
-                      src={`https://quickchart.io/qr?text=${encodeURIComponent(
-                        totpData.otpauthUrl,
-                      )}&size=180`}
-                      onError={(e) => {
-                        // Fallback si un proveedor externo tiene bloqueo de red
-                        const target = e.currentTarget;
-                        if (!target.dataset.triedFallback) {
-                          target.dataset.triedFallback = 'true';
-                          target.src = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(
-                            totpData.otpauthUrl,
-                          )}&size=180x180`;
-                        }
-                      }}
-                      alt="Código QR TOTP"
-                      className="w-full h-full object-contain"
-                    />
+                  <div className="w-44 h-44 bg-white p-2 rounded-lg flex items-center justify-center shadow-xs">
+                    {qrDataUrl ? (
+                      <img
+                        src={qrDataUrl}
+                        alt="Código QR TOTP Oficial"
+                        className="w-full h-full object-contain"
+                      />
+                    ) : (
+                      <div className="flex flex-col items-center justify-center text-muted-foreground p-2 text-center">
+                        <RefreshCw className="w-6 h-6 animate-spin text-primary mb-1" />
+                        <span className="text-[10px]">Cargando QR...</span>
+                      </div>
+                    )}
                   </div>
                   <span className="text-[10px] text-muted-foreground mt-2 text-center">
                     Google Auth • MS Authenticator • 2FAS

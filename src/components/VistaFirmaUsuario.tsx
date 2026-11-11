@@ -86,6 +86,11 @@ export const VistaFirmaUsuario: React.FC = () => {
   const estaConectado = estacionUsuario?.estadoEnVivo === 'CONECTADO';
   const tokenInfo = estacionUsuario?.tokenInfo;
 
+  const handleDescargarAgenteUsb = () => {
+    const unidadParam = encodeURIComponent(usuario?.unidad || 'Red Interna Municipal');
+    window.location.href = `/api/v1/telemetria/descargar-agente?unidad=${unidadParam}`;
+  };
+
   // Manejo de carga de archivo PDF
   const handleCargarArchivo = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -127,15 +132,22 @@ export const VistaFirmaUsuario: React.FC = () => {
       purpose: propositoTexto,
     };
 
-    const base64UrlEncode = (str: string) =>
-      btoa(str).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    const base64UrlEncodeBytes = (bytes: Uint8Array) => {
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      return btoa(binary).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+    };
 
-    const headerEnc = base64UrlEncode(JSON.stringify(header));
-    const payloadEnc = base64UrlEncode(JSON.stringify(payload));
+    const enc = new TextEncoder();
+    const base64UrlEncodeText = (str: string) => base64UrlEncodeBytes(enc.encode(str));
+
+    const headerEnc = base64UrlEncodeText(JSON.stringify(header));
+    const payloadEnc = base64UrlEncodeText(JSON.stringify(payload));
     const signingInput = `${headerEnc}.${payloadEnc}`;
 
     const secretKey = '27a216342c744f89b7b82fa290519ba0';
-    const enc = new TextEncoder();
     const key = await window.crypto.subtle.importKey(
       'raw',
       enc.encode(secretKey),
@@ -149,8 +161,7 @@ export const VistaFirmaUsuario: React.FC = () => {
       enc.encode(signingInput),
     );
 
-    const sigString = String.fromCharCode(...new Uint8Array(signatureBuffer));
-    const signatureEnc = base64UrlEncode(sigString);
+    const signatureEnc = base64UrlEncodeBytes(new Uint8Array(signatureBuffer));
 
     return `${signingInput}.${signatureEnc}`;
   };
@@ -212,7 +223,10 @@ export const VistaFirmaUsuario: React.FC = () => {
         };
 
         if (!esDesatendida) {
-          const otpAEnviar = codigoOtpGob.trim() || (await calcularOtpSandboxFirmaGob());
+          const otpAEnviar = codigoOtpGob.trim();
+          if (!otpAEnviar) {
+            throw new Error('Debe ingresar el código OTP de 6 dígitos de su aplicación Authenticator.');
+          }
           headers['OTP'] = otpAEnviar;
         }
 
@@ -504,13 +518,13 @@ export const VistaFirmaUsuario: React.FC = () => {
                     type="text"
                     inputMode="numeric"
                     maxLength={6}
-                    placeholder="Ej: 1908 o abre tu app Authenticator"
+                    placeholder="Código de 6 dígitos de tu app Authenticator"
                     value={codigoOtpGob}
                     onChange={(e) => setCodigoOtpGob(e.target.value.replace(/\D/g, ''))}
-                    className="h-10 text-center font-mono tracking-widest text-sm bg-background"
+                    className="h-10 text-center font-mono tracking-widest text-sm bg-background font-bold"
                   />
                   <p className="text-[10px] text-muted-foreground">
-                    Si estás en modo prueba y lo dejas en blanco, se calculará automáticamente el OTP oficial de sandbox.
+                    Abre tu aplicación Google Authenticator, Microsoft Authenticator o 2FAS e ingresa el código dinámico de 6 dígitos que se muestra en tu teléfono.
                   </p>
                 </div>
               )}
@@ -573,6 +587,25 @@ export const VistaFirmaUsuario: React.FC = () => {
                   Tu token físico en el PC firmará criptográficamente en cuanto valides tu PIN desde aquí.
                 </p>
               </div>
+
+              {/* Botón Descargar Agente USB si el token no está conectado */}
+              {!estaConectado && (
+                <div className="pt-1 border-t border-border/60 flex items-center justify-between">
+                  <span className="text-[10px] text-muted-foreground">
+                    ¿El token no figura conectado en este equipo?
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleDescargarAgenteUsb}
+                    className="h-7 text-[10px] font-semibold gap-1 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/10"
+                  >
+                    <Download className="w-3 h-3" />
+                    <span>Descargar agente USB</span>
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
@@ -662,6 +695,25 @@ export const VistaFirmaUsuario: React.FC = () => {
               Documentos firmados en esta sesión: <span className="font-bold text-foreground">{contadorFirmas}</span>
             </div>
           )}
+
+          {/* Enlace / Botón para descargar el Agente USB */}
+          <div className="w-full pt-2 border-t border-border/60 flex items-center justify-between text-left">
+            <div className="flex items-center gap-1.5 text-muted-foreground text-[11px]">
+              <Usb className="w-3.5 h-3.5" />
+              <span>Agente de Telemetría para Token Físico</span>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleDescargarAgenteUsb}
+              className="h-8 text-xs font-semibold gap-1.5 text-primary border-primary/40 hover:bg-primary/10 shadow-xs"
+              title="Descargar script autoinstalador para conectar el Token USB en esta máquina"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Descargar agente USB</span>
+            </Button>
+          </div>
 
         </CardContent>
       </Card>

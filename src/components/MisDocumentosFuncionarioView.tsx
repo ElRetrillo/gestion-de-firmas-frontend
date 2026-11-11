@@ -127,8 +127,8 @@ export const MisDocumentosFuncionarioView: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           rutFirmante: usuario.rut,
-          pin: modalidadFirmaModal === 'ATENDIDA' ? pinToken : undefined,
-          otp: modalidadFirmaModal === 'ATENDIDA' ? (codigoOtp || pinToken) : undefined,
+          pin: modalidadFirmaModal === 'ATENDIDA' ? (pinToken.trim() || undefined) : undefined,
+          otp: modalidadFirmaModal === 'ATENDIDA' ? (codigoOtp.trim() || undefined) : undefined,
           modalidadFirma: modalidadFirmaModal,
           accion: 'FIRMAR',
         }),

@@ -484,16 +484,16 @@ export const DashboardSupervisores: React.FC = () => {
               ))}
             </div>
 
-            {/* Botón Descarga .bat para prueba en vivo */}
+            {/* Botón Descarga Agente USB */}
             <Button
               size="sm"
               variant="outline"
               onClick={handleDescargarAgenteBat}
               className="h-8 text-xs font-semibold gap-1.5 text-primary border-primary/40 hover:bg-primary/10 shadow-xs"
-              title="Descargar script .bat para instalar el agente de telemetría USB en esta máquina"
+              title="Descargar instalador para el agente de telemetría USB en esta máquina"
             >
               <Download className="w-3.5 h-3.5" />
-              <span>Descargar .bat Agente USB</span>
+              <span>Descargar agente USB</span>
             </Button>
           </div>
         </CardHeader>
