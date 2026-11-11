@@ -10,11 +10,14 @@ import {
   KeyRound,
   ShieldCheck,
   Zap,
+  Bot,
   Smartphone,
   Laptop,
   Check,
   QrCode,
   Lock,
+  Eye,
+  Crosshair,
 } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { useTelemetriaStore } from '../store/useTelemetriaStore';
@@ -23,6 +26,8 @@ import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 import { ModalConfigurarTotp } from './ModalConfigurarTotp';
+import { VisorFirmaAdobe } from './VisorFirmaAdobe';
+import { FirmaCoordenadas, generarLayoutXml } from '../lib/pdfSignatureLayout';
 
 export type MetodoFirma = 'FIRMAGOB' | 'TOKEN_SAFENET';
 export type SubmodalidadFirmaGob = 'DESATENDIDA' | 'GENERAL';
@@ -58,7 +63,11 @@ export const VistaFirmaUsuario: React.FC = () => {
     base64: string;
   } | null>(null);
 
-  // 6. Estados de ejecución
+  // 6. Coordenadas de estampado visual interactivo estilo Adobe Acrobat
+  const [coordenadasFirma, setCoordenadasFirma] = useState<FirmaCoordenadas | null>(null);
+  const [mostrarVisorAdobe, setMostrarVisorAdobe] = useState(true);
+
+  // 7. Estados de ejecución
   const [firmando, setFirmando] = useState(false);
   const [mensajeExito, setMensajeExito] = useState<string | null>(null);
   const [errorFirma, setErrorFirma] = useState<string | null>(null);
@@ -67,6 +76,13 @@ export const VistaFirmaUsuario: React.FC = () => {
     nombre: string;
     url: string;
   } | null>(null);
+
+  const rawRut = usuario?.rut || '16.892.415-3';
+  const runSinDv = rawRut.split('-')[0].replace(/\D/g, '') || '16892415';
+  const nombreDoc =
+    archivoPersonalizado?.nombre ||
+    `decreto-oficial-${new Date().toISOString().slice(0, 10)}.pdf`;
+  const contenidoBase64 = archivoPersonalizado?.base64 || PDF_MINIMO_BASE64;
 
   // Detección de estación y token SafeNet / E-Sign en vivo
   const estacionUsuario =
@@ -202,13 +218,6 @@ export const VistaFirmaUsuario: React.FC = () => {
     setMensajeExito(null);
     setDocumentoDescargable(null);
 
-    const rawRut = usuario?.rut || '16.892.415-3';
-    const runSinDv = rawRut.split('-')[0].replace(/\D/g, '') || '16892415';
-    const nombreDoc =
-      archivoPersonalizado?.nombre ||
-      `decreto-oficial-${new Date().toISOString().slice(0, 10)}.pdf`;
-    const contenidoBase64 = archivoPersonalizado?.base64 || PDF_MINIMO_BASE64;
-
     try {
       if (metodoFirma === 'FIRMAGOB') {
         // -------------------------------------------------------------
@@ -230,6 +239,9 @@ export const VistaFirmaUsuario: React.FC = () => {
           headers['OTP'] = otpAEnviar;
         }
 
+        // Generar layout XML si el usuario posicionó la firma con el mouse en el visor Adobe
+        const layoutXml = coordenadasFirma ? generarLayoutXml(coordenadasFirma) : undefined;
+
         const res = await fetch('/api/v1/firmas/v2/files/tickets', {
           method: 'POST',
           headers,
@@ -242,6 +254,7 @@ export const VistaFirmaUsuario: React.FC = () => {
                 content: contenidoBase64,
                 description: nombreDoc,
                 checksum: 'auto-sha256',
+                layout: layoutXml,
               },
             ],
           }),
@@ -330,6 +343,8 @@ export const VistaFirmaUsuario: React.FC = () => {
         }
 
         // 2. Ejecutar la firma con validación criptográfica de Token USB y PIN
+        const layoutXml = coordenadasFirma ? generarLayoutXml(coordenadasFirma) : undefined;
+
         const resFirmar = await fetch(`/api/v1/firmas/solicitudes/${solicitudId}/firmar`, {
           method: 'POST',
           headers: headersAuth,
@@ -337,6 +352,7 @@ export const VistaFirmaUsuario: React.FC = () => {
             rutFirmante: rawRut,
             pin,
             modalidadFirma: 'ATENDIDA',
+            layoutXml,
             accion: 'FIRMAR',
           }),
         });
@@ -386,8 +402,8 @@ export const VistaFirmaUsuario: React.FC = () => {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] w-full px-3 py-4 sm:px-6 sm:py-8">
-      {/* Contenedor Responsivo: En móvil toma el 100% con bordes suaves, en desktop max-w-lg */}
-      <Card className="w-full max-w-lg border border-border/80 shadow-2xl bg-card/95 backdrop-blur-md rounded-2xl overflow-hidden">
+      {/* Contenedor Principal: Se amplía a max-w-4xl para acomodar el visor estilo Adobe cómodamente */}
+      <Card className="w-full max-w-4xl border border-border/80 shadow-2xl bg-card/95 backdrop-blur-md rounded-2xl overflow-hidden">
         <CardContent className="flex flex-col items-center text-center p-4 sm:p-8 space-y-5">
 
           {/* Encabezado: Título y Funcionario */}
@@ -403,7 +419,7 @@ export const VistaFirmaUsuario: React.FC = () => {
           {/* SELECTOR PRINCIPAL: FIRMAGOB (NUBE/CELULAR) VS TOKEN SAFENET (PC OFICINA) */}
           <div className="w-full space-y-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block text-left">
-              1. Selecciona cómo deseas firmar:
+              1. Selecciona el mecanismo criptográfico:
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {/* Opción A: FirmaGob */}
@@ -452,6 +468,41 @@ export const VistaFirmaUsuario: React.FC = () => {
             </div>
           </div>
 
+          {/* VISOR ESTILO ADOBE: ELEGIR LUGAR DE LA FIRMA CON EL MOUSE */}
+          <div className="w-full space-y-2 text-left">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Crosshair className="w-3.5 h-3.5 text-primary" />
+                <span>2. Ubicación de la firma en el documento (Estilo Adobe):</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setMostrarVisorAdobe((v) => !v)}
+                className="text-[11px] text-primary hover:underline font-semibold flex items-center gap-1"
+              >
+                <Eye className="w-3 h-3" />
+                <span>{mostrarVisorAdobe ? 'Ocultar Visor' : 'Abrir Visor'}</span>
+              </button>
+            </div>
+
+            {mostrarVisorAdobe && (
+              <div className="w-full animate-in fade-in duration-200">
+                <VisorFirmaAdobe
+                  pdfData={contenidoBase64}
+                  nombreDocumento={nombreDoc}
+                  firmanteNombre={usuario?.nombre || 'Funcionario Municipal'}
+                  firmanteRut={rawRut}
+                  tokenSerial={
+                    metodoFirma === 'TOKEN_SAFENET'
+                      ? tokenInfo?.serialNumber || 'SafeNet eToken 5110 CC'
+                      : 'FirmaGob Nube Ministerial'
+                  }
+                  onCoordenadasChange={(coords) => setCoordenadasFirma(coords)}
+                />
+              </div>
+            )}
+          </div>
+
           {/* SECCIÓN DETALLADA SEGÚN EL MÉTODO ELEGIDO */}
           {metodoFirma === 'FIRMAGOB' ? (
             /* CONFIGURACIÓN FIRMAGOB */
@@ -472,11 +523,11 @@ export const VistaFirmaUsuario: React.FC = () => {
                   }`}
                 >
                   <div className="flex items-center gap-1.5 text-xs">
-                    <Zap className="w-3.5 h-3.5 text-amber-500" />
+                    <Bot className="w-3.5 h-3.5 text-primary" />
                     <span>Desatendida</span>
                   </div>
                   <span className="text-[10px] text-muted-foreground font-normal mt-0.5">
-                    1 solo clic, sin OTP
+                    1 solo clic
                   </span>
                 </button>
 
@@ -535,19 +586,19 @@ export const VistaFirmaUsuario: React.FC = () => {
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
                   <Laptop className="w-4 h-4 text-emerald-600" />
-                  <span>Estado de tu Token en la Oficina</span>
+                  <span>Estado del Token</span>
                 </span>
                 <Badge
                   variant={estaConectado ? 'success' : 'destructive'}
                   className="text-[10px] py-0.5 px-2 font-mono"
                 >
-                  {estaConectado ? 'TOKEN EN LÍNEA' : 'DESCONECTADO'}
+                  {estaConectado ? 'EN LÍNEA' : 'DESCONECTADO'}
                 </Badge>
               </div>
 
               <div className="bg-background/80 p-2.5 rounded-lg border border-border text-xs space-y-1">
                 <div className="flex justify-between items-center text-[11px]">
-                  <span className="text-muted-foreground">Estación PC:</span>
+                  <span className="text-muted-foreground">Estación / PC:</span>
                   <span className="font-mono font-semibold text-foreground">
                     {estacionUsuario?.codigoPc || 'DESKTOP-1LK714Q'}
                   </span>
@@ -570,21 +621,20 @@ export const VistaFirmaUsuario: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold text-foreground flex items-center gap-1">
                     <Lock className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span>PIN de Seguridad del Token</span>
+                    <span>PIN de Autorización del Token</span>
                   </label>
-                  <span className="text-[10px] text-muted-foreground font-mono">PIN: 1234</span>
                 </div>
                 <Input
                   type="password"
                   inputMode="numeric"
                   maxLength={8}
-                  placeholder="Ingresa tu PIN asignado (ej: 1234)"
+                  placeholder="Ingresa tu PIN (ej: 1234)"
                   value={pinTokenSafeNet}
                   onChange={(e) => setPinTokenSafeNet(e.target.value)}
                   className="h-10 text-center font-mono tracking-widest text-sm bg-background"
                 />
                 <p className="text-[10px] text-muted-foreground">
-                  Tu token físico en el PC firmará criptográficamente en cuanto valides tu PIN desde aquí.
+                  Tu token físico en el PC firmará cuando coloques tu PIN
                 </p>
               </div>
 
@@ -698,10 +748,6 @@ export const VistaFirmaUsuario: React.FC = () => {
 
           {/* Enlace / Botón para descargar el Agente USB */}
           <div className="w-full pt-2 border-t border-border/60 flex items-center justify-between text-left">
-            <div className="flex items-center gap-1.5 text-muted-foreground text-[11px]">
-              <Usb className="w-3.5 h-3.5" />
-              <span>Agente de Telemetría para Token Físico</span>
-            </div>
             <Button
               type="button"
               variant="outline"
