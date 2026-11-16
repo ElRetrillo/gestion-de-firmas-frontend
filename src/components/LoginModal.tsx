@@ -6,6 +6,10 @@ import { Input } from './ui/input';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { formatRut } from '../lib/rut';
+import {
+  CATALOGO_ROLES_RBAC,
+  CALIDADES_CONTRACTUALES_RBAC,
+} from '../lib/rbacFirmas';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -32,7 +36,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regPasswordConf, setRegPasswordConf] = useState('');
-  const [regCargo, setRegCargo] = useState('');
+  const [regCargo, setRegCargo] = useState('Profesionales');
+  const [regCalidadContractual, setRegCalidadContractual] = useState('CONTRATA');
   const [regUnidad, setRegUnidad] = useState('');
 
   // Estado para cambio de contraseña obligatorio
@@ -78,7 +83,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
           apellido: regApellido.trim(),
           email: regEmail.trim() || undefined,
           password: regPassword,
-          cargo: regCargo.trim() || 'Funcionario Municipal',
+          cargo: regCargo.trim() || 'Profesionales',
+          condicionContractual: regCalidadContractual,
           unidad: regUnidad.trim() || 'I. Municipalidad de Coquimbo',
         }),
       });
@@ -413,14 +419,32 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
 
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
-                      <label className="text-[11px] font-semibold text-foreground">Cargo / Función</label>
-                      <Input
-                        type="text"
-                        placeholder="Ej: Jefa de Proyecto"
+                      <label className="text-[11px] font-semibold text-foreground">Grado / Rol Funcional (RBAC)</label>
+                      <select
                         value={regCargo}
                         onChange={(e) => setRegCargo(e.target.value)}
-                        className="text-xs h-8"
-                      />
+                        className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground"
+                      >
+                        {CATALOGO_ROLES_RBAC.map((rolItem) => (
+                          <option key={rolItem.id} value={rolItem.etiqueta}>
+                            {rolItem.etiqueta}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-foreground">Calidad Contractual</label>
+                      <select
+                        value={regCalidadContractual}
+                        onChange={(e) => setRegCalidadContractual(e.target.value)}
+                        className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground"
+                      >
+                        {CALIDADES_CONTRACTUALES_RBAC.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.etiqueta}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div className="space-y-1">
                       <label className="text-[11px] font-semibold text-foreground">Unidad</label>

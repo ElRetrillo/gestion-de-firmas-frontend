@@ -28,6 +28,7 @@ import { Input } from './ui/input';
 import { ModalConfigurarTotp } from './ModalConfigurarTotp';
 import { VisorFirmaAdobe } from './VisorFirmaAdobe';
 import { FirmaCoordenadas, generarLayoutXml } from '../lib/pdfSignatureLayout';
+import { evaluarPoliticaRbacFirma } from '../lib/rbacFirmas';
 
 export type MetodoFirma = 'FIRMAGOB' | 'TOKEN_SAFENET';
 export type SubmodalidadFirmaGob = 'DESATENDIDA' | 'GENERAL';
@@ -39,11 +40,14 @@ const PDF_MINIMO_BASE64 =
 export const VistaFirmaUsuario: React.FC = () => {
   const { usuario } = useAuthStore();
   const { estaciones, registrarAccionFirma } = useTelemetriaStore();
+  const rbac = usuario?.rbac || evaluarPoliticaRbacFirma(usuario || {});
 
   // 1. Selector de Método Criptográfico:
   // - FIRMAGOB: Nube Ministerial de Gobierno Digital (Ideal para firmar desde celular con OTP o desatendido)
   // - TOKEN_SAFENET: FEA Avanzada con Token Físico SafeNet/E-Sign conectado en el PC de la oficina (autorizado remotamente con PIN)
-  const [metodoFirma, setMetodoFirma] = useState<MetodoFirma>('FIRMAGOB');
+  const [metodoFirma, setMetodoFirma] = useState<MetodoFirma>(
+    rbac.predominio === 'FEA_PRIVADA' ? 'TOKEN_SAFENET' : 'FIRMAGOB',
+  );
 
   // 2. Submodalidad para FirmaGob:
   // - DESATENDIDA: Inmediata, 1 solo clic (sin clave)
@@ -53,6 +57,7 @@ export const VistaFirmaUsuario: React.FC = () => {
   // 3. Claves de autenticación según el método
   const [codigoOtpGob, setCodigoOtpGob] = useState('');
   const [pinTokenSafeNet, setPinTokenSafeNet] = useState('');
+  const [simularTokenConectado, setSimularTokenConectado] = useState(true);
 
   // 4. Modal para configurar Authenticator / TOTP
   const [modalTotpAbierto, setModalTotpAbierto] = useState(false);
@@ -310,9 +315,6 @@ export const VistaFirmaUsuario: React.FC = () => {
           );
         }
 
-        const pin = pinTokenSafeNet.trim() || '1234';
-
-        // 1. Crear solicitud formal en el backend para registro legal
         const tokenAuth = localStorage.getItem('access_token');
         const headersAuth: Record<string, string> = {
           'Content-Type': 'application/json',
@@ -321,6 +323,112 @@ export const VistaFirmaUsuario: React.FC = () => {
           headersAuth['Authorization'] = `Bearer ${tokenAuth}`;
         }
 
+        const layoutXml = coordenadasFirma ? generarLayoutXml(coordenadasFirma) : undefined;
+        const serial = tokenInfo?.serialNumber || 'SN-08E6-D453B70C2CF7';
+        const codigoPc = estacionUsuario?.codigoPc || 'DESKTOP-1LK714Q';
+
+        // Intentar firma PKCS#7 real vía puente local del Agente USB (127.0.0.1:48921)
+        // Solo si no está activado el modo simulación local
+        let certLocal: any = null;
+        if (!simularTokenConectado) {
+          try {
+            const resCert = await fetch('http://127.0.0.1:48921/api/token/certificado');
+            if (resCert.ok) {
+              const dataCert = await resCert.json();
+              if (dataCert?.disponible && Array.isArray(dataCert.certificados) && dataCert.certificados.length > 0) {
+                certLocal = dataCert.certificados[0];
+              }
+            }
+          } catch {
+            // Puente local no disponible en este navegador/dispositivo
+          }
+        }
+
+        if (certLocal) {
+          // 1. Preparar PDF con sello visual y ByteRange PAdES en backend
+          const resPrep = await fetch('/api/v1/firmas/pades/preparar', {
+            method: 'POST',
+            headers: headersAuth,
+            body: JSON.stringify({
+              pdfBase64: contenidoBase64,
+              nombreDocumento: nombreDoc,
+              layoutXml,
+              firmanteNombre: certLocal.cn || usuario?.nombre,
+              firmanteRut: rawRut,
+            }),
+          });
+          const dataPrep = await resPrep.json();
+          if (!resPrep.ok) {
+            throw new Error(dataPrep.message || 'No se pudo preparar el PDF para firma con token.');
+          }
+
+          // 2. Firmar ByteRange con clave privada real del Token USB (SafeNet/Windows CryptoAPI)
+          const resSignLocal = await fetch('http://127.0.0.1:48921/api/token/firmar-pkcs7', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              payloadBase64: dataPrep.payloadBase64,
+              thumbprint: certLocal.thumbprint,
+            }),
+          });
+          const dataSignLocal = await resSignLocal.json();
+          if (!resSignLocal.ok || !dataSignLocal.pkcs7Base64) {
+            throw new Error(
+              dataSignLocal.error ||
+                'No se pudo completar la firma criptográfica con el token físico.',
+            );
+          }
+
+          // 3. Incrustar firma PKCS#7 real en el PDF final
+          const resComp = await fetch('/api/v1/firmas/pades/completar', {
+            method: 'POST',
+            headers: headersAuth,
+            body: JSON.stringify({
+              pdfConPlaceholderBase64: dataPrep.pdfConPlaceholderBase64,
+              pkcs7Base64: dataSignLocal.pkcs7Base64,
+              nombreDocumento: nombreDoc,
+              certSubject: dataSignLocal.subject || certLocal.subject,
+              certThumbprint: dataSignLocal.thumbprint || certLocal.thumbprint,
+              firmanteNombre: certLocal.cn || usuario?.nombre,
+              firmanteRut: rawRut,
+              tokenSerial: serial,
+            }),
+          });
+          const dataComp = await resComp.json();
+          if (!resComp.ok || !dataComp.pdfFirmadoBase64) {
+            throw new Error(dataComp.message || 'Error al ensamblar el PDF firmado con PKCS#7.');
+          }
+
+          await registrarAccionFirma({
+            rutFuncionario: rawRut,
+            usuarioId: usuario?.id,
+            serialNumber: serial,
+            codigoPc,
+            glosaAccion: `Firma FEA real con Token USB (${certLocal.cn || serial})`,
+          });
+
+          const binStr = atob(dataComp.pdfFirmadoBase64);
+          const bytes = new Uint8Array(binStr.length);
+          for (let i = 0; i < binStr.length; i++) {
+            bytes[i] = binStr.charCodeAt(i);
+          }
+          const blob = new Blob([bytes], { type: 'application/pdf' });
+          const blobUrl = URL.createObjectURL(blob);
+
+          setDocumentoDescargable({
+            nombre: `FIRMADO_TOKEN_${nombreDoc}`,
+            url: blobUrl,
+          });
+          setContadorFirmas((prev) => prev + 1);
+          setMensajeExito(
+            `¡Documento firmado criptográficamente con certificado real del Token (${certLocal.cn || serial})!`,
+          );
+          return;
+        }
+
+        const pin = pinTokenSafeNet.trim() || '1234';
+
+        // Flujo respaldo si no hay puente local 127.0.0.1:48921
         const resCrear = await fetch('/api/v1/firmas/solicitudes', {
           method: 'POST',
           headers: headersAuth,
@@ -342,16 +450,13 @@ export const VistaFirmaUsuario: React.FC = () => {
           solicitudId = `DOC-REMOTO-${Date.now()}`;
         }
 
-        // 2. Ejecutar la firma con validación criptográfica de Token USB y PIN
-        const layoutXml = coordenadasFirma ? generarLayoutXml(coordenadasFirma) : undefined;
-
         const resFirmar = await fetch(`/api/v1/firmas/solicitudes/${solicitudId}/firmar`, {
           method: 'POST',
           headers: headersAuth,
           body: JSON.stringify({
             rutFirmante: rawRut,
             pin,
-            modalidadFirma: 'ATENDIDA',
+            modalidadFirma: simularTokenConectado ? 'DESATENDIDA' : 'ATENDIDA',
             layoutXml,
             accion: 'FIRMAR',
           }),
@@ -366,9 +471,6 @@ export const VistaFirmaUsuario: React.FC = () => {
           );
         }
 
-        // Registrar acción en telemetría en vivo
-        const serial = tokenInfo?.serialNumber || 'SN-08E6-D453B70C2CF7';
-        const codigoPc = estacionUsuario?.codigoPc || 'DESKTOP-1LK714Q';
         await registrarAccionFirma({
           rutFuncionario: rawRut,
           usuarioId: usuario?.id,
@@ -377,7 +479,6 @@ export const VistaFirmaUsuario: React.FC = () => {
           glosaAccion: `Firma Remota FEA con Token SafeNet/E-Sign (${serial}) validado por PIN`,
         });
 
-        // 3. Obtener URL de descarga del PDF firmado
         const urlPdf =
           respuestaFirmar.urlDescargaFirmado ||
           respuestaFirmar.documentoFirmadoUrl ||
@@ -407,14 +508,53 @@ export const VistaFirmaUsuario: React.FC = () => {
         <CardContent className="flex flex-col items-center text-center p-4 sm:p-8 space-y-5">
 
           {/* Encabezado: Título y Funcionario */}
-          <div className="w-full space-y-1">
+          <div className="w-full space-y-2">
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
               Firmar Documento
             </h1>
             <p className="text-xs sm:text-sm text-muted-foreground truncate max-w-full px-2">
               {usuario?.nombre ? `${usuario.nombre} • ${usuario.cargo || 'Funcionario'}` : 'Sesión de Funcionario'}
             </p>
+            <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+              <Badge variant="outline" className="text-[10px] font-mono">
+                Grado: {rbac.etiquetaRol}
+              </Badge>
+              <Badge variant="outline" className="text-[10px] font-mono">
+                Calidad: {rbac.etiquetaCalidad}
+              </Badge>
+              <Badge
+                variant="outline"
+                className={`text-[10px] font-mono ${
+                  rbac.puedeFirmar
+                    ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                    : 'border-rose-500/40 bg-rose-500/10 text-rose-700 dark:text-rose-300'
+                }`}
+              >
+                {rbac.predominio === 'FEA_PRIVADA'
+                  ? 'Predominio FEA Privada'
+                  : rbac.predominio === 'FIRMAGOB'
+                  ? 'FirmaGob / FEA Privada'
+                  : rbac.predominio === 'SEGUN_FUNCIONES'
+                  ? 'Asignación según funciones'
+                  : 'Sin asignación FEA'}
+              </Badge>
+            </div>
           </div>
+
+          {!rbac.puedeFirmar && (
+            <div className="w-full rounded-xl border border-rose-500/40 bg-rose-500/10 p-4 text-left space-y-1">
+              <div className="text-xs font-bold text-rose-700 dark:text-rose-300 flex items-center gap-1.5">
+                <Lock className="w-4 h-4 shrink-0" />
+                Firma Electrónica restringida por política RBAC
+              </div>
+              <p className="text-xs text-foreground/90 leading-relaxed">
+                {rbac.motivoBloqueo || 'Tu grado o calidad contractual no cuenta con habilitación activa para firmar.'}
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                {rbac.descripcion}
+              </p>
+            </div>
+          )}
 
           {/* SELECTOR PRINCIPAL: FIRMAGOB (NUBE/CELULAR) VS TOKEN SAFENET (PC OFICINA) */}
           <div className="w-full space-y-2">
@@ -636,6 +776,15 @@ export const VistaFirmaUsuario: React.FC = () => {
                 <p className="text-[10px] text-muted-foreground">
                   Tu token físico en el PC firmará cuando coloques tu PIN
                 </p>
+                <label className="flex items-center justify-center gap-2 pt-1.5 text-[11px] text-foreground cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={simularTokenConectado}
+                    onChange={(e) => setSimularTokenConectado(e.target.checked)}
+                    className="rounded border-border accent-primary"
+                  />
+                  <span>Simular firma con token conectado (sin pedir PIN físico)</span>
+                </label>
               </div>
 
               {/* Botón Descargar Agente USB si el token no está conectado */}
@@ -682,7 +831,7 @@ export const VistaFirmaUsuario: React.FC = () => {
           <div className="py-2 w-full flex justify-center">
             <Button
               size="lg"
-              disabled={firmando}
+              disabled={firmando || !rbac.puedeFirmar}
               onClick={handleEjecutarFirma}
               className={`w-full sm:w-72 h-16 sm:h-20 rounded-2xl text-lg sm:text-xl font-black shadow-xl hover:shadow-2xl transition-all transform active:scale-95 flex flex-col items-center justify-center gap-1 cursor-pointer ${
                 metodoFirma === 'TOKEN_SAFENET'

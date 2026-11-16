@@ -27,7 +27,11 @@ import { Input } from './ui/input';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from './ui/table';
 import { useAuthStore } from '../store/useAuthStore';
 import { useTelemetriaStore, ContratoTokenItem } from '../store/useTelemetriaStore';
-import { formatRut, matchesRutSearch } from '../lib/rut';
+import { formatRut, formatRutVisual, matchesRutSearch } from '../lib/rut';
+import {
+  CATALOGO_ROLES_RBAC,
+  CALIDADES_CONTRACTUALES_RBAC,
+} from '../lib/rbacFirmas';
 
 interface UsuarioItem {
   id: string;
@@ -459,9 +463,10 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
         rut: rutFinal,
         nombre: nuevoNombre.trim(),
         email: `${rutFinal.replace(/[^0-9]/g, '').slice(0, 8)}@municoquimbo.cl`,
-        cargo: nuevoCargo.trim() || 'Profesional Municipal',
+        cargo: nuevoCargo.trim() || 'Profesionales',
         unidad: nuevaUnidad,
         rol: nuevoRol,
+        condicionContractual: (document.getElementById('select-calidad-rbac') as HTMLSelectElement)?.value || 'CONTRATA',
         ...(nuevaPassword.trim() ? { password: nuevaPassword.trim() } : {}),
       }),
     });
@@ -1542,14 +1547,32 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
                       className="h-8 text-xs"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="font-semibold">Cargo / Unidad:</label>
-                    <Input
-                      value={nuevoCargo}
+                  <div className="space-y-1.5">
+                    <label className="font-semibold">Grado / Rol Funcional (RBAC):</label>
+                    <select
+                      value={nuevoCargo || 'Profesionales'}
                       onChange={(e) => setNuevoCargo(e.target.value)}
-                      placeholder="Cargo municipal"
-                      className="h-8 text-xs mb-1.5"
-                    />
+                      className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground"
+                    >
+                      {CATALOGO_ROLES_RBAC.map((rolItem) => (
+                        <option key={rolItem.id} value={rolItem.etiqueta}>
+                          {rolItem.etiqueta}
+                        </option>
+                      ))}
+                    </select>
+                    <label className="font-semibold block pt-1">Calidad Contractual:</label>
+                    <select
+                      id="select-calidad-rbac"
+                      defaultValue="CONTRATA"
+                      className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground"
+                    >
+                      {CALIDADES_CONTRACTUALES_RBAC.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.etiqueta}
+                        </option>
+                      ))}
+                    </select>
+                    <label className="font-semibold block pt-1">Unidad:</label>
                     <Input
                       value={nuevaUnidad}
                       onChange={(e) => setNuevaUnidad(e.target.value)}
@@ -1773,7 +1796,7 @@ export const GestionUsuariosEquipamientoView: React.FC = () => {
                         <TableCell>
                           <div className="font-medium text-foreground">{a.usuario?.nombre}</div>
                           <div className="text-[10px] font-mono text-muted-foreground">
-                            RUT: {a.usuario?.rut}
+                            RUT: {formatRutVisual(a.usuario?.rut)}
                           </div>
                         </TableCell>
                         <TableCell className="text-right">

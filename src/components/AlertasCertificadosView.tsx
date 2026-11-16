@@ -4,6 +4,7 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { useTelemetriaStore } from '../store/useTelemetriaStore';
+import { formatRutVisual } from '../lib/rut';
 
 interface AlertaToken {
   id: string;
@@ -567,7 +568,7 @@ export const AlertasCertificadosView: React.FC = () => {
                   <div className="flex justify-between gap-2">
                     <span className="text-muted-foreground">RUT:</span>
                     <span className="font-mono font-semibold text-foreground">
-                      {alerta.usuario.rut}
+                      {formatRutVisual(alerta.usuario.rut)}
                     </span>
                   </div>
                   <div className="flex justify-between gap-2">

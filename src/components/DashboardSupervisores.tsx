@@ -7,6 +7,8 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from './ui/table';
+import { formatRutVisual } from '../lib/rut';
+import { cleanIpVisual } from '../lib/ip';
 
 interface InfoPeriodoTooltipProps {
   periodoEtiqueta?: string;
@@ -128,6 +130,7 @@ export const DashboardSupervisores: React.FC = () => {
   // 2. Firmas Asignadas y Acciones
   const listadoFirmas = metricas?.firmasAsignadas?.listado || [];
   const listadoAccionesFuncionarios = metricas?.accionesFuncionarios?.listadoPorFuncionario || [];
+  const trazabilidadDispositivos = metricas?.telemetria?.trazabilidadDispositivos || [];
   const totalAccionesPeriodo =
     metricas?.accionesFuncionarios?.totalAccionesFirmaPeriodo ??
     listadoAccionesFuncionarios.reduce((acc, item) => acc + item.accionesFirmaPeriodo, 0);
@@ -135,6 +138,13 @@ export const DashboardSupervisores: React.FC = () => {
     metricas?.accionesFuncionarios?.totalAccionesFirmaHistorico ??
     listadoAccionesFuncionarios.reduce((acc, item) => acc + item.accionesFirmaHistorico, 0);
   const periodoEtiqueta = metricas?.periodo?.etiquetaPeriodo || 'Últimos 30 días';
+
+  const formatearHorasMinutos = (totalMinutos?: number): string => {
+    const mins = Math.max(0, Math.round(totalMinutos || 0));
+    const hrs = Math.floor(mins / 60);
+    const remMins = mins % 60;
+    return `${hrs} hrs ${String(remMins).padStart(2, '0')} mins`;
+  };
 
   // Consolidación de datos unificados por Funcionario/Token
   interface FilaCentralizada {
@@ -163,6 +173,7 @@ export const DashboardSupervisores: React.FC = () => {
     firmasHistorico: number;
     conexiones: number;
     desconexiones: number;
+    promedioUsoDiarioMinutos: number;
   }
 
   // Mapa combinado
@@ -182,6 +193,11 @@ export const DashboardSupervisores: React.FC = () => {
       (a) =>
         (f.funcionario?.rut && a.rut === f.funcionario.rut) ||
         (f.serialNumberToken && a.serialNumberToken === f.serialNumberToken)
+    );
+    const trazaData = trazabilidadDispositivos.find(
+      (t) =>
+        (f.serialNumberToken && t.serialNumber.toLowerCase() === f.serialNumberToken.toLowerCase()) ||
+        (f.funcionario?.rut && t.funcionarioAsignado?.rut === f.funcionario.rut)
     );
 
     const estadoConexionFinal = estacionEnVivo
@@ -212,8 +228,9 @@ export const DashboardSupervisores: React.FC = () => {
       dependenciaFisica: estacionEnVivo?.dependenciaFisica || null,
       firmasPeriodo: accionData?.accionesFirmaPeriodo ?? f.accionesFirmaPeriodo ?? 0,
       firmasHistorico: accionData?.accionesFirmaHistorico ?? f.accionesFirmaTotal ?? 0,
-      conexiones: accionData?.conexionesIgnoradasPeriodo ?? 0,
-      desconexiones: accionData?.desconexionesIgnoradasPeriodo ?? 0,
+      conexiones: trazaData?.conexionesPeriodo ?? accionData?.conexionesIgnoradasPeriodo ?? 0,
+      desconexiones: trazaData?.desconexionesPeriodo ?? accionData?.desconexionesIgnoradasPeriodo ?? 0,
+      promedioUsoDiarioMinutos: trazaData?.promedioUsoDiarioMinutos ?? 0,
     });
   });
 
@@ -245,12 +262,28 @@ export const DashboardSupervisores: React.FC = () => {
         tiempoExpiracionTexto: a.diasRestantesToken ? `${a.diasRestantesToken} días restantes` : undefined,
         estadoConexion: estacionEnVivo?.estadoEnVivo || 'DESCONECTADO',
         estacionActual: estacionEnVivo?.codigoPc || a.codigoPcUltimaSesion || null,
-        ipEstacion: estacionEnVivo?.ipAsignada || null,
+        ipEstacion: cleanIpVisual(estacionEnVivo?.ipAsignada || null),
         dependenciaFisica: estacionEnVivo?.dependenciaFisica || null,
         firmasPeriodo: a.accionesFirmaPeriodo,
         firmasHistorico: a.accionesFirmaHistorico,
-        conexiones: a.conexionesIgnoradasPeriodo,
-        desconexiones: a.desconexionesIgnoradasPeriodo,
+        conexiones:
+          trazabilidadDispositivos.find(
+            (t) =>
+              t.serialNumber.toLowerCase() === a.serialNumberToken.toLowerCase() ||
+              t.funcionarioAsignado?.rut === a.rut
+          )?.conexionesPeriodo ?? a.conexionesIgnoradasPeriodo,
+        desconexiones:
+          trazabilidadDispositivos.find(
+            (t) =>
+              t.serialNumber.toLowerCase() === a.serialNumberToken.toLowerCase() ||
+              t.funcionarioAsignado?.rut === a.rut
+          )?.desconexionesPeriodo ?? a.desconexionesIgnoradasPeriodo,
+        promedioUsoDiarioMinutos:
+          trazabilidadDispositivos.find(
+            (t) =>
+              t.serialNumber.toLowerCase() === a.serialNumberToken.toLowerCase() ||
+              t.funcionarioAsignado?.rut === a.rut
+          )?.promedioUsoDiarioMinutos ?? 0,
       });
     }
   });
@@ -289,6 +322,11 @@ export const DashboardSupervisores: React.FC = () => {
       });
     } else {
       // Si el usuario logueado no estaba en la lista inicial, se agrega para monitorear en vivo su token
+      const trazaUser = trazabilidadDispositivos.find(
+        (t) =>
+          t.serialNumber.toLowerCase() === (tokenLocal?.serialNumber || 'SN-08E6-D453B70C2CF7').toLowerCase() ||
+          t.funcionarioAsignado?.rut === usuario.rut
+      );
       mapaFilas.set(keyUsuario, {
         id: usuario.id || keyUsuario,
         funcionario: {
@@ -313,13 +351,22 @@ export const DashboardSupervisores: React.FC = () => {
         dependenciaFisica: estacionLocalUsuario?.dependenciaFisica || usuario.unidad || 'Red Interna Municipal',
         firmasPeriodo: 0,
         firmasHistorico: 0,
-        conexiones: estadoConexionLocal === 'CONECTADO' ? 1 : 0,
-        desconexiones: 0,
+        conexiones: trazaUser?.conexionesPeriodo ?? (estadoConexionLocal === 'CONECTADO' ? 1 : 0),
+        desconexiones: trazaUser?.desconexionesPeriodo ?? (estadoConexionLocal === 'DESCONECTADO' ? 1 : 0),
+        promedioUsoDiarioMinutos: trazaUser?.promedioUsoDiarioMinutos ?? 0,
       });
     }
   }
 
   const todasLasFilas = Array.from(mapaFilas.values());
+  const promedioUsoDiarioGeneralMinutos =
+    metricas?.telemetria?.promedioUsoDiarioGeneralMinutos ??
+    (todasLasFilas.length > 0
+      ? Math.round(
+          todasLasFilas.reduce((acc, f) => acc + f.promedioUsoDiarioMinutos, 0) /
+            todasLasFilas.length,
+        )
+      : 0);
 
   const filasFiltradas = todasLasFilas.filter((f) => {
     const q = busqueda.trim().toLowerCase();
@@ -358,7 +405,7 @@ export const DashboardSupervisores: React.FC = () => {
       )}
 
       {/* 1. Fila Compacta de KPIs Esenciales */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <Card className="p-3.5">
           <div className="text-[10px] font-bold uppercase text-muted-foreground">
             Dispositivos Existentes
@@ -417,6 +464,18 @@ export const DashboardSupervisores: React.FC = () => {
           </div>
           <div className="text-[11px] text-muted-foreground font-mono">
             Total de  N° Firmas desde la implementación del sistema
+          </div>
+        </Card>
+
+        <Card className="p-3.5 border-sky-500/30 bg-sky-500/5 col-span-2 sm:col-span-1">
+          <div className="text-[10px] font-bold uppercase text-sky-600 dark:text-sky-400">
+            Promedio Uso Diario
+          </div>
+          <div className="text-xl font-bold text-foreground mt-1 font-mono">
+            {formatearHorasMinutos(promedioUsoDiarioGeneralMinutos)}
+          </div>
+          <div className="text-[11px] text-muted-foreground font-mono">
+            Promedio diario por token
           </div>
         </Card>
       </div>
@@ -515,13 +574,14 @@ export const DashboardSupervisores: React.FC = () => {
                   </div>
                 </TableHead>
                 <TableHead className="min-w-[100px]">Firmas Totales</TableHead>
-                <TableHead className="min-w-[160px]">Conexiones / Desconexiones</TableHead>
+                <TableHead className="min-w-[175px]">Trazabilidad (Conex. / Desconex.)</TableHead>
+                <TableHead className="min-w-[140px]">Promedio Uso Diario</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="text-xs">
               {filasFiltradas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground italic">
+                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground italic">
                     No se encontraron funcionarios o dispositivos con los filtros seleccionados.
                   </TableCell>
                 </TableRow>
@@ -547,7 +607,7 @@ export const DashboardSupervisores: React.FC = () => {
                         )}
                       </div>
                       <div className="text-[10px] font-mono text-muted-foreground ml-5">
-                        {fila.funcionario.rut}
+                        {formatRutVisual(fila.funcionario.rut)}
                       </div>
                     </TableCell>
 
@@ -641,7 +701,7 @@ export const DashboardSupervisores: React.FC = () => {
                       {fila.firmasHistorico}
                     </TableCell>
 
-                    {/* 9. Conexiones / Desconexiones */}
+                    {/* 9. Contador de Trazabilidad (Conexiones / Desconexiones) */}
                     <TableCell>
                       <div className="font-mono text-[11px] text-muted-foreground flex flex-col gap-0.5">
                         <span className="text-emerald-700 dark:text-emerald-400 font-medium">
@@ -651,6 +711,11 @@ export const DashboardSupervisores: React.FC = () => {
                           {fila.desconexiones} desconexiones
                         </span>
                       </div>
+                    </TableCell>
+
+                    {/* 10. Promedio de tiempo de uso diario (hrs; mins) */}
+                    <TableCell className="font-mono text-xs font-semibold text-foreground whitespace-nowrap">
+                      {formatearHorasMinutos(fila.promedioUsoDiarioMinutos)}
                     </TableCell>
                   </TableRow>
                 ))

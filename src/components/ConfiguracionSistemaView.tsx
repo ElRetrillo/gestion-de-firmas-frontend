@@ -6,6 +6,7 @@ import { Input } from './ui/input';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from './ui/table';
 import { useAuthStore } from '../store/useAuthStore';
 import { useTelemetriaStore } from '../store/useTelemetriaStore';
+import { cleanIpVisual } from '../lib/ip';
 
 interface ProveedorAdaptador {
   servicio: string;
@@ -285,7 +286,7 @@ export const ConfiguracionSistemaView: React.FC = () => {
                         </div>
                       </TableCell>
                       <TableCell className="font-mono text-[11px] text-muted-foreground">
-                        {est.ipAsignada}
+                        {cleanIpVisual(est.ipAsignada)}
                       </TableCell>
                       <TableCell className="text-right">
                         <Badge

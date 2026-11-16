@@ -32,6 +32,64 @@ export function formatRut(value: string): string {
 }
 
 /**
+ * Calcula el dígito verificador chileno (Módulo 11) para un cuerpo de RUT numérico.
+ */
+export function calcularDvRut(cuerpoDigits: string): string {
+  const digits = (cuerpoDigits || '').replace(/\D/g, '');
+  if (!digits) return '';
+  let suma = 0;
+  let multiplicador = 2;
+  for (let i = digits.length - 1; i >= 0; i--) {
+    suma += Number(digits[i]) * multiplicador;
+    multiplicador = multiplicador === 7 ? 2 : multiplicador + 1;
+  }
+  const resto = 11 - (suma % 11);
+  if (resto === 11) return '0';
+  if (resto === 10) return 'K';
+  return String(resto);
+}
+
+/**
+ * Formatea cualquier RUT o RUN (con o sin dígito verificador, puntos o guion)
+ * a formato estándar visual XX.XXX.XXX-Y.
+ * Ej: "16892415" -> "16.892.415-3", "16892415-3" -> "16.892.415-3".
+ */
+export function formatRutVisual(value?: string | null): string {
+  const raw = (value || '').trim();
+  if (!raw || raw === '-' || raw === 'N/A') return raw || '-';
+
+  const clean = cleanRut(raw);
+  if (clean.length < 2) return raw;
+
+  let cuerpo: string;
+  let dv: string;
+
+  if (raw.includes('-')) {
+    dv = clean.slice(-1);
+    cuerpo = clean.slice(0, -1);
+  } else if (clean.length <= 8 && /^\d+$/.test(clean)) {
+    // RUN sin dígito verificador (ej: token FirmaGob "16892415")
+    cuerpo = clean;
+    dv = calcularDvRut(cuerpo);
+  } else {
+    dv = clean.slice(-1);
+    cuerpo = clean.slice(0, -1);
+  }
+
+  let cuerpoFormateado = '';
+  let count = 0;
+  for (let i = cuerpo.length - 1; i >= 0; i--) {
+    cuerpoFormateado = cuerpo[i] + cuerpoFormateado;
+    count++;
+    if (count === 3 && i > 0) {
+      cuerpoFormateado = '.' + cuerpoFormateado;
+      count = 0;
+    }
+  }
+  return `${cuerpoFormateado}-${dv}`;
+}
+
+/**
  * Genera variantes de búsqueda para un término ingresado.
  * Permite que al buscar "12312312" se encuentren "12.312.312-K", "12.312.312", etc.
  */

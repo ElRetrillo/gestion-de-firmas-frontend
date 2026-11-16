@@ -9,7 +9,6 @@ import {
   MousePointerClick,
   Check,
   RotateCcw,
-  Sparkles,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -427,54 +426,69 @@ export const VisorFirmaAdobe: React.FC<VisorFirmaAdobeProps> = ({
           {/* Canvas donde pdf.js dibuja el PDF */}
           <canvas ref={canvasRef} className="block pointer-events-none" />
 
-          {/* Recuadro de Firma Electrónica Estilo Adobe Signer */}
-          {cajaFirma && cajaFirma.pagina === paginaActual && (
-            <div
-              onMouseDown={handleMouseDownCaja}
-              className={`absolute border-2 border-dashed border-rose-500 bg-rose-500/15 backdrop-blur-[2px] rounded-md shadow-lg flex flex-col justify-between p-1.5 transition-all cursor-move group select-none ${
-                arrastrando ? 'ring-4 ring-rose-500/30 scale-102 opacity-95' : 'hover:border-rose-600'
-              }`}
-              style={{
-                left: cajaFirma.x,
-                top: cajaFirma.y,
-                width: cajaFirma.width,
-                height: cajaFirma.height,
-                zIndex: 20,
-              }}
-            >
-              {/* Encabezado del Sello */}
-              <div className="flex items-center justify-between border-b border-rose-500/40 pb-0.5">
-                <span className="text-[9px] font-bold text-rose-700 dark:text-rose-300 flex items-center gap-1 font-mono uppercase tracking-tight">
-                  <Sparkles className="w-2.5 h-2.5 text-rose-600" />
-                  Sello Firma Electrónica
-                </span>
-                <span className="text-[8px] bg-rose-600 text-white px-1 py-0.2 rounded font-mono font-bold">
-                  Pág {cajaFirma.pagina}
-                </span>
-              </div>
+          {/* Recuadro de Firma Electrónica Estilo Adobe Acrobat */}
+          {cajaFirma && cajaFirma.pagina === paginaActual && (() => {
+            const nombreMayus = (firmanteNombre || 'FUNCIONARIO MUNICIPAL').toUpperCase();
+            const ahora = new Date();
+            const yyyy = ahora.getFullYear();
+            const mm = String(ahora.getMonth() + 1).padStart(2, '0');
+            const dd = String(ahora.getDate()).padStart(2, '0');
+            const hh = String(ahora.getHours()).padStart(2, '0');
+            const min = String(ahora.getMinutes()).padStart(2, '0');
+            const ss = String(ahora.getSeconds()).padStart(2, '0');
+            const tzMin = -ahora.getTimezoneOffset();
+            const tzSign = tzMin >= 0 ? '+' : '-';
+            const tzH = String(Math.floor(Math.abs(tzMin) / 60)).padStart(2, '0');
+            const tzM = String(Math.abs(tzMin) % 60).padStart(2, '0');
+            const scaleRatio = cajaFirma.height / 65;
 
-              {/* Contenido Visual Simulado de la Firma (Estilo Adobe / FirmaGob) */}
-              <div className="flex flex-col text-[8.5px] leading-tight text-slate-800 dark:text-slate-100 font-sans mt-0.5">
-                <span className="font-bold truncate text-rose-950 dark:text-rose-100">
-                  {firmanteNombre}
-                </span>
-                <span className="text-[7.5px] font-mono text-muted-foreground truncate">
-                  RUT: {firmanteRut} • FEA Token USB
-                </span>
-                <span className="text-[7px] text-emerald-700 dark:text-emerald-400 font-mono truncate">
-                  {tokenSerial}
-                </span>
-              </div>
+            return (
+              <div
+                onMouseDown={handleMouseDownCaja}
+                title="Arrastra para ubicar la firma en el documento"
+                className={`absolute bg-white/95 border border-slate-300 shadow-md overflow-hidden flex items-center cursor-move group select-none transition-shadow ${
+                  arrastrando
+                    ? 'ring-2 ring-rose-500/50 shadow-xl opacity-95'
+                    : 'hover:ring-2 hover:ring-rose-400/50'
+                }`}
+                style={{
+                  left: cajaFirma.x,
+                  top: cajaFirma.y,
+                  width: cajaFirma.width,
+                  height: cajaFirma.height,
+                  zIndex: 20,
+                  padding: `${Math.max(3, 4 * scaleRatio)}px ${Math.max(4, 6 * scaleRatio)}px`,
+                }}
+              >
+                {/* Mitad izquierda: Nombre completo en grande */}
+                <div
+                  className="relative z-10 w-[47%] pr-1 font-sans font-normal text-black uppercase leading-[1.08] tracking-tight break-words overflow-hidden"
+                  style={{
+                    fontSize: `${Math.max(7, Math.min(12, 10.5 * scaleRatio))}px`,
+                  }}
+                >
+                  {nombreMayus}
+                </div>
 
-              {/* Pie con indicador de arrastre */}
-              <div className="flex items-center justify-between text-[7.5px] text-muted-foreground pt-0.5 border-t border-rose-500/20">
-                <span className="font-mono text-rose-600 font-semibold">Ley N° 19.799</span>
-                <span className="italic text-[7px] text-muted-foreground group-hover:text-rose-600">
-                  Arrastrar para reubicar
-                </span>
+                {/* Mitad derecha: Bloque "Firmado digitalmente por" + Fecha */}
+                <div
+                  className="relative z-10 w-[53%] pl-1 font-sans font-normal text-black leading-[1.15] overflow-hidden"
+                  style={{
+                    fontSize: `${Math.max(5.5, Math.min(8, 6.8 * scaleRatio))}px`,
+                  }}
+                >
+                  <div>Firmado digitalmente por</div>
+                  <div className="uppercase break-words">{nombreMayus}</div>
+                  <div>
+                    Fecha: {yyyy}.{mm}.{dd}
+                  </div>
+                  <div>
+                    {hh}:{min}:{ss} {tzSign}{tzH}&apos;{tzM}&apos;
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       </div>
 

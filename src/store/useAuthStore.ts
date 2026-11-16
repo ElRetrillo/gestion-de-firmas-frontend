@@ -1,6 +1,7 @@
 import { create } from 'zustand';
+import { EvaluacionRbacFirma } from '../lib/rbacFirmas';
 
-export type UserRole = 'ADMIN' | 'SUPERVISOR' | 'MINISTRO_DE_FE' | 'FUNCIONARIO' | 'CIUDADANO';
+export type UserRole = 'ADMIN' | 'SUPERVISOR' | 'MINISTRO_DE_FE' | 'FUNCIONARIO' | 'CIUDADANO' | 'PENDIENTE';
 export type VistaGeneral = 'ADMIN' | 'FUNCIONARIO';
 
 export interface UserProfile {
@@ -11,6 +12,8 @@ export interface UserProfile {
   cargo: string;
   unidad: string;
   rol: UserRole;
+  condicionContractual?: string;
+  rbac?: EvaluacionRbacFirma;
   estado?: string;
   pinBloqueado?: boolean;
   debeCambiarPassword?: boolean;
@@ -77,6 +80,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: () => {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      fetch('/api/v1/auth/logout', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {});
+    }
     localStorage.removeItem('access_token');
     set({
       usuario: { ...GUEST_USER },

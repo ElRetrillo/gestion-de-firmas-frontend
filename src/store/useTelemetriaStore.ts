@@ -247,9 +247,15 @@ export interface MetricasTrazabilidadResponse {
       conexionesPeriodo: number;
       firmasPeriodo: number;
       desconexionesPeriodo: number;
+      tiempoUsoMinutos?: number;
+      promedioUsoDiarioMinutos?: number;
+      porcentajeUsoMensual?: number;
       porcentajeUsoPeriodo: number;
       ultimaActividad: string;
     }>;
+    tiempoUsoTotalMinutos?: number;
+    promedioUsoDiarioGeneralMinutos?: number;
+    porcentajeUsoMedioMensual?: number;
   };
   firmas: {
     totalSolicitudesPeriodo: number;
@@ -549,12 +555,22 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
     });
 
     socket.on('estado_pc_actualizado', (payload: any) => {
+      const prev = get().estaciones.find((e) => e.codigoPc === payload?.codigoPc);
+      const cambioEstado = prev && payload?.estadoHardware && prev.estadoEnVivo !== payload.estadoHardware;
       get().actualizarEstadoEstacion(payload);
+      if (cambioEstado) {
+        get().cargarMetricas();
+      }
     });
 
     socket.on('usb-status-changed', (payload: any) => {
       if (payload?.codigoPc) {
+        const prev = get().estaciones.find((e) => e.codigoPc === payload.codigoPc);
+        const cambioEstado = prev && payload?.estadoHardware && prev.estadoEnVivo !== payload.estadoHardware;
         get().actualizarEstadoEstacion(payload);
+        if (cambioEstado) {
+          get().cargarMetricas();
+        }
       }
     });
 

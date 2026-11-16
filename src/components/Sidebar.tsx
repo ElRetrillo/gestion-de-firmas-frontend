@@ -14,6 +14,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { Badge } from './ui/badge';
 import { LogoMunicipalidad } from './LogoMunicipalidad';
 import { Button } from './ui/button';
+import { formatRutVisual } from '../lib/rut';
 
 export type NavTab =
   | 'DASHBOARD'
@@ -35,6 +36,8 @@ interface NavItemConfig {
   label: string;
   icon: LucideIcon;
   badge?: string;
+  badgeVariant?: 'danger' | 'warning';
+  statusDot?: boolean;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -46,30 +49,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { metricas, estaciones } = useTelemetriaStore();
   const { usuario, logout } = useAuthStore();
 
-  const totalDispositivos = metricas?.resumenDispositivos?.totalExistentes ?? 8;
-  const dispositivosActivos = metricas?.resumenDispositivos?.activos ?? 6;
-  const alertasCount = metricas?.alertasVencimiento?.totalEnUmbral60Dias ?? 4;
-  const contratosCount = metricas?.contratosResumen?.totalContratos ?? 3;
+  const alertasVencimientos =
+    (metricas?.alertasVencimiento?.totalEnUmbral60Dias ?? 0) +
+    (metricas?.alertasVencimiento?.expirados ?? 0);
+  const contratosAlerta =
+    (metricas?.contratosResumen?.contratosPorCaducar ?? 0) +
+    (metricas?.contratosResumen?.contratosCaducados ?? 0);
   const conectadosEnVivo = estaciones.filter((e) => e.estadoEnVivo === 'CONECTADO').length;
+
+  const formatearBadge = (count: number): string | undefined => {
+    if (count <= 0) return undefined;
+    return count > 99 ? '99+' : String(count);
+  };
 
   const itemsControlTokens: NavItemConfig[] = [
     {
       id: 'DASHBOARD',
       icon: Monitor,
       label: 'Control de Tokens y Firmas',
-      badge: `${dispositivosActivos}/${totalDispositivos}`,
     },
     {
       id: 'FIRMAR',
       icon: PenTool,
       label: 'Firmar Documento',
-      badge: conectadosEnVivo > 0 ? 'Token Listo' : undefined,
+      statusDot: conectadosEnVivo > 0,
     },
     {
       id: 'ALERTAS',
       icon: BellRing,
       label: 'Alertas de Vencimientos',
-      badge: String(alertasCount),
+      badge: formatearBadge(alertasVencimientos),
+      badgeVariant: 'danger',
     },
     {
       id: 'METRICAS',
@@ -80,7 +90,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'USUARIOS_CUSTODIA',
       icon: Users,
       label: 'Contratos y Asignación',
-      badge: String(contratosCount),
+      badge: formatearBadge(contratosAlerta),
+      badgeVariant: 'warning',
     },
     {
       id: 'AUDITORIA',
@@ -104,7 +115,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-68 flex-col border-r bg-sidebar text-sidebar-foreground transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r bg-sidebar text-sidebar-foreground transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 ${
           isOpenMobile ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -136,7 +147,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'
                 }`}
               >
-                <div className="flex items-center space-x-2.5 truncate">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <span
                     className={`flex items-center justify-center w-6 h-6 rounded border shrink-0 ${
                       isSelected
@@ -146,10 +157,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   >
                     <IconComponent className="h-3.5 w-3.5" />
                   </span>
-                  <span className="truncate">{item.label}</span>
+                  <span className="leading-snug text-left">{item.label}</span>
                 </div>
+                {item.statusDot && (
+                  <span
+                    title="Token USB conectado y listo"
+                    className="shrink-0 ml-2 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-500/25"
+                  />
+                )}
                 {item.badge && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded font-mono font-medium text-muted-foreground bg-muted/50 border border-border/40">
+                  <span
+                    className={`shrink-0 ml-2 min-w-[22px] h-5 px-1.5 inline-flex items-center justify-center rounded-full text-[11px] font-bold tabular-nums shadow-xs ${
+                      item.badgeVariant === 'danger'
+                        ? 'bg-rose-600 text-white'
+                        : 'bg-amber-500 text-slate-950'
+                    }`}
+                  >
                     {item.badge}
                   </span>
                 )}
@@ -168,7 +191,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </span>
           </div>
           <div className="text-[10px] font-mono text-muted-foreground">
-            RUT: {usuario?.rut || '11.111.111-1'}
+            RUT: {formatRutVisual(usuario?.rut || '11.111.111-1')}
           </div>
           <Button
             onClick={logout}
