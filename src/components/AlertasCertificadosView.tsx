@@ -3,6 +3,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from './ui/table';
 import { useTelemetriaStore } from '../store/useTelemetriaStore';
 import { formatRutVisual } from '../lib/rut';
 
@@ -516,95 +517,92 @@ export const AlertasCertificadosView: React.FC = () => {
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-          {alertasFiltradas.map((alerta) => {
-            const isExpirado = alerta.diasRestantes <= 0 || alerta.tramoAlerta === 'EXPIRADO';
-            const is15 = !isExpirado && (alerta.diasRestantes <= 15 || alerta.tramoAlerta === '15_DIAS');
-            const is30 = !isExpirado && !is15 && (alerta.diasRestantes <= 30 || alerta.tramoAlerta === '30_DIAS');
-            const avisoHora = avisosEnviadosMap[alerta.id] || alerta.ultimoAvisoEnviado;
+        <Card className="border-border/80 bg-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader className="bg-muted/40 text-[11px]">
+                <TableRow>
+                  <TableHead className="min-w-[190px]">Funcionario / RUT</TableHead>
+                  <TableHead className="min-w-[180px]">Correo</TableHead>
+                  <TableHead className="min-w-[160px]">Token / Modelo</TableHead>
+                  <TableHead className="min-w-[150px]">Vencimiento</TableHead>
+                  <TableHead className="min-w-[110px]">Estado Aviso</TableHead>
+                  <TableHead className="text-right min-w-[130px]">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody className="text-xs">
+                {alertasFiltradas.map((alerta) => {
+                  const isExpirado = alerta.diasRestantes <= 0 || alerta.tramoAlerta === 'EXPIRADO';
+                  const is15 = !isExpirado && (alerta.diasRestantes <= 15 || alerta.tramoAlerta === '15_DIAS');
+                  const is30 = !isExpirado && !is15 && (alerta.diasRestantes <= 30 || alerta.tramoAlerta === '30_DIAS');
+                  const avisoHora = avisosEnviadosMap[alerta.id] || alerta.ultimoAvisoEnviado;
 
-            return (
-              <Card
-                key={alerta.id}
-                className={`p-4 border transition-all hover:shadow-sm flex flex-col justify-between gap-3 ${
-                  isExpirado || is15
-                    ? 'border-rose-500/40 bg-rose-500/5'
-                    : is30
-                    ? 'border-amber-500/40 bg-amber-500/5'
-                    : 'border-blue-500/30 bg-card'
-                }`}
-              >
-                {/* Nombre del Funcionario y Tiempo para Expiración */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span
-                      className={`inline-flex items-center gap-1.5 text-xs font-bold ${
-                        isExpirado || is15
-                          ? 'text-rose-600 dark:text-rose-400'
-                          : is30
-                          ? 'text-amber-600 dark:text-amber-400'
-                          : 'text-blue-600 dark:text-blue-400'
-                      }`}
-                    >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full ${
-                          isExpirado || is15
-                            ? 'bg-rose-500'
-                            : is30
-                            ? 'bg-amber-500'
-                            : 'bg-blue-500'
-                        }`}
-                      />
-                      {alerta.tiempoExpiracionTexto}
-                    </span>
-                  </div>
-                  <h3 className="text-sm font-bold text-foreground truncate">
-                    {alerta.usuario.nombre}
-                  </h3>
-                </div>
-
-                {/* RUT y Correo Electrónico */}
-                <div className="p-2.5 rounded-md bg-muted/40 border border-border/60 space-y-1 text-xs">
-                  <div className="flex justify-between gap-2">
-                    <span className="text-muted-foreground">RUT:</span>
-                    <span className="font-mono font-semibold text-foreground">
-                      {formatRutVisual(alerta.usuario.rut)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <span className="text-muted-foreground">Correo:</span>
-                    <span className="font-mono text-foreground truncate">
-                      {alerta.usuario.email}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Acción de Envío de Aviso por Correo */}
-                <div className="flex items-center justify-between gap-2 pt-0.5">
-                  <span className="text-[10px] font-mono text-muted-foreground truncate">
-                    {avisoHora ? (
-                      <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
-                        ✓ Notificado
-                      </span>
-                    ) : (
-                      'Sin notificar'
-                    )}
-                  </span>
-
-                  <Button
-                    variant="default"
-                    size="sm"
-                    disabled={notificandoId === alerta.id}
-                    onClick={() => handleEnviarCorreoAviso(alerta)}
-                    className="text-xs font-bold h-7 px-3 shadow-xs"
-                  >
-                    {notificandoId === alerta.id ? 'Enviando...' : '✉ Enviar Aviso'}
-                  </Button>
-                </div>
-              </Card>
-            );
-          })}
-        </div>
+                  return (
+                    <TableRow key={alerta.id} className="hover:bg-muted/30 transition-colors">
+                      <TableCell>
+                        <div className="font-bold text-foreground">{alerta.usuario.nombre}</div>
+                        <div className="text-[10px] font-mono text-muted-foreground">
+                          {formatRutVisual(alerta.usuario.rut)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-mono text-[11px] text-foreground">
+                        {alerta.usuario.email}
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-mono text-[11px] font-semibold text-foreground">
+                          {alerta.serialNumberToken}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground">{alerta.hardwareModelo}</div>
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={`inline-flex items-center gap-1.5 text-xs font-bold ${
+                            isExpirado || is15
+                              ? 'text-rose-600 dark:text-rose-400'
+                              : is30
+                              ? 'text-amber-600 dark:text-amber-400'
+                              : 'text-blue-600 dark:text-blue-400'
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              isExpirado || is15
+                                ? 'bg-rose-500'
+                                : is30
+                                ? 'bg-amber-500'
+                                : 'bg-blue-500'
+                            }`}
+                          />
+                          {alerta.tiempoExpiracionTexto}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-[11px] font-mono">
+                        {avisoHora ? (
+                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                            ✓ Notificado
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">Sin notificar</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="default"
+                          size="sm"
+                          disabled={notificandoId === alerta.id}
+                          onClick={() => handleEnviarCorreoAviso(alerta)}
+                          className="text-xs font-bold h-7 px-3 shadow-xs"
+                        >
+                          {notificandoId === alerta.id ? 'Enviando...' : '✉ Enviar Aviso'}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
       )}
     </div>
   );

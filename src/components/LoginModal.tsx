@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { LogoMunicipalidad } from './LogoMunicipalidad';
 import { Button } from './ui/button';
@@ -39,6 +40,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
   const [regCargo, setRegCargo] = useState('Profesionales');
   const [regCalidadContractual, setRegCalidadContractual] = useState('CONTRATA');
   const [regUnidad, setRegUnidad] = useState('');
+  const [mostrarPassLogin, setMostrarPassLogin] = useState(false);
+  const [mostrarPassReg, setMostrarPassReg] = useState(false);
+  const [mostrarPassRegConf, setMostrarPassRegConf] = useState(false);
 
   // Estado para cambio de contraseña obligatorio
   const [modoCambioPassword, setModoCambioPassword] = useState(false);
@@ -71,6 +75,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
       setError('Las contraseñas no coinciden.');
       return;
     }
+    const emailNorm = regEmail.trim().toLowerCase();
+    if (!emailNorm.endsWith('@municoquimbo.cl')) {
+      setError('El correo institucional debe pertenecer al dominio @municoquimbo.cl.');
+      return;
+    }
 
     setCargando(true);
     try {
@@ -81,7 +90,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
           rut: formatRut(regRut.trim()) || regRut.trim(),
           nombre: regNombre.trim(),
           apellido: regApellido.trim(),
-          email: regEmail.trim() || undefined,
+          email: emailNorm,
           password: regPassword,
           cargo: regCargo.trim() || 'Profesionales',
           condicionContractual: regCalidadContractual,
@@ -94,9 +103,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
         throw new Error(data.message || 'Error al procesar el registro.');
       }
 
-      setExitoRegistro(
-        '¡Registro recibido con éxito! Tu cuenta está a la espera de que el Administrador te asigne un rol en el panel de control para que puedas iniciar sesión.',
-      );
+      if (data.accessToken && data.usuario) {
+        loginSuccess(data);
+        onLoginSuccess?.();
+        return;
+      }
+
+      setExitoRegistro('¡Registro completado con éxito! Ya puedes iniciar sesión.');
       setTabAuth('LOGIN');
       setRut(regRut);
     } catch (err: any) {
@@ -329,14 +342,24 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
                       <span>Contraseña</span>
                       <span className="text-[10px] text-muted-foreground">Clave institucional</span>
                     </label>
-                    <Input
-                      type="password"
-                      placeholder=""
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="text-sm"
-                      required
-                    />
+                    <div className="relative">
+                      <Input
+                        type={mostrarPassLogin ? 'text' : 'password'}
+                        placeholder=""
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="text-sm pr-9"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setMostrarPassLogin((v) => !v)}
+                        aria-label={mostrarPassLogin ? 'Ocultar contraseña' : 'Ver contraseña'}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      >
+                        {mostrarPassLogin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="pt-2 space-y-2.5">
@@ -459,43 +482,64 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[11px] font-semibold text-foreground">Correo Electrónico (opcional)</label>
+                    <label className="text-[11px] font-semibold text-foreground">Correo Institucional (@municoquimbo.cl)</label>
                     <Input
                       type="email"
                       placeholder="nombre@municoquimbo.cl"
                       value={regEmail}
                       onChange={(e) => setRegEmail(e.target.value)}
                       className="text-xs h-8"
+                      required
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
                       <label className="text-[11px] font-semibold text-foreground">Contraseña</label>
-                      <Input
-                        type="password"
-                        placeholder="Mín. 10 car."
-                        value={regPassword}
-                        onChange={(e) => setRegPassword(e.target.value)}
-                        className="text-xs h-8"
-                        required
-                      />
+                      <div className="relative">
+                        <Input
+                          type={mostrarPassReg ? 'text' : 'password'}
+                          placeholder="Mín. 10 car."
+                          value={regPassword}
+                          onChange={(e) => setRegPassword(e.target.value)}
+                          className="text-xs h-8 pr-8"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setMostrarPassReg((v) => !v)}
+                          aria-label={mostrarPassReg ? 'Ocultar contraseña' : 'Ver contraseña'}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          {mostrarPassReg ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
                     </div>
                     <div className="space-y-1">
                       <label className="text-[11px] font-semibold text-foreground">Confirmar</label>
-                      <Input
-                        type="password"
-                        placeholder="Repetir"
-                        value={regPasswordConf}
-                        onChange={(e) => setRegPasswordConf(e.target.value)}
-                        className="text-xs h-8"
-                        required
-                      />
+                      <div className="relative">
+                        <Input
+                          type={mostrarPassRegConf ? 'text' : 'password'}
+                          placeholder="Repetir"
+                          value={regPasswordConf}
+                          onChange={(e) => setRegPasswordConf(e.target.value)}
+                          className="text-xs h-8 pr-8"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setMostrarPassRegConf((v) => !v)}
+                          aria-label={mostrarPassRegConf ? 'Ocultar confirmación' : 'Ver confirmación'}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          {mostrarPassRegConf ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
                     </div>
                   </div>
 
                   <div className="text-[10px] text-muted-foreground pt-0.5">
-                    Nota: Al registrarte, un administrador revisará tu cuenta y te asignará el rol correspondiente antes de que puedas iniciar sesión.
+                    Al registrarte con tu correo @municoquimbo.cl, iniciarás sesión de inmediato con acceso según tu grado RBAC.
                   </div>
 
                   <div className="pt-2">

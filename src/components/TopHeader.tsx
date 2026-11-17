@@ -15,12 +15,13 @@ interface TopHeaderProps {
 }
 
 const TAB_TITLES: Record<NavTab, string> = {
-  DASHBOARD: 'Control de Tokens, Firmas Asignadas y Acciones por Funcionario',
+  DASHBOARD: 'Control y Trazabilidad de Tokens Criptográficos',
   FIRMAR: 'Firma Electrónica Avanzada con Token USB',
-  ALERTAS: 'Alertas de Vencimientos',
-  METRICAS: 'Estadisticas',
+  DOCUMENTOS: 'Repositorio de Documentos Firmados',
+  ALERTAS: 'Alertas de Vencimientos de Tokens',
+  METRICAS: 'Estadisticas de Trazabilidad',
   USUARIOS_CUSTODIA: 'Contratos de Obtención de Tokens y Asignación a Funcionarios',
-  AUDITORIA: 'Bitácora de Acciones de Firma',
+  AUDITORIA: 'Bitácora de Acciones y Telemetría',
 };
 
 export const TopHeader: React.FC<TopHeaderProps> = ({
@@ -31,14 +32,16 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   const { estaciones } = useTelemetriaStore();
   const currentTitle = TAB_TITLES[tabActiva] || TAB_TITLES.DASHBOARD;
 
-  // Buscar si la estación local o asignada al usuario tiene un token físico conectado
-  const estacionUsuario = estaciones.find(
-    (e) =>
-      e.codigoPc.toUpperCase().includes('1LK714Q') ||
-      e.codigoPc.toUpperCase() === 'DESKTOP-1LK714Q' ||
-      (usuario?.rut && e.codigoPc.includes(usuario.rut.replace(/[.-]/g, ''))) ||
-      (e.tokenInfo && (e.tokenInfo.serialNumber?.includes('D453B70C2CF7') || e.tokenInfo.modelo?.includes('Ezio')))
-  ) || estaciones.find((e) => e.estadoEnVivo === 'CONECTADO');
+  // Buscar dinámicamente cualquier estación con un token físico conectado (priorizando aquel con titular identificado por Ghost App)
+  const estacionUsuario =
+    estaciones.find((e) => e.estadoEnVivo === 'CONECTADO' && Boolean(e.tokenInfo?.titularNombre)) ||
+    estaciones.find(
+      (e) =>
+        e.estadoEnVivo === 'CONECTADO' &&
+        (e.codigoPc.toUpperCase().includes('1LK714Q') ||
+          (usuario?.rut && e.tokenInfo?.titularRut === usuario.rut))
+    ) ||
+    estaciones.find((e) => e.estadoEnVivo === 'CONECTADO' && Boolean(e.tokenInfo?.serialNumber));
 
   const estaConectado = estacionUsuario?.estadoEnVivo === 'CONECTADO';
   const infoToken = estacionUsuario?.tokenInfo;
@@ -67,7 +70,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
       <div className="flex items-center space-x-2">
         {usuario && (
           <div className="flex items-center gap-2">
-            {/* Indicador de Token Físico en Vivo del Usuario */}
+            {/* Indicador de Token Físico en Vivo y Titular Detectado */}
             <div
               className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-mono transition-colors ${
                 estaConectado
@@ -76,13 +79,17 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
               }`}
               title={
                 estaConectado
-                  ? `Token Criptográfico Conectado en ${estacionUsuario?.codigoPc || 'Estación'}: ${infoToken?.marca || ''} ${infoToken?.modelo || ''} (S/N: ${infoToken?.serialNumber || 'Detectado'})`
-                  : 'Ningún Token Criptográfico físico detectado en su estación de trabajo'
+                  ? `Token Criptográfico Conectado en ${estacionUsuario?.codigoPc || 'Estación'} — Titular: ${infoToken?.titularNombre || 'Detectado'} (S/N: ${infoToken?.serialNumber || 'Detectado'})`
+                  : 'Ningún Token Criptográfico físico detectado en la estación de trabajo'
               }
             >
               <Usb className={`w-3.5 h-3.5 ${estaConectado ? 'animate-pulse text-emerald-500' : 'text-muted-foreground'}`} />
               <span className="font-semibold text-[11px]">
-                {estaConectado ? 'Token USB Conectado' : 'Token USB: Desconectado'}
+                {estaConectado
+                  ? infoToken?.titularNombre
+                    ? `Token: ${infoToken.titularNombre}`
+                    : 'Token USB Conectado'
+                  : 'Token USB: Desconectado'}
               </span>
               {estaConectado && infoToken?.serialNumber && (
                 <span className="text-[10px] opacity-80 hidden lg:inline">

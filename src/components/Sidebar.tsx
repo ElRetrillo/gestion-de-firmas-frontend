@@ -19,6 +19,7 @@ import { formatRutVisual } from '../lib/rut';
 export type NavTab =
   | 'DASHBOARD'
   | 'FIRMAR'
+  | 'DOCUMENTOS'
   | 'ALERTAS'
   | 'METRICAS'
   | 'USUARIOS_CUSTODIA'
@@ -66,12 +67,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'DASHBOARD',
       icon: Monitor,
-      label: 'Control de Tokens y Firmas',
-    },
-    {
-      id: 'FIRMAR',
-      icon: PenTool,
-      label: 'Firmar Documento',
+      label: 'Control de Tokens',
       statusDot: conectadosEnVivo > 0,
     },
     {

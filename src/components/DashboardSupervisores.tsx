@@ -115,16 +115,7 @@ export const DashboardSupervisores: React.FC = () => {
     setMensajeAccion('Descargando script autoinstalador .bat del Agente USB para probar en vivo...');
   };
 
-  // 1. Dispositivos Existentes (Total, Activos, Expirados) y Estado en Sesión
-  const dispExistentes =
-    metricas?.resumenDispositivos?.totalExistentes ?? metricas?.telemetria?.tokensRegistrados ?? 8;
-  const dispActivos =
-    metricas?.resumenDispositivos?.activos ?? metricas?.telemetria?.tokensOperativos ?? 6;
-  const dispExpirados =
-    metricas?.resumenDispositivos?.expirados ??
-    metricas?.telemetria?.tokensExpirados ??
-    Math.max(0, dispExistentes - dispActivos);
-
+  // 1. Estado de conexión en vivo
   const conectados = estaciones.filter((e) => e.estadoEnVivo === 'CONECTADO').length;
 
   // 2. Firmas Asignadas y Acciones
@@ -153,8 +144,10 @@ export const DashboardSupervisores: React.FC = () => {
       id?: string;
       nombre: string;
       rut: string;
+      email?: string;
       unidad: string;
       cargo?: string;
+      extraidoDeToken?: boolean;
     };
     token: {
       serialNumber: string;
@@ -169,8 +162,6 @@ export const DashboardSupervisores: React.FC = () => {
     estacionActual?: string | null;
     ipEstacion?: string | null;
     dependenciaFisica?: string | null;
-    firmasPeriodo: number;
-    firmasHistorico: number;
     conexiones: number;
     desconexiones: number;
     promedioUsoDiarioMinutos: number;
@@ -181,8 +172,7 @@ export const DashboardSupervisores: React.FC = () => {
 
   // 1. Poblamos desde listadoFirmas
   listadoFirmas.forEach((f) => {
-    const key = f.funcionario?.rut || f.serialNumberToken || f.id;
-    // Buscar si hay estación conectada en vivo con este serial o vinculada a este PC
+    const key = f.serialNumberToken || f.funcionario?.rut || f.id;
     const estacionEnVivo = estaciones.find(
       (e) =>
         (e.tokenInfo?.serialNumber && e.tokenInfo.serialNumber.toLowerCase() === f.serialNumberToken.toLowerCase()) ||
@@ -204,19 +194,33 @@ export const DashboardSupervisores: React.FC = () => {
       ? estacionEnVivo.estadoEnVivo
       : f.estadoConexion || 'DESCONECTADO';
 
+    const titularTokenVivo = estacionEnVivo?.tokenInfo?.titularNombre || trazaData?.funcionarioAsignado?.nombre;
+    const extraidoDeToken = Boolean(
+      estacionEnVivo?.tokenInfo?.titularNombre || trazaData?.funcionarioAsignado?.origenCertificado
+    );
+
     mapaFilas.set(key, {
       id: f.id || key,
       funcionario: {
         id: f.funcionario?.id,
-        nombre: f.funcionario?.nombre || 'Funcionario Municipal',
-        rut: f.funcionario?.rut || 'Sin RUT',
-        unidad: f.funcionario?.unidad || 'Municipalidad',
-        cargo: f.funcionario?.cargo,
+        nombre: titularTokenVivo || f.funcionario?.nombre || 'Funcionario Municipal',
+        rut: f.funcionario?.rut || trazaData?.funcionarioAsignado?.rut || 'Sin RUT',
+        email: estacionEnVivo?.tokenInfo?.titularEmail || trazaData?.funcionarioAsignado?.email || f.funcionario?.email,
+        unidad:
+          estacionEnVivo?.tokenInfo?.titularUnidad ||
+          trazaData?.funcionarioAsignado?.unidad ||
+          f.funcionario?.unidad ||
+          'Municipalidad',
+        cargo:
+          estacionEnVivo?.tokenInfo?.titularCargo ||
+          trazaData?.funcionarioAsignado?.cargo ||
+          f.funcionario?.cargo,
+        extraidoDeToken,
       },
       token: {
         serialNumber: f.serialNumberToken || 'SN-SIN-TOKEN',
-        marca: f.marca,
-        modelo: f.modelo,
+        marca: estacionEnVivo?.tokenInfo?.marca || f.marca,
+        modelo: estacionEnVivo?.tokenInfo?.modelo || f.modelo,
       },
       estadoFirma: (f.estado as any) === 'POR VENCER' ? 'POR_VENCER' : f.estado,
       fechaExpiracion: f.fechaExpiracion,
@@ -226,139 +230,194 @@ export const DashboardSupervisores: React.FC = () => {
       estacionActual: estacionEnVivo?.codigoPc || f.estacionActual || null,
       ipEstacion: estacionEnVivo?.ipAsignada || null,
       dependenciaFisica: estacionEnVivo?.dependenciaFisica || null,
-      firmasPeriodo: accionData?.accionesFirmaPeriodo ?? f.accionesFirmaPeriodo ?? 0,
-      firmasHistorico: accionData?.accionesFirmaHistorico ?? f.accionesFirmaTotal ?? 0,
       conexiones: trazaData?.conexionesPeriodo ?? accionData?.conexionesIgnoradasPeriodo ?? 0,
       desconexiones: trazaData?.desconexionesPeriodo ?? accionData?.desconexionesIgnoradasPeriodo ?? 0,
       promedioUsoDiarioMinutos: trazaData?.promedioUsoDiarioMinutos ?? 0,
     });
   });
 
-  // 2. Complementamos desde listadoAccionesFuncionarios si alguno no estuviese en listadoFirmas
-  listadoAccionesFuncionarios.forEach((a) => {
-    const key = a.rut || a.serialNumberToken || a.usuarioId;
-    if (!mapaFilas.has(key)) {
+  // 2. Complementamos desde trazabilidadDispositivos (incluye tokens físicos detectados por Ghost App)
+  trazabilidadDispositivos.forEach((t) => {
+    const yaExiste = Array.from(mapaFilas.values()).some(
+      (f) => f.token.serialNumber.toLowerCase() === t.serialNumber.toLowerCase()
+    );
+    if (!yaExiste) {
       const estacionEnVivo = estaciones.find(
         (e) =>
-          (e.tokenInfo?.serialNumber && e.tokenInfo.serialNumber.toLowerCase() === a.serialNumberToken.toLowerCase()) ||
-          (a.codigoPcUltimaSesion && e.codigoPc.toLowerCase() === a.codigoPcUltimaSesion.toLowerCase())
+          e.estadoEnVivo === 'CONECTADO' &&
+          e.tokenInfo?.serialNumber &&
+          e.tokenInfo.serialNumber.toLowerCase() === t.serialNumber.toLowerCase()
       );
+      const tokenVivo = estacionEnVivo?.tokenInfo;
+      const nombreTitular =
+        tokenVivo?.titularNombre ||
+        t.funcionarioAsignado?.nombre ||
+        'Token Detectado (Sin Asignar)';
+      const emailTitular = tokenVivo?.titularEmail || t.funcionarioAsignado?.email;
+      const fechaExp = tokenVivo?.certNotAfter
+        ? tokenVivo.certNotAfter.slice(0, 10)
+        : t.fechaExpiracion;
+      const diasRest =
+        fechaExp && t.diasRestantes === undefined
+          ? Math.ceil((new Date(fechaExp).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+          : t.diasRestantes;
 
-      mapaFilas.set(key, {
-        id: a.usuarioId || key,
+      mapaFilas.set(t.serialNumber, {
+        id: t.id || t.serialNumber,
         funcionario: {
-          id: a.usuarioId,
-          nombre: a.nombre,
-          rut: a.rut,
-          unidad: a.unidad,
-          cargo: a.cargo,
+          nombre: nombreTitular,
+          rut: t.funcionarioAsignado?.rut || emailTitular || 'Certificado X.509',
+          email: emailTitular,
+          unidad:
+            tokenVivo?.titularUnidad ||
+            t.funcionarioAsignado?.unidad ||
+            estacionEnVivo?.dependenciaFisica ||
+            'Ilustre Municipalidad de Coquimbo',
+          cargo: tokenVivo?.titularCargo || t.funcionarioAsignado?.cargo || 'Titular Certificado FEA',
+          extraidoDeToken: Boolean(tokenVivo?.titularNombre || t.funcionarioAsignado?.origenCertificado),
         },
         token: {
-          serialNumber: a.serialNumberToken,
-          modelo: a.modeloToken,
+          serialNumber: t.serialNumber,
+          marca: tokenVivo?.marca || t.marca,
+          modelo: tokenVivo?.modelo || t.modelo,
         },
-        estadoFirma: (a.estadoToken as any) === 'POR VENCER' ? 'POR_VENCER' : (a.estadoToken || 'ACTIVO'),
-        diasRestantes: a.diasRestantesToken,
-        tiempoExpiracionTexto: a.diasRestantesToken ? `${a.diasRestantesToken} días restantes` : undefined,
-        estadoConexion: estacionEnVivo?.estadoEnVivo || 'DESCONECTADO',
-        estacionActual: estacionEnVivo?.codigoPc || a.codigoPcUltimaSesion || null,
+        estadoFirma:
+          diasRest !== undefined && diasRest <= 0
+            ? 'EXPIRADO'
+            : diasRest !== undefined && diasRest <= 60
+            ? 'POR_VENCER'
+            : 'ACTIVO',
+        fechaExpiracion: fechaExp,
+        diasRestantes: diasRest,
+        tiempoExpiracionTexto:
+          t.tiempoExpiracionTexto ||
+          (diasRest !== undefined
+            ? diasRest <= 0
+              ? `Expirado hace ${Math.abs(diasRest)} días`
+              : `${diasRest} días restantes`
+            : 'Vigente'),
+        estadoConexion: estacionEnVivo?.estadoEnVivo || t.estadoEnVivo || 'DESCONECTADO',
+        estacionActual: estacionEnVivo?.codigoPc || t.estacionActual || null,
         ipEstacion: cleanIpVisual(estacionEnVivo?.ipAsignada || null),
         dependenciaFisica: estacionEnVivo?.dependenciaFisica || null,
-        firmasPeriodo: a.accionesFirmaPeriodo,
-        firmasHistorico: a.accionesFirmaHistorico,
-        conexiones:
-          trazabilidadDispositivos.find(
-            (t) =>
-              t.serialNumber.toLowerCase() === a.serialNumberToken.toLowerCase() ||
-              t.funcionarioAsignado?.rut === a.rut
-          )?.conexionesPeriodo ?? a.conexionesIgnoradasPeriodo,
-        desconexiones:
-          trazabilidadDispositivos.find(
-            (t) =>
-              t.serialNumber.toLowerCase() === a.serialNumberToken.toLowerCase() ||
-              t.funcionarioAsignado?.rut === a.rut
-          )?.desconexionesPeriodo ?? a.desconexionesIgnoradasPeriodo,
-        promedioUsoDiarioMinutos:
-          trazabilidadDispositivos.find(
-            (t) =>
-              t.serialNumber.toLowerCase() === a.serialNumberToken.toLowerCase() ||
-              t.funcionarioAsignado?.rut === a.rut
-          )?.promedioUsoDiarioMinutos ?? 0,
+        conexiones: t.conexionesPeriodo ?? 0,
+        desconexiones: t.desconexionesPeriodo ?? 0,
+        promedioUsoDiarioMinutos: t.promedioUsoDiarioMinutos ?? 0,
       });
     }
   });
 
-  // 3. Inyectar o enlazar en vivo la estación física y token del usuario actual logueado
-  if (usuario && usuario.nombre) {
-    const rutUsuarioClean = usuario.rut ? usuario.rut.trim() : '';
-    const keyUsuario = rutUsuarioClean || usuario.id || 'USUARIO_ACTUAL';
+  // 3. Sincronizar dinámicamente TODAS las estaciones activas (solo por N° de serie del token activo, sin pisar otros tokens de la misma PC)
+  estaciones.forEach((est) => {
+    const tokenVivo = est.tokenInfo;
+    if (!tokenVivo?.serialNumber) return;
+    const serialDetectado = tokenVivo.serialNumber;
+    if (serialDetectado.startsWith('SN-WIN-') && serialDetectado.endsWith('-UNKNOWN')) return;
 
-    // Buscar si hay estación local activa (por hostname, coincidencia de RUT o cualquier estación local activa)
-    const estacionLocalUsuario = estaciones.find(
-      (e) =>
-        e.codigoPc.toUpperCase().includes('1LK714Q') ||
-        e.codigoPc.toUpperCase() === 'DESKTOP-1LK714Q' ||
-        (rutUsuarioClean && e.codigoPc.includes(rutUsuarioClean.replace(/[.-]/g, ''))) ||
-        (rutUsuarioClean && (e.tokenInfo?.serialNumber?.includes('D453B70C2CF7') || e.tokenInfo?.modelo?.includes('Ezio')))
-    ) || estaciones.find((e) => e.codigoPc.toUpperCase() === 'DESKTOP-1LK714Q');
+    const trazaPorSerial = trazabilidadDispositivos.find(
+      (t) => t.serialNumber.toLowerCase() === serialDetectado.toLowerCase()
+    );
 
-    const tokenLocal = estacionLocalUsuario?.tokenInfo;
-    const estadoConexionLocal = estacionLocalUsuario?.estadoEnVivo || (tokenLocal ? 'CONECTADO' : 'DESCONECTADO');
+    const nombreTitular =
+      tokenVivo.titularNombre ||
+      trazaPorSerial?.funcionarioAsignado?.nombre;
+    const rutTitular =
+      tokenVivo.titularRut ||
+      trazaPorSerial?.funcionarioAsignado?.rut;
+    const emailTitular =
+      tokenVivo.titularEmail ||
+      trazaPorSerial?.funcionarioAsignado?.email;
+    const cargoTitular =
+      tokenVivo.titularCargo ||
+      trazaPorSerial?.funcionarioAsignado?.cargo;
+    const unidadTitular =
+      tokenVivo.titularUnidad ||
+      trazaPorSerial?.funcionarioAsignado?.unidad;
+    const fechaExpCert = tokenVivo.certNotAfter
+      ? tokenVivo.certNotAfter.slice(0, 10)
+      : trazaPorSerial?.fechaExpiracion;
 
-    if (mapaFilas.has(keyUsuario)) {
-      // Si el usuario ya existe en las filas, enriquecemos su estado con la conexión física en vivo
-      const filaExistente = mapaFilas.get(keyUsuario)!;
-      mapaFilas.set(keyUsuario, {
-        ...filaExistente,
-        token: {
-          serialNumber: tokenLocal?.serialNumber || filaExistente.token.serialNumber,
-          marca: tokenLocal?.marca || filaExistente.token.marca,
-          modelo: tokenLocal?.modelo || filaExistente.token.modelo,
-        },
-        estadoConexion: estadoConexionLocal,
-        estacionActual: estacionLocalUsuario?.codigoPc || filaExistente.estacionActual,
-        ipEstacion: estacionLocalUsuario?.ipAsignada || filaExistente.ipEstacion,
-        dependenciaFisica: estacionLocalUsuario?.dependenciaFisica || filaExistente.dependenciaFisica,
-      });
-    } else {
-      // Si el usuario logueado no estaba en la lista inicial, se agrega para monitorear en vivo su token
-      const trazaUser = trazabilidadDispositivos.find(
-        (t) =>
-          t.serialNumber.toLowerCase() === (tokenLocal?.serialNumber || 'SN-08E6-D453B70C2CF7').toLowerCase() ||
-          t.funcionarioAsignado?.rut === usuario.rut
-      );
-      mapaFilas.set(keyUsuario, {
-        id: usuario.id || keyUsuario,
-        funcionario: {
-          id: usuario.id,
-          nombre: usuario.nombre,
-          rut: usuario.rut || '11.111.111-1',
-          unidad: usuario.unidad || 'Dirección de TICs',
-          cargo: usuario.cargo || 'Funcionario Municipal',
-        },
-        token: {
-          serialNumber: tokenLocal?.serialNumber || 'SN-08E6-D453B70C2CF7',
-          marca: tokenLocal?.marca || 'Thales / Gemalto',
-          modelo: tokenLocal?.modelo || 'Ezio Generic',
-        },
-        estadoFirma: 'ACTIVO',
-        fechaExpiracion: '2027-11-10',
-        diasRestantes: 365,
-        tiempoExpiracionTexto: '365 días restantes (Vigente)',
-        estadoConexion: estadoConexionLocal,
-        estacionActual: estacionLocalUsuario?.codigoPc || 'DESKTOP-1LK714Q',
-        ipEstacion: estacionLocalUsuario?.ipAsignada || '192.168.90.31',
-        dependenciaFisica: estacionLocalUsuario?.dependenciaFisica || usuario.unidad || 'Red Interna Municipal',
-        firmasPeriodo: 0,
-        firmasHistorico: 0,
-        conexiones: trazaUser?.conexionesPeriodo ?? (estadoConexionLocal === 'CONECTADO' ? 1 : 0),
-        desconexiones: trazaUser?.desconexionesPeriodo ?? (estadoConexionLocal === 'DESCONECTADO' ? 1 : 0),
-        promedioUsoDiarioMinutos: trazaUser?.promedioUsoDiarioMinutos ?? 0,
-      });
-    }
-  }
+    // Buscar fila existente únicamente por N° de serie del token
+    const existingEntry = Array.from(mapaFilas.entries()).find(
+      ([, val]) => val.token.serialNumber.toLowerCase() === serialDetectado.toLowerCase()
+    );
 
-  const todasLasFilas = Array.from(mapaFilas.values());
+    const keyTarget = existingEntry ? existingEntry[0] : serialDetectado;
+    const prevRow = existingEntry ? existingEntry[1] : undefined;
+
+    const diasRest =
+      fechaExpCert
+        ? Math.ceil((new Date(fechaExpCert).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+        : prevRow?.diasRestantes;
+
+    const esExtraidoCert = Boolean(
+      tokenVivo?.titularNombre ||
+      trazaPorSerial?.funcionarioAsignado?.origenCertificado ||
+      prevRow?.funcionario.extraidoDeToken
+    );
+
+    mapaFilas.set(keyTarget, {
+      id: prevRow?.id || serialDetectado,
+      funcionario: {
+        id: prevRow?.funcionario.id,
+        nombre: nombreTitular || prevRow?.funcionario.nombre || 'Token Criptográfico Detectado',
+        rut: rutTitular || prevRow?.funcionario.rut || emailTitular || 'Certificado X.509',
+        email: emailTitular || prevRow?.funcionario.email,
+        unidad: unidadTitular || prevRow?.funcionario.unidad || est.dependenciaFisica || 'Ilustre Municipalidad de Coquimbo',
+        cargo: cargoTitular || prevRow?.funcionario.cargo || 'Profesional',
+        extraidoDeToken: esExtraidoCert,
+      },
+      token: {
+        serialNumber: serialDetectado,
+        marca: tokenVivo?.marca || prevRow?.token.marca || trazaPorSerial?.marca || 'Thales / SafeNet',
+        modelo: tokenVivo?.modelo || prevRow?.token.modelo || trazaPorSerial?.modelo || 'Token USB',
+      },
+      estadoFirma:
+        diasRest !== undefined && diasRest <= 0
+          ? 'EXPIRADO'
+          : diasRest !== undefined && diasRest <= 60
+          ? 'POR_VENCER'
+          : prevRow?.estadoFirma || 'ACTIVO',
+      fechaExpiracion: fechaExpCert || prevRow?.fechaExpiracion,
+      diasRestantes: diasRest,
+      tiempoExpiracionTexto:
+        prevRow?.tiempoExpiracionTexto ||
+        (diasRest !== undefined
+          ? diasRest <= 0
+            ? `Expirado hace ${Math.abs(diasRest)} días`
+            : `${diasRest} días restantes`
+          : 'Vigente'),
+      estadoConexion: est.estadoEnVivo,
+      estacionActual: est.codigoPc,
+      ipEstacion: cleanIpVisual(est.ipAsignada || prevRow?.ipEstacion || null),
+      dependenciaFisica: est.dependenciaFisica || prevRow?.dependenciaFisica || null,
+      conexiones:
+        trazaPorSerial?.conexionesPeriodo ??
+        prevRow?.conexiones ??
+        (est.estadoEnVivo === 'CONECTADO' ? 1 : 0),
+      desconexiones:
+        trazaPorSerial?.desconexionesPeriodo ??
+        prevRow?.desconexiones ??
+        0,
+      promedioUsoDiarioMinutos:
+        trazaPorSerial?.promedioUsoDiarioMinutos ??
+        prevRow?.promedioUsoDiarioMinutos ??
+        0,
+    });
+  });
+
+  const todasLasFilas = Array.from(mapaFilas.values())
+    .filter((f) => !(f.token.serialNumber.startsWith('SN-WIN-') && f.token.serialNumber.endsWith('-UNKNOWN')))
+    .sort((a, b) => {
+      // Priorizar en la parte superior los tokens detectados por certificado X.509 o conectados en vivo
+      const aScore = (a.funcionario.extraidoDeToken ? 2 : 0) + (a.estadoConexion === 'CONECTADO' ? 1 : 0);
+      const bScore = (b.funcionario.extraidoDeToken ? 2 : 0) + (b.estadoConexion === 'CONECTADO' ? 1 : 0);
+      return bScore - aScore;
+    });
+
+  const dispExistentes = todasLasFilas.length;
+  const dispExpirados = todasLasFilas.filter((f) => f.estadoFirma === 'EXPIRADO').length;
+  const dispActivos = Math.max(0, dispExistentes - dispExpirados);
   const promedioUsoDiarioGeneralMinutos =
     metricas?.telemetria?.promedioUsoDiarioGeneralMinutos ??
     (todasLasFilas.length > 0
@@ -404,8 +463,8 @@ export const DashboardSupervisores: React.FC = () => {
         </div>
       )}
 
-      {/* 1. Fila Compacta de KPIs Esenciales */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      {/* 1. Fila Compacta de KPIs Esenciales de Trazabilidad de Tokens */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Card className="p-3.5">
           <div className="text-[10px] font-bold uppercase text-muted-foreground">
             Dispositivos Existentes
@@ -424,7 +483,7 @@ export const DashboardSupervisores: React.FC = () => {
             {dispActivos}
           </div>
           <div className="text-[11px] text-muted-foreground font-mono">
-            {conectados} Disponibles
+            {conectados} Conectados en vivo
           </div>
         </Card>
 
@@ -436,38 +495,11 @@ export const DashboardSupervisores: React.FC = () => {
             {dispExpirados}
           </div>
           <div className="text-[11px] text-muted-foreground font-mono">
-            Expirados historicamente
+            Expirados históricamente
           </div>
         </Card>
 
-        <Card className="p-3.5 border-primary/40 bg-primary/5 col-span-2 sm:col-span-1">
-          <div className="flex items-center justify-between gap-1">
-            <div className="text-[10px] font-bold uppercase text-primary truncate">
-              Acciones Firma (Período Actual)
-            </div>
-            <InfoPeriodoTooltip periodoEtiqueta={periodoEtiqueta} align="right" />
-          </div>
-          <div className="text-2xl font-bold text-foreground mt-1">
-            {totalAccionesPeriodo}
-          </div>
-          <div className="text-[11px] text-muted-foreground font-mono">
-            Se considera que: 1 acción = 1 firma
-          </div>
-        </Card>
-
-        <Card className="p-3.5 border-primary/40 bg-primary/5 col-span-2 sm:col-span-1">
-          <div className="text-[10px] font-bold uppercase text-primary">
-            Historico de Firmas
-          </div>
-          <div className="text-2xl font-bold text-foreground mt-1">
-            {totalAccionesHistorico}
-          </div>
-          <div className="text-[11px] text-muted-foreground font-mono">
-            Total de  N° Firmas desde la implementación del sistema
-          </div>
-        </Card>
-
-        <Card className="p-3.5 border-sky-500/30 bg-sky-500/5 col-span-2 sm:col-span-1">
+        <Card className="p-3.5 border-sky-500/30 bg-sky-500/5">
           <div className="text-[10px] font-bold uppercase text-sky-600 dark:text-sky-400">
             Promedio Uso Diario
           </div>
@@ -485,13 +517,13 @@ export const DashboardSupervisores: React.FC = () => {
         <CardHeader className="p-3.5 border-b bg-muted/20 flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div>
             <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <span>Supervisión Centralizada de Firmas y Dispositivos</span>
+              <span>Supervisión Centralizada de Tokens y Trazabilidad USB</span>
               <Badge variant="outline" className="text-[10px] font-mono">
                 {filasFiltradas.length} de {todasLasFilas.length} registros
               </Badge>
             </CardTitle>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              Panel integrado con funcionario, token, vigencia de firma, trazabilidad en sesión y métricas de uso.
+              Panel integrado con titular extraído del certificado X.509 del token, vigencia, trazabilidad en sesión y métricas de uso.
             </p>
           </div>
 
@@ -504,7 +536,7 @@ export const DashboardSupervisores: React.FC = () => {
             />
 
             {/* Filtro por Vigencia de Firma */}
-            <div className="inline-flex rounded-md border bg-background p-0.5" title="Filtrar por estado de vigencia del token/firma">
+            <div className="inline-flex rounded-md border bg-background p-0.5" title="Filtrar por estado de vigencia del token">
               {(['TODOS', 'ACTIVO', 'POR_VENCER', 'EXPIRADO'] as const).map((est) => (
                 <button
                   key={est}
@@ -561,27 +593,20 @@ export const DashboardSupervisores: React.FC = () => {
           <Table>
             <TableHeader className="bg-muted/40 text-[11px]">
               <TableRow>
-                <TableHead className="min-w-[180px]">Funcionario Titular / RUT</TableHead>
-                <TableHead className="min-w-[140px]">Unidad / Cargo</TableHead>
-                <TableHead className="min-w-[170px]">Token (Info)</TableHead>
-                <TableHead className="min-w-[110px]">Estado de Firma</TableHead>
+                <TableHead className="min-w-[200px]">Funcionario Titular / Identificación</TableHead>
+                <TableHead className="min-w-[160px]">Unidad / Cargo</TableHead>
+                <TableHead className="min-w-[175px]">Token (Info)</TableHead>
+                <TableHead className="min-w-[115px]">Estado del Token</TableHead>
                 <TableHead className="min-w-[140px]">Vigencia Actual</TableHead>
-                <TableHead className="min-w-[140px]">Estado de Conexión</TableHead>
-                <TableHead className="min-w-[120px]">
-                  <div className="inline-flex items-center gap-1">
-                    <span>Firmas Período</span>
-                    <InfoPeriodoTooltip periodoEtiqueta={periodoEtiqueta} align="center" />
-                  </div>
-                </TableHead>
-                <TableHead className="min-w-[100px]">Firmas Totales</TableHead>
+                <TableHead className="min-w-[155px]">Estado de Conexión</TableHead>
                 <TableHead className="min-w-[175px]">Trazabilidad (Conex. / Desconex.)</TableHead>
-                <TableHead className="min-w-[140px]">Promedio Uso Diario</TableHead>
+                <TableHead className="min-w-[145px]">Promedio Uso Diario</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="text-xs">
               {filasFiltradas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground italic">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground italic">
                     No se encontraron funcionarios o dispositivos con los filtros seleccionados.
                   </TableCell>
                 </TableRow>
@@ -590,24 +615,26 @@ export const DashboardSupervisores: React.FC = () => {
                   <TableRow
                     key={fila.id}
                     className={`transition-colors ${
-                      usuario?.rut && fila.funcionario.rut === usuario.rut
+                      fila.funcionario.extraidoDeToken || (usuario?.rut && fila.funcionario.rut === usuario.rut)
                         ? 'bg-primary/5 border-l-4 border-l-primary hover:bg-primary/10'
                         : 'hover:bg-muted/30'
                     }`}
                   >
-                    {/* 1. Funcionario Titular / RUT */}
+                    {/* 1. Funcionario Titular / Identificación */}
                     <TableCell>
                       <div className="font-bold text-foreground flex items-center gap-1.5 flex-wrap">
                         <User className="w-3.5 h-3.5 text-primary shrink-0" />
                         <span>{fila.funcionario.nombre}</span>
-                        {usuario?.rut && fila.funcionario.rut === usuario.rut && (
-                          <span className="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-primary text-primary-foreground uppercase tracking-wider">
-                            Mi Usuario
+                        {fila.funcionario.extraidoDeToken && (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded font-mono font-bold bg-emerald-600 text-white uppercase tracking-wider">
+                            Titular Token USB
                           </span>
                         )}
                       </div>
                       <div className="text-[10px] font-mono text-muted-foreground ml-5">
-                        {formatRutVisual(fila.funcionario.rut)}
+                        {fila.funcionario.rut.includes('@')
+                          ? fila.funcionario.rut
+                          : formatRutVisual(fila.funcionario.rut)}
                       </div>
                     </TableCell>
 
@@ -615,7 +642,7 @@ export const DashboardSupervisores: React.FC = () => {
                     <TableCell>
                       <div className="text-[11px] font-medium text-foreground">{fila.funcionario.unidad}</div>
                       {fila.funcionario.cargo && (
-                        <div className="text-[10px] text-muted-foreground truncate max-w-[160px]" title={fila.funcionario.cargo}>
+                        <div className="text-[10px] text-muted-foreground truncate max-w-[180px]" title={fila.funcionario.cargo}>
                           {fila.funcionario.cargo}
                         </div>
                       )}
@@ -629,7 +656,7 @@ export const DashboardSupervisores: React.FC = () => {
                       </div>
                     </TableCell>
 
-                    {/* 4. Estado de Firma */}
+                    {/* 4. Estado del Token */}
                     <TableCell>
                       <Badge
                         variant={
@@ -665,7 +692,7 @@ export const DashboardSupervisores: React.FC = () => {
                       </div>
                     </TableCell>
 
-                    {/* 6. Estado de Conexión */}
+                    {/* 6. Estado de Conexión y Red */}
                     <TableCell>
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-1.5">
@@ -681,27 +708,14 @@ export const DashboardSupervisores: React.FC = () => {
                             </span>
                           )}
                         </div>
-                        {fila.dependenciaFisica && (
-                          <div className="text-[10px] text-muted-foreground truncate max-w-[140px]" title={fila.dependenciaFisica}>
-                            {fila.dependenciaFisica}
-                          </div>
-                        )}
+                        <div className="text-[10px] font-mono text-muted-foreground">
+                          {fila.ipEstacion ? `IP: ${fila.ipEstacion}` : 'Red Municipal'}
+                          {fila.dependenciaFisica ? ` • ${fila.dependenciaFisica}` : ''}
+                        </div>
                       </div>
                     </TableCell>
 
-                    {/* 7. Firmas Período */}
-                    <TableCell>
-                      <Badge variant="success" className="text-xs font-mono font-bold px-2">
-                        {fila.firmasPeriodo}
-                      </Badge>
-                    </TableCell>
-
-                    {/* 8. Firmas Totales */}
-                    <TableCell className="font-mono font-semibold text-foreground">
-                      {fila.firmasHistorico}
-                    </TableCell>
-
-                    {/* 9. Contador de Trazabilidad (Conexiones / Desconexiones) */}
+                    {/* 7. Contador de Trazabilidad (Conexiones / Desconexiones) */}
                     <TableCell>
                       <div className="font-mono text-[11px] text-muted-foreground flex flex-col gap-0.5">
                         <span className="text-emerald-700 dark:text-emerald-400 font-medium">
@@ -713,7 +727,7 @@ export const DashboardSupervisores: React.FC = () => {
                       </div>
                     </TableCell>
 
-                    {/* 10. Promedio de tiempo de uso diario (hrs; mins) */}
+                    {/* 8. Promedio de tiempo de uso diario (hrs; mins) */}
                     <TableCell className="font-mono text-xs font-semibold text-foreground whitespace-nowrap">
                       {formatearHorasMinutos(fila.promedioUsoDiarioMinutos)}
                     </TableCell>

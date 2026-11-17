@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Info } from 'lucide-react';
 import {
   useTelemetriaStore,
   MetricasTrazabilidadResponse,
@@ -375,6 +376,7 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
     setPeriodoReporte,
   } = useTelemetriaStore();
 
+  const [infoPesoAbierta, setInfoPesoAbierta] = useState(false);
   const [tabTrazabilidad, setTabTrazabilidad] = useState<
     'VIGENCIA_FIRMAS' | 'SERIE_TEMPORAL' | 'VISOR_LATEX'
   >('VIGENCIA_FIRMAS');
@@ -768,8 +770,28 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
             {/* Tarjeta 4: % Actividad del Período sobre el Histórico */}
             <div className="p-4 rounded-xl border bg-background/60 flex flex-col justify-between gap-3">
               <div className="flex flex-col items-center text-center gap-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                  Peso del Período
+                <span className="relative text-[11px] font-bold uppercase tracking-wider text-muted-foreground inline-flex items-center gap-1">
+                  <span>Peso del Período</span>
+                  <button
+                    type="button"
+                    onClick={() => setInfoPesoAbierta((v) => !v)}
+                    onBlur={() => setTimeout(() => setInfoPesoAbierta(false), 150)}
+                    aria-label="Información sobre Peso del Período"
+                    className="inline-flex items-center justify-center rounded-full p-0.5 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                  >
+                    <Info className="w-3.5 h-3.5" />
+                  </button>
+                  {infoPesoAbierta && (
+                    <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 w-60 rounded-xl border border-border bg-card p-3 text-left shadow-xl normal-case tracking-normal">
+                      <div className="text-[11px] font-bold text-foreground mb-1 flex items-center gap-1.5">
+                        <Info className="w-3.5 h-3.5 text-primary shrink-0" />
+                        <span>¿Qué es Peso del Período?</span>
+                      </div>
+                      <p className="text-[11px] font-normal text-muted-foreground leading-relaxed">
+                        Porcentaje del total histórico de firmas del sistema que se realizó dentro del período seleccionado.
+                      </p>
+                    </div>
+                  )}
                 </span>
                 <RingProgress percentage={pctPeriodoSobreHistorico} colorClass="text-primary" />
                 <span className="text-xs text-muted-foreground">
@@ -817,17 +839,6 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                     className="h-8 text-xs font-bold"
                   >
                     Evolución Diaria ({serie.length}d)
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant={tabTrazabilidad === 'VISOR_LATEX' ? 'default' : 'outline'}
-                    onClick={() => {
-                      setTabTrazabilidad('VISOR_LATEX');
-                      handleCompilarLatexAPdf();
-                    }}
-                    className="h-8 text-xs font-bold"
-                  >
-                    Visor y Compilador Summary PDF (LaTeX)
                   </Button>
                 </div>
               </div>
@@ -923,135 +934,75 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                       Firmas Realizadas por Día ({etiquetaPeriodo})
                     </span>
                     <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
-                      Total período: {accionesPeriodo} firmas
+                      Total período: {serie.reduce((acc, d) => acc + (d.firmasRealizadas || 0), 0)} firmas
                     </span>
                   </div>
 
                   <div className="flex items-end gap-1.5 h-32 pt-5 px-1 border-b pb-2 overflow-x-auto">
-                    {serie.map((dia) => {
-                      const valor = dia.firmasRealizadas;
-                      const alturaPct =
-                        valor > 0 ? Math.max(14, Math.round((valor / maxFirmasDia) * 100)) : 5;
-                      return (
-                        <div
-                          key={dia.fecha}
-                          className="flex flex-col items-center justify-end h-full group min-w-[26px] flex-1"
-                          title={`${dia.etiqueta}: ${valor} firmas`}
-                        >
-                          <div className="text-[10px] font-mono font-bold text-foreground mb-1">
-                            {valor > 0 ? valor : ''}
-                          </div>
+                    {(() => {
+                      const esAnual = modoReporte === 'POR_ANIO' || serie.length > 45;
+                      const mesesCortos = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+                      const datosGrafico = esAnual
+                        ? Array.from(
+                            serie.reduce((map, d) => {
+                              const ym = String(d.fecha || '').slice(0, 7);
+                              const mIdx = Number(ym.slice(5, 7)) - 1;
+                              const label = mesesCortos[mIdx] || ym;
+                              const prev = map.get(ym) || { fecha: ym, etiqueta: label, firmasRealizadas: 0 };
+                              prev.firmasRealizadas += d.firmasRealizadas || 0;
+                              map.set(ym, prev);
+                              return map;
+                            }, new Map<string, { fecha: string; etiqueta: string; firmasRealizadas: number }>()).values(),
+                          )
+                        : serie;
+                      const maxVal = Math.max(1, ...datosGrafico.map((d) => d.firmasRealizadas || 0));
+
+                      return datosGrafico.map((dia) => {
+                        const valor = dia.firmasRealizadas;
+                        const alturaPct =
+                          valor > 0 ? Math.max(14, Math.round((valor / maxVal) * 100)) : 5;
+                        return (
                           <div
-                            className={`w-full max-w-[20px] rounded-t transition-all ${valor > 0
-                              ? 'bg-emerald-500 group-hover:bg-emerald-400'
-                              : 'bg-muted'
-                              }`}
-                            style={{ height: `${alturaPct}%` }}
-                          />
-                          <span className="text-[9px] font-mono text-muted-foreground mt-1.5 truncate max-w-[36px]">
-                            {dia.etiqueta.split(' ')[0]}
-                          </span>
-                        </div>
-                      );
-                    })}
+                            key={dia.fecha}
+                            className="flex flex-col items-center justify-end h-full group min-w-[26px] flex-1"
+                            title={`${dia.etiqueta}: ${valor} firmas`}
+                          >
+                            <div className="text-[10px] font-mono font-bold text-foreground mb-1">
+                              {valor > 0 ? valor : ''}
+                            </div>
+                            <div
+                              className={`w-full max-w-[22px] rounded-t transition-all ${valor > 0
+                                ? 'bg-emerald-500 group-hover:bg-emerald-400'
+                                : 'bg-muted'
+                                }`}
+                              style={{ height: `${alturaPct}%` }}
+                            />
+                            <span className="text-[9px] font-mono text-muted-foreground mt-1.5 truncate max-w-[36px]">
+                              {esAnual ? dia.etiqueta : dia.etiqueta.split(' ')[0]}
+                            </span>
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
                 </div>
               )}
 
-              {/* Pestaña 3: Compilador y Visor Integrado de Summary PDF en LaTeX */}
+              {/* Pestaña 3: Visualizar Reporte (Renderizado Tipográfico LaTeX) */}
               {tabTrazabilidad === 'VISOR_LATEX' && (
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 rounded-xl border bg-background/50">
-                  {/* Editor LaTeX */}
-                  <div className="lg:col-span-5 flex flex-col space-y-2">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <span className="text-xs font-bold font-mono text-foreground">
-                        Código Fuente LaTeX (.tex)
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        <Button
-                          size="sm"
-                          variant="default"
-                          disabled={compilandoPdf}
-                          onClick={() => handleCompilarLatexAPdf()}
-                          className="h-7 px-2.5 text-[11px] font-bold"
-                        >
-                          {compilandoPdf ? 'Compilando...' : '▶ Compilar LaTeX a PDF'}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={handleCopiarLatex}
-                          className="h-7 px-2 text-[11px] font-mono"
-                        >
-                          {copiadoLatex ? '✓ Copiado' : 'Copiar'}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={handleDescargarTex}
-                          className="h-7 px-2 text-[11px] font-mono"
-                        >
-                          .tex
-                        </Button>
-                      </div>
-                    </div>
-                    <textarea
-                      value={codigoLatex}
-                      onChange={(e) => setCodigoLatex(e.target.value)}
-                      className="w-full h-[500px] rounded-lg border border-border bg-zinc-950 text-emerald-400 p-3 font-mono text-[11px] leading-relaxed focus:outline-none focus:ring-1 focus:ring-primary"
-                      spellCheck={false}
-                    />
+                <div className="p-4 rounded-xl border bg-background/50 flex flex-col space-y-2">
+                  <div className="flex items-center justify-end">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => navigator.clipboard.writeText(codigoLatex)}
+                      className="h-7 px-3 text-xs font-bold shadow-xs"
+                    >
+                      Copiar Código LaTeX
+                    </Button>
                   </div>
 
-                  {/* Visor de Documento LaTeX Compilado (Hoja LaTeX / Visor PDF Nativo) */}
-                  <div className="lg:col-span-7 flex flex-col space-y-2">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div className="inline-flex rounded-md border bg-background p-0.5 text-xs">
-                        <button
-                          type="button"
-                          onClick={() => setModoVisorDerecho('PDF_NATIVO')}
-                          className={`px-2.5 py-1 rounded text-[11px] font-semibold ${modoVisorDerecho === 'PDF_NATIVO'
-                            ? 'bg-primary text-primary-foreground'
-                            : 'text-muted-foreground'
-                            }`}
-                        >
-                          Visor PDF Compilado
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setModoVisorDerecho('PAPER_LATEX')}
-                          className={`px-2.5 py-1 rounded text-[11px] font-semibold ${modoVisorDerecho === 'PAPER_LATEX'
-                            ? 'bg-primary text-primary-foreground'
-                            : 'text-muted-foreground'
-                            }`}
-                        >
-                          Renderizado Tipográfico LaTeX
-                        </button>
-                      </div>
-
-                      <a
-                        href={compiledPdfBlobUrl || pdfDownloadUrl}
-                        download={`Summary-LaTeX-${modoReporte.toLowerCase()}.pdf`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 h-7 px-3 text-xs font-bold shadow-xs"
-                      >
-                        Descargar Summary PDF
-                      </a>
-                    </div>
-
-                    {modoVisorDerecho === 'PAPER_LATEX' ? (
-                      <LatexPaperPreview tex={codigoLatex} />
-                    ) : (
-                      <div className="w-full h-[500px] rounded-lg border bg-muted/30 overflow-hidden">
-                        <iframe
-                          src={pdfInlineUrl}
-                          title="Visor Summary PDF en LaTeX"
-                          className="w-full h-full border-0"
-                        />
-                      </div>
-                    )}
-                  </div>
+                  <LatexPaperPreview tex={codigoLatex} />
                 </div>
               )}
             </div>
@@ -1080,39 +1031,6 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <div className="inline-flex rounded-md border bg-background p-0.5 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setVistaModal('SPLIT')}
-                    className={`px-2.5 py-1 rounded text-xs font-semibold ${vistaModal === 'SPLIT'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground'
-                      }`}
-                  >
-                    Vista Dividida (LaTeX + Visor)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setVistaModal('LATEX')}
-                    className={`px-2.5 py-1 rounded text-xs font-semibold ${vistaModal === 'LATEX'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground'
-                      }`}
-                  >
-                    Solo Código LaTeX
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setVistaModal('PDF')}
-                    className={`px-2.5 py-1 rounded text-xs font-semibold ${vistaModal === 'PDF'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground'
-                      }`}
-                  >
-                    Solo Visor PDF
-                  </button>
-                </div>
-
                 <Button
                   size="sm"
                   variant="outline"
@@ -1124,114 +1042,29 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
               </div>
             </CardHeader>
 
-            <CardContent className="p-4 flex-1 overflow-y-auto grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-[480px]">
-              {/* Columna Código LaTeX */}
-              {(vistaModal === 'SPLIT' || vistaModal === 'LATEX') && (
-                <div
-                  className={`${vistaModal === 'SPLIT' ? 'lg:col-span-5' : 'lg:col-span-12'
-                    } flex flex-col space-y-2`}
+            <CardContent className="p-4 flex-1 overflow-y-auto flex flex-col space-y-2 min-h-[480px]">
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => navigator.clipboard.writeText(codigoLatex)}
+                  className="h-7 px-3 text-xs font-bold shadow-xs"
                 >
-                  <div className="flex items-center justify-between flex-wrap gap-1.5">
-                    <span className="text-xs font-bold font-mono text-foreground">
-                      Código Fuente LaTeX (Summary_{modoReporte}.tex)
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      <Button
-                        size="sm"
-                        variant="default"
-                        disabled={compilandoPdf}
-                        onClick={() => handleCompilarLatexAPdf()}
-                        className="h-7 px-2.5 text-[11px] font-bold"
-                      >
-                        {compilandoPdf ? 'Compilando...' : '▶ Compilar a PDF'}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={handleCopiarLatex}
-                        className="h-7 px-2 text-[11px] font-mono"
-                      >
-                        {copiadoLatex ? '✓ Copiado' : 'Copiar'}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={handleDescargarTex}
-                        className="h-7 px-2 text-[11px] font-mono"
-                      >
-                        Descargar .tex
-                      </Button>
-                    </div>
-                  </div>
-                  {cargandoLatex ? (
-                    <div className="flex-1 rounded-lg border bg-muted/40 flex items-center justify-center text-xs font-mono text-muted-foreground">
-                      Generando código LaTeX del período seleccionado...
-                    </div>
-                  ) : (
-                    <textarea
-                      value={codigoLatex}
-                      onChange={(e) => setCodigoLatex(e.target.value)}
-                      className="flex-1 w-full min-h-[420px] rounded-lg border border-border bg-zinc-950 text-emerald-400 p-3 font-mono text-[11px] leading-relaxed focus:outline-none focus:ring-1 focus:ring-primary"
-                      spellCheck={false}
-                    />
-                  )}
-                </div>
-              )}
-
-              {/* Columna Previsualización PDF / LaTeX */}
-              {(vistaModal === 'SPLIT' || vistaModal === 'PDF') && (
-                <div
-                  className={`${vistaModal === 'SPLIT' ? 'lg:col-span-7' : 'lg:col-span-12'
-                    } flex flex-col space-y-2`}
+                  Copiar Código LaTeX
+                </Button>
+                <a
+                  href={compiledPdfBlobUrl || pdfDownloadUrl}
+                  download={`Summary-LaTeX-${modoReporte.toLowerCase()}.pdf`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 h-7 px-3 text-xs font-bold shadow-xs"
                 >
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <div className="inline-flex rounded-md border bg-background p-0.5 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => setModoVisorDerecho('PDF_NATIVO')}
-                        className={`px-2.5 py-1 rounded text-[11px] font-semibold ${modoVisorDerecho === 'PDF_NATIVO'
-                          ? 'bg-primary text-primary-foreground'
-                          : 'text-muted-foreground'
-                          }`}
-                      >
-                        Visor PDF Compilado
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setModoVisorDerecho('PAPER_LATEX')}
-                        className={`px-2.5 py-1 rounded text-[11px] font-semibold ${modoVisorDerecho === 'PAPER_LATEX'
-                          ? 'bg-primary text-primary-foreground'
-                          : 'text-muted-foreground'
-                          }`}
-                      >
-                        Renderizado Tipográfico LaTeX
-                      </button>
-                    </div>
+                  Descargar PDF
+                </a>
+              </div>
 
-                    <a
-                      href={compiledPdfBlobUrl || pdfDownloadUrl}
-                      download={`Summary-LaTeX-${modoReporte.toLowerCase()}.pdf`}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 h-7 px-3 text-xs font-bold shadow-xs"
-                    >
-                      Descargar Summary como PDF
-                    </a>
-                  </div>
-
-                  {modoVisorDerecho === 'PAPER_LATEX' ? (
-                    <LatexPaperPreview tex={codigoLatex} />
-                  ) : (
-                    <div className="flex-1 min-h-[420px] rounded-lg border bg-muted/30 overflow-hidden">
-                      <iframe
-                        src={pdfInlineUrl}
-                        title="Previsualización Summary PDF"
-                        className="w-full h-full min-h-[420px] border-0"
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
+              <LatexPaperPreview tex={codigoLatex} />
             </CardContent>
           </Card>
         </div>

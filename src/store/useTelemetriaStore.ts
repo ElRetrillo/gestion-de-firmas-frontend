@@ -27,6 +27,12 @@ export interface EstacionTrabajo {
     vendorId?: string;
     marca?: string;
     modelo?: string;
+    titularNombre?: string;
+    titularRut?: string;
+    titularEmail?: string;
+    titularCargo?: string;
+    titularUnidad?: string;
+    certNotAfter?: string;
   };
 }
 
@@ -237,6 +243,9 @@ export interface MetricasTrazabilidadResponse {
         nombre: string;
         rut: string;
         unidad: string;
+        cargo?: string;
+        email?: string;
+        origenCertificado?: boolean;
       } | null;
       estacionActual: string | null;
       estadoEnVivo: 'CONECTADO' | 'DESCONECTADO';
@@ -379,16 +388,16 @@ const defaultAnioActual = () => {
 export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
   socket: null,
   wsConectado: true,
-  estaciones: MOCK_ESTACIONES,
-  historialEventos: MOCK_HISTORIAL_EVENTOS,
-  metricas: buildMockMetricas('ULTIMOS_30_DIAS', defaultMesActual(), defaultAnioActual()),
+  estaciones: [],
+  historialEventos: [],
+  metricas: null,
   cargandoMetricas: false,
   modoReporte: 'ULTIMOS_30_DIAS',
   mesSeleccionado: defaultMesActual(),
   anioSeleccionado: defaultAnioActual(),
 
   limpiarMalla: async () => {
-    set({ estaciones: MOCK_ESTACIONES, historialEventos: MOCK_HISTORIAL_EVENTOS });
+    set({ estaciones: [], historialEventos: [] });
     try {
       await fetch('/api/v1/telemetria/limpiar', { method: 'POST' });
     } catch {
@@ -399,12 +408,10 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
   setPeriodoReporte: async (modo, mes, anio) => {
     const nuevoMes = mes || get().mesSeleccionado || defaultMesActual();
     const nuevoAnio = anio || get().anioSeleccionado || defaultAnioActual();
-    const fallbackData = buildMockMetricas(modo, nuevoMes, nuevoAnio);
     set({
       modoReporte: modo,
       mesSeleccionado: nuevoMes,
       anioSeleccionado: nuevoAnio,
-      metricas: fallbackData,
     });
     await get().cargarMetricas(modo, nuevoMes, nuevoAnio);
   },
@@ -413,7 +420,6 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
     const modo = modoInput || get().modoReporte || 'ULTIMOS_30_DIAS';
     const mes = mesInput || get().mesSeleccionado || defaultMesActual();
     const anio = anioInput || get().anioSeleccionado || defaultAnioActual();
-    const fallback = buildMockMetricas(modo, mes, anio);
 
     set({ cargandoMetricas: true });
     try {
@@ -427,17 +433,48 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
       const res = await fetch(`/api/v1/telemetria/metricas?${params.toString()}`);
       if (res.ok) {
         const data: MetricasTrazabilidadResponse = await res.json();
+        const backendTraza = (data.telemetria?.trazabilidadDispositivos || []).filter(
+          (item) => !(item.serialNumber.startsWith('SN-WIN-') && item.serialNumber.endsWith('-UNKNOWN')),
+        );
+
         set({
-          metricas: data,
+          metricas: {
+            ...data,
+            resumenDispositivos: data.resumenDispositivos || {
+              totalExistentes: backendTraza.length,
+              activos: backendTraza.length,
+              expirados: 0,
+              porcentajeActivos: backendTraza.length > 0 ? 100 : 0,
+              porcentajeExpirados: 0,
+              conectadosEnSesion: data.telemetria?.estacionesConectadas || 0,
+              firmandoEnSesion: 0,
+            },
+            firmasAsignadas: data.firmasAsignadas || {
+              totalAsignadas: backendTraza.length,
+              vigentes: backendTraza.length,
+              porVencer: 0,
+              expiradas: 0,
+              listado: [],
+            },
+            accionesFuncionarios: data.accionesFuncionarios || {
+              totalAccionesFirmaPeriodo: 0,
+              totalAccionesFirmaHistorico: 0,
+              conexionesExcluidasPeriodo: data.telemetria?.eventosConectado || 0,
+              desconexionesExcluidasPeriodo: data.telemetria?.eventosDesconectado || 0,
+              listadoPorFuncionario: [],
+            },
+            telemetria: {
+              ...(data.telemetria || {}),
+              trazabilidadDispositivos: backendTraza,
+            },
+          },
           modoReporte: data.periodo?.modo || modo,
           mesSeleccionado: data.periodo?.mesSeleccionado || mes,
           anioSeleccionado: data.periodo?.anioSeleccionado || anio,
         });
       }
     } catch {
-      if (!get().metricas) {
-        set({ metricas: fallback });
-      }
+      // No usar datos mock hardcodeados
     } finally {
       set({ cargandoMetricas: false });
     }
@@ -556,7 +593,11 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
 
     socket.on('estado_pc_actualizado', (payload: any) => {
       const prev = get().estaciones.find((e) => e.codigoPc === payload?.codigoPc);
-      const cambioEstado = prev && payload?.estadoHardware && prev.estadoEnVivo !== payload.estadoHardware;
+      const cambioEstado =
+        !prev ||
+        (payload?.estadoHardware && prev.estadoEnVivo !== payload.estadoHardware) ||
+        (payload?.serialNumber && prev.tokenInfo?.serialNumber !== payload.serialNumber) ||
+        Boolean(payload?.metadatos?.titularNombre && prev.tokenInfo?.titularNombre !== payload.metadatos.titularNombre);
       get().actualizarEstadoEstacion(payload);
       if (cambioEstado) {
         get().cargarMetricas();
@@ -566,7 +607,11 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
     socket.on('usb-status-changed', (payload: any) => {
       if (payload?.codigoPc) {
         const prev = get().estaciones.find((e) => e.codigoPc === payload.codigoPc);
-        const cambioEstado = prev && payload?.estadoHardware && prev.estadoEnVivo !== payload.estadoHardware;
+        const cambioEstado =
+          !prev ||
+          (payload?.estadoHardware && prev.estadoEnVivo !== payload.estadoHardware) ||
+          (payload?.serialNumber && prev.tokenInfo?.serialNumber !== payload.serialNumber) ||
+          Boolean(payload?.metadatos?.titularNombre && prev.tokenInfo?.titularNombre !== payload.metadatos.titularNombre);
         get().actualizarEstadoEstacion(payload);
         if (cambioEstado) {
           get().cargarMetricas();
@@ -598,6 +643,12 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
                 vendorId: payload.vendorId,
                 marca: payload.marca,
                 modelo: payload.modelo,
+                titularNombre: payload.metadatos?.titularNombre,
+                titularRut: payload.metadatos?.titularRut,
+                titularEmail: payload.metadatos?.titularEmail,
+                titularCargo: payload.metadatos?.titularCargo,
+                titularUnidad: payload.metadatos?.titularUnidad,
+                certNotAfter: payload.metadatos?.certNotAfter,
               }
             : undefined);
 
@@ -650,7 +701,7 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
       const resEst = await fetch('/api/v1/telemetria/estaciones');
       if (resEst.ok) {
         const data = await resEst.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           const mappedEstaciones: EstacionTrabajo[] = data.map((d: any) => ({
             id: d.id,
             codigoPc: d.codigoPc,
@@ -678,7 +729,7 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
       const resEventos = await fetch('/api/v1/telemetria/eventos-recientes');
       if (resEventos.ok) {
         const data = await resEventos.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           const mappedEventos: TelemetriaLog[] = data.map((e: any) => {
             const fechaObj = new Date(e.timestamp || Date.now());
             const fechaValida = !isNaN(fechaObj.getTime()) ? fechaObj : new Date();

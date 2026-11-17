@@ -2,12 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Sidebar, NavTab } from './components/Sidebar';
 import { TopHeader } from './components/TopHeader';
 import { LoginModal } from './components/LoginModal';
+import { LandingPage } from './components/LandingPage';
 import { DashboardSupervisores } from './components/DashboardSupervisores';
 import { AlertasCertificadosView } from './components/AlertasCertificadosView';
 import { MetricasTrazabilidadPanel } from './components/MetricasTrazabilidadPanel';
 import { AuditoriaView } from './components/AuditoriaView';
 import { GestionUsuariosEquipamientoView } from './components/GestionUsuariosEquipamientoView';
+import { RepositorioDocumentosView } from './components/RepositorioDocumentosView';
 import { VistaFirmaUsuario } from './components/VistaFirmaUsuario';
+import { ValidadorDocumentoView } from './components/ValidadorDocumentoView';
 import { LogoMunicipalidad } from './components/LogoMunicipalidad';
 import { Button } from './components/ui/button';
 import { Badge } from './components/ui/badge';
@@ -17,7 +20,9 @@ import { useAuthStore } from './store/useAuthStore';
 
 export const App: React.FC = () => {
   const [tabActiva, setTabActiva] = useState<NavTab>('DASHBOARD');
+  const [tabFuncionario, setTabFuncionario] = useState<'FIRMAR' | 'MIS_DOCUMENTOS'>('FIRMAR');
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
+  const [mostrarLoginModal, setMostrarLoginModal] = useState(false);
 
   const { inicializarSocket, cargarEstaciones, cargarEventosRecientes, cargarMetricas } = useTelemetriaStore();
   const { usuario, isAutenticado, verificarSesion, cargandoSesion, debeCambiarPassword, logout } = useAuthStore();
@@ -44,6 +49,13 @@ export const App: React.FC = () => {
     }
   }, [isAutenticado, inicializarSocket, cargarEstaciones, cargarEventosRecientes, cargarMetricas]);
 
+  const esValidadorPublico =
+    typeof window !== 'undefined' && window.location.pathname.startsWith('/validar');
+
+  if (esValidadorPublico) {
+    return <ValidadorDocumentoView />;
+  }
+
   if (cargandoSesion && localStorage.getItem('access_token')) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background text-foreground">
@@ -57,62 +69,20 @@ export const App: React.FC = () => {
 
   if (!isAutenticado) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-foreground p-4">
+      <>
+        <LandingPage
+          onOpenLogin={() => setMostrarLoginModal(true)}
+          onGoToApp={() => setMostrarLoginModal(true)}
+        />
         <LoginModal
-          isOpen={true}
-          onClose={() => {}}
+          isOpen={mostrarLoginModal}
+          onClose={() => setMostrarLoginModal(false)}
           onLoginSuccess={() => {
+            setMostrarLoginModal(false);
             setTabActiva('DASHBOARD');
           }}
         />
-      </div>
-    );
-  }
-
-  if (!esSupervisorOAdmin) {
-    return (
-      <div className="min-h-screen flex flex-col w-full bg-background text-foreground">
-        <header className="h-14 border-b border-border bg-card/80 backdrop-blur-sm px-4 sm:px-6 flex items-center justify-between gap-3 sticky top-0 z-30">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <LogoMunicipalidad variant="sidebar" className="h-8 w-8 shrink-0" />
-            <div className="flex flex-col min-w-0">
-              <span className="font-bold text-xs sm:text-sm text-foreground truncate">
-                Portal de Firma Electrónica
-              </span>
-              <span className="text-[10px] font-mono text-muted-foreground truncate">
-                {usuario?.nombre} • {formatRutVisual(usuario?.rut)}
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Badge variant="outline" className="hidden sm:inline-flex text-[10px] font-mono">
-              {usuario?.rbac?.etiquetaRol || usuario?.cargo || 'Funcionario'}
-            </Badge>
-            <Button
-              onClick={logout}
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 border-rose-500/30 font-semibold"
-            >
-              Cerrar Sesión
-            </Button>
-          </div>
-        </header>
-
-        <main className="flex-1 overflow-y-auto p-3 sm:p-6 bg-background">
-          <VistaFirmaUsuario />
-        </main>
-
-        {debeCambiarPassword && (
-          <LoginModal
-            isOpen={true}
-            onClose={() => {}}
-            onLoginSuccess={() => {
-              setTabActiva('FIRMAR');
-            }}
-          />
-        )}
-      </div>
+      </>
     );
   }
 
@@ -135,7 +105,6 @@ export const App: React.FC = () => {
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-background">
           <div className="max-w-7xl mx-auto space-y-5">
             {tabActiva === 'DASHBOARD' && <DashboardSupervisores />}
-            {tabActiva === 'FIRMAR' && <VistaFirmaUsuario />}
             {tabActiva === 'ALERTAS' && <AlertasCertificadosView />}
             {tabActiva === 'METRICAS' && <MetricasTrazabilidadPanel vistaCompleta />}
             {tabActiva === 'USUARIOS_CUSTODIA' && <GestionUsuariosEquipamientoView />}

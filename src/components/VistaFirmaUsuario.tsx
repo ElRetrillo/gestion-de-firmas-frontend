@@ -53,6 +53,7 @@ export const VistaFirmaUsuario: React.FC = () => {
   // - DESATENDIDA: Inmediata, 1 solo clic (sin clave)
   // - GENERAL: Con código dinámico OTP de 6 dígitos
   const [submodalidadGob, setSubmodalidadGob] = useState<SubmodalidadFirmaGob>('DESATENDIDA');
+  const [destinoGob, setDestinoGob] = useState<'SANDBOX_LOCAL' | 'TEST_OFICIAL_GOB_CL'>('SANDBOX_LOCAL');
 
   // 3. Claves de autenticación según el método
   const [codigoOtpGob, setCodigoOtpGob] = useState('');
@@ -230,38 +231,31 @@ export const VistaFirmaUsuario: React.FC = () => {
         // -------------------------------------------------------------
         const esDesatendida = submodalidadGob === 'DESATENDIDA';
         const propositoFirmaGob = esDesatendida ? 'Desatendido' : 'Propósito General';
-        const jwtToken = await construirTokenJwtFirmaGob(runSinDv, propositoFirmaGob);
 
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-        };
-
-        if (!esDesatendida) {
-          const otpAEnviar = codigoOtpGob.trim();
-          if (!otpAEnviar) {
-            throw new Error('Debe ingresar el código OTP de 6 dígitos de su aplicación Authenticator.');
-          }
-          headers['OTP'] = otpAEnviar;
+        if (!esDesatendida && !codigoOtpGob.trim()) {
+          throw new Error('Debe ingresar el código OTP de 6 dígitos de su aplicación Authenticator.');
         }
 
         // Generar layout XML si el usuario posicionó la firma con el mouse en el visor Adobe
         const layoutXml = coordenadasFirma ? generarLayoutXml(coordenadasFirma) : undefined;
+        const tokenAuth = localStorage.getItem('access_token');
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+        if (tokenAuth) {
+          headers['Authorization'] = `Bearer ${tokenAuth}`;
+        }
 
-        const res = await fetch('/api/v1/firmas/v2/files/tickets', {
+        const res = await fetch('/api/v1/firmas/v2/enviar', {
           method: 'POST',
           headers,
           body: JSON.stringify({
-            token: jwtToken,
-            api_token_key: 'sandbox',
-            files: [
-              {
-                'content-type': 'application/pdf',
-                content: contenidoBase64,
-                description: nombreDoc,
-                checksum: 'auto-sha256',
-                layout: layoutXml,
-              },
-            ],
+            pdfBase64: contenidoBase64,
+            nombreDocumento: nombreDoc,
+            submodalidad: submodalidadGob,
+            otp: esDesatendida ? undefined : codigoOtpGob.trim(),
+            layoutXml,
+            destino: destinoGob,
           }),
         });
 
@@ -651,6 +645,39 @@ export const VistaFirmaUsuario: React.FC = () => {
                 <span className="text-xs font-bold text-foreground">Modalidad de FirmaGob:</span>
                 <span className="text-[10px] text-muted-foreground font-mono">Protocolo v2</span>
               </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDestinoGob('SANDBOX_LOCAL')}
+                  className={`p-2 rounded-lg border text-left transition-all ${
+                    destinoGob === 'SANDBOX_LOCAL'
+                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold'
+                      : 'border-border bg-background text-muted-foreground'
+                  }`}
+                >
+                  <div className="text-[11px]">Sandbox Local</div>
+                  <div className="text-[9px] font-normal opacity-80">Simulación en servidor local</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDestinoGob('TEST_OFICIAL_GOB_CL')}
+                  className={`p-2 rounded-lg border text-left transition-all ${
+                    destinoGob === 'TEST_OFICIAL_GOB_CL'
+                      ? 'border-sky-500 bg-sky-500/10 text-sky-700 dark:text-sky-300 font-bold'
+                      : 'border-border bg-background text-muted-foreground'
+                  }`}
+                >
+                  <div className="text-[11px]">Etapa A • TEST Gob.cl</div>
+                  <div className="text-[9px] font-normal opacity-80">api.firma.cert.digital.gob.cl</div>
+                </button>
+              </div>
+
+              {destinoGob === 'TEST_OFICIAL_GOB_CL' && (
+                <div className="p-2 rounded-lg border border-sky-500/30 bg-sky-500/5 text-[10px] font-mono text-sky-800 dark:text-sky-200">
+                  Credenciales Etapa A: <strong>api_token_key=sandbox</strong> • Entity: <strong>Subsecretaría General de la Presidencia</strong> • RUN: <strong>{submodalidadGob === 'DESATENDIDA' ? '22222222 (Desatendido)' : '11111111 (OTP QR Pág. 18)'}</strong>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-2">
                 <button
