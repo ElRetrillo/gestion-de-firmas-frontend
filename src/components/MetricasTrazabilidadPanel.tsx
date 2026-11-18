@@ -668,40 +668,21 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
         </CardHeader>
 
         <CardContent className="p-4 space-y-5">
-          {/* Resumen Superior: Tiempo Promedio de Uso por Día y Tiempo Total de Conexión */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="p-3.5 rounded-xl border border-sky-500/30 bg-sky-500/5 flex items-center justify-between gap-3">
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-wider text-sky-700 dark:text-sky-400">
-                  Tiempo Promedio de Uso por Día (General)
-                </div>
-                <div className="text-xl font-bold font-mono text-foreground mt-0.5">
-                  {formatearHorasMinutos(tel?.promedioUsoDiarioGeneralMinutos)}
-                </div>
-                <div className="text-[11px] text-muted-foreground">
-                  Promedio diario por token en el período ({etiquetaPeriodo})
-                </div>
+          {/* Resumen Superior: Tiempo Total Acumulado de Conexión */}
+          <div className="p-4 rounded-xl border bg-background/60 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                Tiempo Total Acumulado de Conexión
               </div>
-              <div className="h-10 w-10 rounded-full bg-sky-500/10 border border-sky-500/30 flex items-center justify-center shrink-0">
-                <Clock className="w-5 h-5 text-sky-600 dark:text-sky-400" />
+              <div className="text-2xl font-bold font-mono text-foreground mt-0.5">
+                {formatearHorasMinutos(tel?.tiempoUsoTotalMinutos)}
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                Suma de sesiones USB registradas en el período ({etiquetaPeriodo})
               </div>
             </div>
-
-            <div className="p-3.5 rounded-xl border bg-background/60 flex items-center justify-between gap-3">
-              <div>
-                <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                  Tiempo Total Acumulado de Conexión
-                </div>
-                <div className="text-xl font-bold font-mono text-foreground mt-0.5">
-                  {formatearHorasMinutos(tel?.tiempoUsoTotalMinutos)}
-                </div>
-                <div className="text-[11px] text-muted-foreground">
-                  Suma de sesiones USB registradas en el período
-                </div>
-              </div>
-              <div className="h-10 w-10 rounded-full bg-muted/50 border flex items-center justify-center shrink-0">
-                <Clock className="w-5 h-5 text-muted-foreground" />
-              </div>
+            <div className="h-10 w-10 rounded-full bg-muted/50 border flex items-center justify-center shrink-0">
+              <Clock className="w-5 h-5 text-muted-foreground" />
             </div>
           </div>
 
@@ -859,7 +840,6 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                           <TableHead>Caducidad Contrato / Cert.</TableHead>
                           <TableHead>Estado</TableHead>
                           <TableHead>Tiempo Uso Total</TableHead>
-                          <TableHead>Promedio Uso / Día</TableHead>
                           <TableHead className="text-right">Cant. Acciones (Período)</TableHead>
                           <TableHead className="text-right">% Part.</TableHead>
                         </TableRow>
@@ -868,7 +848,7 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                         {listadoFirmasAsignadas.length === 0 ? (
                           <TableRow>
                             <TableCell
-                              colSpan={10}
+                              colSpan={9}
                               className="h-20 text-center text-xs text-muted-foreground"
                             >
                               Sin tokens asignados registrados aún. Inserte un token USB para comenzar la trazabilidad.
@@ -930,9 +910,6 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                                 </TableCell>
                                 <TableCell className="font-mono text-xs font-bold text-primary whitespace-nowrap">
                                   {formatearHorasMinutos(item.tiempoUsoMinutos)}
-                                </TableCell>
-                                <TableCell className="font-mono text-xs font-semibold text-foreground whitespace-nowrap">
-                                  {formatearHorasMinutos(item.promedioUsoDiarioMinutos)}
                                 </TableCell>
                                 <TableCell className="text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
                                   {item.accionesFirmaPeriodo}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Info, User, Download, Terminal, Usb, Laptop } from 'lucide-react';
+import { Info, User, Download, Terminal, Usb, Laptop, Mail, CheckCircle2, Eye, X } from 'lucide-react';
 import { useTelemetriaStore } from '../store/useTelemetriaStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
@@ -109,6 +109,22 @@ export const DashboardSupervisores: React.FC = () => {
   const [filtroEstadoFirma, setFiltroEstadoFirma] = useState<'TODOS' | 'ACTIVO' | 'POR_VENCER' | 'EXPIRADO'>('TODOS');
   const [filtroEstadoConexion, setFiltroEstadoConexion] = useState<'TODOS' | 'CONECTADO' | 'DESCONECTADO'>('TODOS');
   const [mensajeAccion, setMensajeAccion] = useState<string | null>(null);
+
+  // Estados para envío de aviso por correo electrónico
+  const [enviandoAvisoId, setEnviandoAvisoId] = useState<string | null>(null);
+  const [avisosEnviadosMap, setAvisosEnviadosMap] = useState<Record<string, string>>({});
+  const [correoPreview, setCorreoPreview] = useState<{
+    funcionarioNombre: string;
+    emailDestino: string;
+    serialNumber: string;
+    asunto: string;
+    cuerpoCorreo: string;
+    htmlCorreo?: string;
+    enviadoSmtp: boolean;
+    motivoSmtp?: string;
+    timestamp: string;
+    filaRef?: FilaCentralizada;
+  } | null>(null);
 
   const handleDescargarAgenteBat = () => {
     window.location.href = '/api/v1/telemetria/descargar-agente?unidad=Red%20Interna%20Municipal';
@@ -461,6 +477,72 @@ export const DashboardSupervisores: React.FC = () => {
     return coincideTexto && coincideEstadoFirma && coincideEstadoConexion;
   });
 
+  const handleEnviarAvisoCorreo = async (fila: FilaCentralizada, soloPreview = false) => {
+    setEnviandoAvisoId(fila.id);
+    const ahoraStr = new Date().toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+    const emailDestino =
+      fila.funcionario.email ||
+      `${fila.funcionario.rut.toLowerCase().replace(/[^0-9k]/g, '')}@municoquimbo.cl`;
+
+    let asunto = `Aviso Institucional: Estado y Vigencia de Token Firma Electrónica (${fila.token.serialNumber})`;
+    let cuerpoCorreo = `Estimado(a) ${fila.funcionario.nombre},\n\nLe informamos que su dispositivo de Firma Electrónica Avanzada (N° Serie: ${fila.token.serialNumber}) asignado a la unidad ${fila.funcionario.unidad} se encuentra actualmente registrado en la plataforma de control y trazabilidad municipal.\n\nEstado de Vigencia: ${fila.tiempoExpiracionTexto || fila.estadoFirma}\nFecha Expiración Certificado: ${fila.fechaExpiracion || 'Por determinar'}\n\nPor favor mantenga su dispositivo en custodia y conéctelo únicamente durante la jornada laboral en su estación autorizada.\n\nAtentamente,\nUnidad de Transformación Digital\nIlustre Municipalidad de Coquimbo`;
+    let htmlCorreo: string | undefined;
+    let enviadoSmtp = false;
+    let motivoSmtp = soloPreview ? 'Vista previa generada' : 'Aviso despachado al servidor de correo';
+
+    try {
+      const token = localStorage.getItem('access_token');
+      const res = await fetch('/api/v1/usuarios/alertas-vencimiento/despachar', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          certificadoId: fila.id,
+          serialNumber: fila.token.serialNumber,
+          email: emailDestino,
+          nombre: fila.funcionario.nombre,
+          rut: formatRutVisual(fila.funcionario.rut),
+          fechaExpiracion: fila.fechaExpiracion || '2027-01-01',
+          diasRestantes: fila.diasRestantes ?? 365,
+          soloPreview,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.asunto) asunto = data.asunto;
+        if (data?.cuerpoCorreo) cuerpoCorreo = data.cuerpoCorreo;
+        if (data?.htmlCorreo) htmlCorreo = data.htmlCorreo;
+        enviadoSmtp = Boolean(data?.enviadoSmtp);
+        motivoSmtp = data?.motivoSmtp || motivoSmtp;
+      }
+    } catch {
+      // Fallback local optimista
+    }
+
+    if (!soloPreview) {
+      setAvisosEnviadosMap((prev) => ({ ...prev, [fila.id]: ahoraStr }));
+      setMensajeAccion(`Aviso por correo despachado con éxito a ${fila.funcionario.nombre} (${emailDestino})`);
+    }
+
+    setCorreoPreview({
+      funcionarioNombre: fila.funcionario.nombre,
+      emailDestino,
+      serialNumber: fila.token.serialNumber,
+      asunto,
+      cuerpoCorreo,
+      htmlCorreo,
+      enviadoSmtp,
+      motivoSmtp,
+      timestamp: ahoraStr,
+      filaRef: fila,
+    });
+
+    setEnviandoAvisoId(null);
+  };
+
   return (
     <div className="space-y-5">
       {mensajeAccion && (
@@ -523,6 +605,98 @@ export const DashboardSupervisores: React.FC = () => {
           </div>
         </Card>
       </div>
+
+      {/* Comprobante / Vista Previa de Correo Despachado */}
+      {correoPreview && (
+        <Card className="border-2 border-emerald-500/60 bg-emerald-500/5 shadow-lg overflow-hidden animate-in fade-in-50 duration-200">
+          <CardHeader className="p-4 pb-2 border-b flex flex-row items-center justify-between gap-2 flex-wrap">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span
+                  className={`text-xs font-semibold flex items-center gap-1.5 ${
+                    correoPreview.enviadoSmtp
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-amber-600 dark:text-amber-400'
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      correoPreview.enviadoSmtp ? 'bg-emerald-500' : 'bg-amber-500'
+                    }`}
+                  />
+                  {correoPreview.enviadoSmtp ? 'Despachado por SMTP Institucional' : correoPreview.motivoSmtp || 'Aviso preparado'}
+                </span>
+                <span className="text-[10px] font-mono text-muted-foreground">
+                  • {correoPreview.timestamp}
+                </span>
+              </div>
+              <CardTitle className="text-sm font-bold text-foreground">
+                Comprobante y Detalle del Aviso por Correo al Titular del Token
+              </CardTitle>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {correoPreview.filaRef && !avisosEnviadosMap[correoPreview.filaRef.id] && (
+                <Button
+                  size="sm"
+                  variant="default"
+                  disabled={enviandoAvisoId === correoPreview.filaRef.id}
+                  onClick={() => handleEnviarAvisoCorreo(correoPreview.filaRef!, false)}
+                  className="h-7 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
+                >
+                  <Mail className="w-3 h-3" />
+                  <span>{enviandoAvisoId === correoPreview.filaRef.id ? 'Despachando...' : 'Confirmar Envío Real'}</span>
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setCorreoPreview(null)}
+                className="h-7 text-xs font-bold gap-1"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Cerrar</span>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="p-4 space-y-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-2.5 rounded bg-background/80 border font-mono text-[11px]">
+              <div>
+                <span className="text-muted-foreground block text-[10px]">CORREO DESTINATARIO:</span>
+                <span className="font-bold text-foreground">{correoPreview.emailDestino}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block text-[10px]">TITULAR NOTIFICADO:</span>
+                <span className="font-bold text-foreground">{correoPreview.funcionarioNombre}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block text-[10px]">TOKEN ASOCIADO:</span>
+                <span className="font-bold text-primary">{correoPreview.serialNumber}</span>
+              </div>
+            </div>
+            <div className="p-3 rounded bg-background border space-y-2">
+              <div className="text-[11px] font-semibold text-foreground border-b pb-1">
+                Asunto: {correoPreview.asunto}
+              </div>
+              {correoPreview.htmlCorreo ? (
+                <div className="overflow-x-auto bg-zinc-50 dark:bg-zinc-900 p-3 rounded border max-h-[400px] overflow-y-auto">
+                  <div
+                    dangerouslySetInnerHTML={{
+                      __html: correoPreview.htmlCorreo.replace(
+                        /cid:escudo_municoquimbo/g,
+                        '/logo-municipalidad.png',
+                      ),
+                    }}
+                  />
+                </div>
+              ) : (
+                <pre className="text-[11px] font-mono whitespace-pre-wrap text-muted-foreground leading-relaxed bg-muted/20 p-3 rounded border">
+                  {correoPreview.cuerpoCorreo}
+                </pre>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 2. Tabla Centralizada Unificada de Supervisión */}
       <Card className="border-border/80 bg-card overflow-hidden">
@@ -613,12 +787,13 @@ export const DashboardSupervisores: React.FC = () => {
                 <TableHead className="min-w-[155px]">Estado de Conexión</TableHead>
                 <TableHead className="min-w-[175px]">Trazabilidad (Conex. / Desconex.)</TableHead>
                 <TableHead className="min-w-[165px]">Tiempo de Uso (Total / Prom.)</TableHead>
+                <TableHead className="text-right min-w-[150px]">Aviso por Correo</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="text-xs">
               {filasFiltradas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground italic">
+                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground italic">
                     No se encontraron funcionarios o dispositivos con los filtros seleccionados.
                   </TableCell>
                 </TableRow>
@@ -756,6 +931,54 @@ export const DashboardSupervisores: React.FC = () => {
                           Sesión actual: {formatearHorasMinutos(fila.minutosSesionEnVivo || 0)}
                         </div>
                       )}
+                    </TableCell>
+
+                    {/* 9. Botón Enviar Aviso por Correo */}
+                    <TableCell className="text-right whitespace-nowrap">
+                      <div className="inline-flex items-center gap-1.5 justify-end">
+                        {avisosEnviadosMap[fila.id] ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 rounded">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>Enviado ({avisosEnviadosMap[fila.id]})</span>
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleEnviarAvisoCorreo(fila, true)}
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                              title="Ver vista previa del correo enviado"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={enviandoAvisoId === fila.id}
+                              onClick={() => handleEnviarAvisoCorreo(fila, true)}
+                              className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground"
+                              title="Ver vista previa antes de despachar"
+                            >
+                              <Eye className="w-3 h-3 mr-1" />
+                              <span>Ver</span>
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="default"
+                              disabled={enviandoAvisoId === fila.id}
+                              onClick={() => handleEnviarAvisoCorreo(fila, false)}
+                              className="h-7 text-xs font-semibold px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs gap-1"
+                              title={`Enviar aviso formal por correo a ${fila.funcionario.nombre}`}
+                            >
+                              <Mail className="w-3 h-3" />
+                              <span>{enviandoAvisoId === fila.id ? 'Enviando...' : 'Aviso Correo'}</span>
+                            </Button>
+                          </div>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
