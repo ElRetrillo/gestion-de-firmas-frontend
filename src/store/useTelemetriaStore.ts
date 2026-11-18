@@ -18,6 +18,7 @@ export interface EstacionTrabajo {
   dependenciaFisica: string;
   estadoEnVivo: EstadoHardwareType;
   ultimoPing: string;
+  minutosConectado?: number;
   tokenInfo?: {
     serialNumber?: string;
     vendorId?: string;

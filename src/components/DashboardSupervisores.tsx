@@ -164,7 +164,9 @@ export const DashboardSupervisores: React.FC = () => {
     dependenciaFisica?: string | null;
     conexiones: number;
     desconexiones: number;
+    tiempoUsoMinutos: number;
     promedioUsoDiarioMinutos: number;
+    minutosSesionEnVivo?: number;
   }
 
   // Mapa combinado
@@ -233,7 +235,9 @@ export const DashboardSupervisores: React.FC = () => {
       dependenciaFisica: estacionEnVivo?.dependenciaFisica || null,
       conexiones: trazaData?.conexionesPeriodo ?? accionData?.conexionesIgnoradasPeriodo ?? 0,
       desconexiones: trazaData?.desconexionesPeriodo ?? accionData?.desconexionesIgnoradasPeriodo ?? 0,
-      promedioUsoDiarioMinutos: trazaData?.promedioUsoDiarioMinutos ?? 0,
+      tiempoUsoMinutos: trazaData?.tiempoUsoMinutos ?? f.tiempoUsoMinutos ?? 0,
+      promedioUsoDiarioMinutos: trazaData?.promedioUsoDiarioMinutos ?? f.promedioUsoDiarioMinutos ?? 0,
+      minutosSesionEnVivo: estacionEnVivo?.minutosConectado,
     });
   });
 
@@ -303,7 +307,9 @@ export const DashboardSupervisores: React.FC = () => {
         dependenciaFisica: estacionEnVivo?.dependenciaFisica || t.dependenciaFisica || null,
         conexiones: t.conexionesPeriodo ?? 0,
         desconexiones: t.desconexionesPeriodo ?? 0,
+        tiempoUsoMinutos: t.tiempoUsoMinutos ?? 0,
         promedioUsoDiarioMinutos: t.promedioUsoDiarioMinutos ?? 0,
+        minutosSesionEnVivo: estacionEnVivo?.minutosConectado,
       });
     }
   });
@@ -400,10 +406,15 @@ export const DashboardSupervisores: React.FC = () => {
         trazaPorSerial?.desconexionesPeriodo ??
         prevRow?.desconexiones ??
         0,
+      tiempoUsoMinutos:
+        trazaPorSerial?.tiempoUsoMinutos ??
+        prevRow?.tiempoUsoMinutos ??
+        0,
       promedioUsoDiarioMinutos:
         trazaPorSerial?.promedioUsoDiarioMinutos ??
         prevRow?.promedioUsoDiarioMinutos ??
         0,
+      minutosSesionEnVivo: est.minutosConectado ?? prevRow?.minutosSesionEnVivo,
     });
   });
 
@@ -601,7 +612,7 @@ export const DashboardSupervisores: React.FC = () => {
                 <TableHead className="min-w-[140px]">Vigencia Actual</TableHead>
                 <TableHead className="min-w-[155px]">Estado de Conexión</TableHead>
                 <TableHead className="min-w-[175px]">Trazabilidad (Conex. / Desconex.)</TableHead>
-                <TableHead className="min-w-[145px]">Promedio Uso Diario</TableHead>
+                <TableHead className="min-w-[165px]">Tiempo de Uso (Total / Prom.)</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody className="text-xs">
@@ -730,9 +741,21 @@ export const DashboardSupervisores: React.FC = () => {
                       </div>
                     </TableCell>
 
-                    {/* 8. Promedio de tiempo de uso diario (hrs; mins) */}
-                    <TableCell className="font-mono text-xs font-semibold text-foreground whitespace-nowrap">
-                      {formatearHorasMinutos(fila.promedioUsoDiarioMinutos)}
+                    {/* 8. Tiempo de uso total en el período y promedio diario (hrs; mins) */}
+                    <TableCell className="font-mono text-xs whitespace-nowrap">
+                      <div className="font-bold text-foreground">
+                        Total: {formatearHorasMinutos(
+                          Math.max(fila.tiempoUsoMinutos, fila.estadoConexion === 'CONECTADO' ? (fila.minutosSesionEnVivo || 0) : 0),
+                        )}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">
+                        Prom. día: {formatearHorasMinutos(fila.promedioUsoDiarioMinutos)}
+                      </div>
+                      {fila.estadoConexion === 'CONECTADO' && (
+                        <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                          Sesión actual: {formatearHorasMinutos(fila.minutosSesionEnVivo || 0)}
+                        </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))

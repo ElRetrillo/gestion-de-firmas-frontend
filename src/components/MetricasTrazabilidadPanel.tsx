@@ -856,6 +856,7 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                           <TableHead>Fecha Asignación</TableHead>
                           <TableHead>Caducidad Contrato / Cert.</TableHead>
                           <TableHead>Estado</TableHead>
+                          <TableHead>Tiempo Uso Total</TableHead>
                           <TableHead>Promedio Uso / Día</TableHead>
                           <TableHead className="text-right">Cant. Acciones (Período)</TableHead>
                           <TableHead className="text-right">% Part.</TableHead>
@@ -865,7 +866,7 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                         {listadoFirmasAsignadas.length === 0 ? (
                           <TableRow>
                             <TableCell
-                              colSpan={9}
+                              colSpan={10}
                               className="h-20 text-center text-xs text-muted-foreground"
                             >
                               Sin tokens asignados registrados aún. Inserte un token USB para comenzar la trazabilidad.
@@ -924,6 +925,9 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                                         ? 'Vigente'
                                         : 'Expirado'}
                                   </span>
+                                </TableCell>
+                                <TableCell className="font-mono text-xs font-bold text-primary whitespace-nowrap">
+                                  {formatearHorasMinutos(item.tiempoUsoMinutos)}
                                 </TableCell>
                                 <TableCell className="font-mono text-xs font-semibold text-foreground whitespace-nowrap">
                                   {formatearHorasMinutos(item.promedioUsoDiarioMinutos)}
