@@ -516,16 +516,19 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
   const serie = metricas?.serieTemporal || [];
   const maxFirmasDia = Math.max(1, ...serie.map((d) => d.firmasRealizadas || d.totalActividad || 1));
 
-  // 1. Porcentaje de Dispositivos Activos vs Expirados (suma exacta 100%, máx 2 decimales)
+  // 1. Métrica: Tasa de Retención y Uso Activo de Tokens (Tokens que registran uso efectivo en el período vs en desuso)
   const totalExistentes =
     metricas?.resumenDispositivos?.totalExistentes ?? tel?.tokensRegistrados ?? 0;
-  const activosCount =
-    metricas?.resumenDispositivos?.activos ?? tel?.tokensOperativos ?? 0;
-  const expiradosCount =
-    metricas?.resumenDispositivos?.expirados ??
-    tel?.tokensExpirados ??
-    Math.max(0, totalExistentes - activosCount);
-  const [pctActivos, pctExpirados] = computeNormalizedPercentages([activosCount, expiradosCount]);
+  const listaDispositivos = tel?.trazabilidadDispositivos || [];
+  const tokensConUsoEfectivo = listaDispositivos.filter(
+    (d) => (d.tiempoUsoMinutos || 0) > 0 || (d.totalEventosPeriodo || 0) > 0,
+  ).length;
+  const tokensEnUsoCount =
+    tokensConUsoEfectivo > 0
+      ? tokensConUsoEfectivo
+      : (metricas?.resumenDispositivos?.activos ?? tel?.tokensOperativos ?? 0);
+  const tokensEnDesusoCount = Math.max(0, totalExistentes - tokensEnUsoCount);
+  const [pctUsoActivo, pctEnDesuso] = computeNormalizedPercentages([tokensEnUsoCount, tokensEnDesusoCount]);
 
   // 2. Porcentaje de Vigencia de Firmas Asignadas (suma exacta 100%, máx 2 decimales)
   const firmasTotal =
@@ -545,7 +548,6 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
   ]);
 
   // 3. Porcentaje de Tokens Conectados en Sesión Actual (suma exacta 100%, máx 2 decimales)
-  const listaDispositivos = tel?.trazabilidadDispositivos || [];
   const conectadosCount =
     listaDispositivos.length > 0
       ? listaDispositivos.filter((d) => d.estadoEnVivo === 'CONECTADO').length
@@ -705,32 +707,32 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
 
           {/* 1. Tarjetas con Gráfico Circular General arriba y Gráfico de Columnas Verticales debajo */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {/* Tarjeta 1: % Dispositivos Operativos */}
+            {/* Tarjeta 1: Adopción y Uso Efectivo en el Período */}
             <div className="p-4 rounded-xl border bg-background/60 flex flex-col justify-between gap-3">
               <div className="flex flex-col items-center text-center gap-2">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                  Tokens Operativos
+                  Uso Efectivo de Tokens
                 </span>
-                <RingProgress percentage={pctActivos} colorClass="text-emerald-500" />
+                <RingProgress percentage={pctUsoActivo} colorClass="text-emerald-500" />
                 <span className="text-xs text-muted-foreground">
-                  {activosCount} de {totalExistentes} dispositivos
+                  {tokensEnUsoCount} de {totalExistentes} con actividad
                 </span>
               </div>
               <VerticalSubChart
                 slices={[
                   {
-                    label: 'Activos',
-                    pct: pctActivos,
-                    count: activosCount,
+                    label: 'Con Actividad',
+                    pct: pctUsoActivo,
+                    count: tokensEnUsoCount,
                     barClass: 'bg-emerald-500',
                     textClass: 'text-emerald-600 dark:text-emerald-400',
                   },
                   {
-                    label: 'Expirados',
-                    pct: pctExpirados,
-                    count: expiradosCount,
-                    barClass: 'bg-rose-500',
-                    textClass: 'text-rose-600 dark:text-rose-400',
+                    label: 'Sin Uso',
+                    pct: pctEnDesuso,
+                    count: tokensEnDesusoCount,
+                    barClass: 'bg-slate-400',
+                    textClass: 'text-muted-foreground',
                   },
                 ]}
               />
@@ -839,8 +841,8 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                       Interpretación de Inventario, Operatividad y Asignación ({etiquetaPeriodo})
                     </div>
                     <p className="text-muted-foreground leading-relaxed">
-                      El sistema registra <strong className="text-foreground">{totalExistentes} dispositivo(s)</strong> en seguimiento, con una operatividad del{' '}
-                      <strong className="text-emerald-600 dark:text-emerald-400">{formatPct(pctActivos)}</strong> ({activosCount} activos y {expiradosCount} expirados).{' '}
+                      El sistema registra <strong className="text-foreground">{totalExistentes} dispositivo(s)</strong> en seguimiento, con una tasa de uso efectivo del{' '}
+                      <strong className="text-emerald-600 dark:text-emerald-400">{formatPct(pctUsoActivo)}</strong> ({tokensEnUsoCount} con actividad y {tokensEnDesusoCount} sin uso en el período).{' '}
                       Existen <strong className="text-foreground">{firmasTotal} token(s) asignado(s)</strong> a funcionarios titulares (ver detalle en la tabla inferior), acumulando{' '}
                       <strong className="text-foreground">{accionesPeriodo} evento(s) de telemetría USB</strong> en el período ({conectadosCount} en línea ahora).
                     </p>

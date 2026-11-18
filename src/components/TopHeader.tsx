@@ -29,7 +29,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   onOpenMobileSidebar,
 }) => {
   const { usuario, logout } = useAuthStore();
-  const { estaciones } = useTelemetriaStore();
+  const { estaciones, metricas } = useTelemetriaStore();
   const currentTitle = TAB_TITLES[tabActiva] || TAB_TITLES.DASHBOARD;
 
   // Buscar dinámicamente cualquier estación con un token físico conectado (priorizando aquel con titular identificado por Ghost App)
@@ -45,6 +45,23 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
 
   const estaConectado = estacionUsuario?.estadoEnVivo === 'CONECTADO';
   const infoToken = estacionUsuario?.tokenInfo;
+
+  // Obtener la última persona que conectó un token si actualmente no hay ninguno en línea
+  const ultimaPersonaConectada = (() => {
+    // 1. Si hay alguna estación con token o metadatos previos
+    const estConTitular = estaciones.find((e) => Boolean(e.tokenInfo?.titularNombre));
+    if (estConTitular?.tokenInfo?.titularNombre) {
+      return estConTitular.tokenInfo.titularNombre;
+    }
+    // 2. Si no, revisar en trazabilidad de dispositivos (el más reciente activo)
+    const traza = metricas?.telemetria?.trazabilidadDispositivos || [];
+    const conTitular = traza.find((t) => Boolean(t.funcionarioAsignado?.nombre));
+    if (conTitular?.funcionarioAsignado?.nombre) {
+      return conTitular.funcionarioAsignado.nombre;
+    }
+    // 3. Fallback al usuario autenticado actual si es funcionario
+    return usuario?.nombre || null;
+  })();
 
   return (
     <header className="sticky top-0 z-30 flex h-14 w-full items-center justify-between border-b bg-background/95 backdrop-blur-md px-4 sm:px-6">
@@ -89,7 +106,9 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
                   ? infoToken?.titularNombre
                     ? `Token: ${infoToken.titularNombre}`
                     : 'Token USB Conectado'
-                  : 'Token USB: Desconectado'}
+                  : ultimaPersonaConectada
+                    ? `Ult. conexión: ${ultimaPersonaConectada}`
+                    : 'Token USB: Desconectado'}
               </span>
               {estaConectado && infoToken?.serialNumber && (
                 <span className="text-[10px] opacity-80 hidden lg:inline">
