@@ -29,12 +29,18 @@ interface AlertaToken {
 }
 
 interface CorreoDespachadoPreview {
+  alertaRef?: AlertaToken;
   emailDestino: string;
+  remitenteSmtp?: string;
   funcionarioNombre: string;
   serialNumber: string;
   diasRestantes: number;
   asunto: string;
   cuerpoCorreo: string;
+  htmlCorreo?: string;
+  enviadoSmtp?: boolean;
+  esSoloPreview?: boolean;
+  motivoSmtp?: string;
   timestamp: string;
   esMasivo?: boolean;
 }
@@ -49,11 +55,15 @@ export const AlertasCertificadosView: React.FC = () => {
   const [notificandoId, setNotificandoId] = useState<string | null>(null);
   const [avisosEnviadosMap, setAvisosEnviadosMap] = useState<Record<string, string>>({});
   const [correoPreview, setCorreoPreview] = useState<CorreoDespachadoPreview | null>(null);
+  const [modoPreviewCorreo, setModoPreviewCorreo] = useState<'HTML' | 'TEXTO'>('HTML');
 
   const cargarAlertas = async () => {
     setCargando(true);
     try {
-      const res = await fetch('/api/v1/usuarios/alertas-vencimiento');
+      const token = localStorage.getItem('access_token');
+      const res = await fetch('/api/v1/usuarios/alertas-vencimiento', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
@@ -168,57 +178,101 @@ export const AlertasCertificadosView: React.FC = () => {
     return coincideBusqueda && coincideTramo;
   });
 
-  const handleEnviarCorreoAviso = async (alerta: AlertaToken) => {
-    setNotificandoId(alerta.id);
+  const handleEnviarCorreoAviso = async (alerta: AlertaToken, soloPreview = false) => {
+    setNotificandoId(soloPreview ? `PREVIEW-${alerta.id}` : alerta.id);
     const ahoraStr = new Date().toLocaleString('es-CL');
-    let asunto = `[AVISO VENCIMIENTO TOKEN FEA] Quedan ${alerta.diasRestantes} días de vigencia (${alerta.serialNumberToken})`;
-    let cuerpoCorreo = `Estimado(a) ${alerta.usuario.nombre} (${alerta.usuario.rut}),\n\nEl Sistema de Control y Seguimiento de Tokens de Firma Electrónica de la Ilustre Municipalidad de Coquimbo le informa que su dispositivo token N° Serie ${alerta.serialNumberToken} (${alerta.hardwareModelo}) asignado a la unidad "${alerta.usuario.unidad}" presenta fecha de expiración el ${alerta.fechaExpiracion} (${alerta.tiempoExpiracionTexto}).\n\nPor favor coordine la renovación de su token criptográfico con el Departamento de Gestión de Sistemas y TICs antes de su caducidad.\n\nAtentamente,\nUnidad de Control de Tokens FEA — I. Municipalidad de Coquimbo`;
+    let asunto = `Aviso importante: Su certificado de Firma Electrónica está por caducar (${alerta.diasRestantes} días)`;
+    let cuerpoCorreo = `Estimado(a) ${alerta.usuario.nombre},\n\nSu certificado de Firma Electrónica Avanzada (RUT: ${alerta.usuario.rut}) presenta fecha de vencimiento ${alerta.fechaExpiracion} (${alerta.tiempoExpiracionTexto}).`;
+    let htmlCorreo: string | undefined;
+    let enviadoSmtp = false;
+    let remitenteSmtp = 'datrigob@gmail.com';
+    let motivoSmtp = soloPreview ? 'Vista previa lista para enviar' : 'Vista previa local';
 
     try {
+      const token = localStorage.getItem('access_token');
       const res = await fetch('/api/v1/usuarios/alertas-vencimiento/despachar', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           certificadoId: alerta.id,
           serialNumber: alerta.serialNumberToken,
           email: alerta.usuario.email,
+          nombre: alerta.usuario.nombre,
+          rut: formatRutVisual(alerta.usuario.rut),
+          fechaExpiracion: alerta.fechaExpiracion,
           diasRestantes: alerta.diasRestantes,
+          soloPreview,
         }),
       });
       if (res.ok) {
         const data = await res.json();
         if (data?.asunto) asunto = data.asunto;
         if (data?.cuerpoCorreo) cuerpoCorreo = data.cuerpoCorreo;
+        if (data?.htmlCorreo) htmlCorreo = data.htmlCorreo;
+        if (data?.remitenteSmtp) remitenteSmtp = data.remitenteSmtp;
+        enviadoSmtp = Boolean(data?.enviadoSmtp);
+        motivoSmtp = data?.motivoSmtp || motivoSmtp;
       }
     } catch {
       // Usa plantilla institucional local si no hay respuesta
     }
 
-    setAvisosEnviadosMap((prev) => ({ ...prev, [alerta.id]: ahoraStr }));
+    if (!soloPreview) {
+      setAvisosEnviadosMap((prev) => ({ ...prev, [alerta.id]: ahoraStr }));
+      cargarMetricas();
+    }
     setCorreoPreview({
+      alertaRef: alerta,
       emailDestino: alerta.usuario.email,
+      remitenteSmtp,
       funcionarioNombre: alerta.usuario.nombre,
       serialNumber: alerta.serialNumberToken,
       diasRestantes: alerta.diasRestantes,
       asunto,
       cuerpoCorreo,
+      htmlCorreo,
+      enviadoSmtp,
+      esSoloPreview: soloPreview,
+      motivoSmtp,
       timestamp: ahoraStr,
     });
     setNotificandoId(null);
-    cargarMetricas();
   };
 
   const handleDespachoMasivo = async () => {
     setNotificandoId('MASIVO');
     const ahoraStr = new Date().toLocaleString('es-CL');
-    try {
-      await fetch('/api/v1/usuarios/alertas-vencimiento/despachar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ masivo: true }),
-      });
-    } catch {
-      // Fallback
+    const token = localStorage.getItem('access_token');
+    let enviadosReales = 0;
+
+    for (const alerta of alertasFiltradas) {
+      try {
+        const res = await fetch('/api/v1/usuarios/alertas-vencimiento/despachar', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({
+            certificadoId: alerta.id,
+            serialNumber: alerta.serialNumberToken,
+            email: alerta.usuario.email,
+            nombre: alerta.usuario.nombre,
+            rut: formatRutVisual(alerta.usuario.rut),
+            fechaExpiracion: alerta.fechaExpiracion,
+            diasRestantes: alerta.diasRestantes,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.enviadoSmtp) enviadosReales += 1;
+        }
+      } catch {
+        // Continuar con el siguiente
+      }
     }
 
     const nuevosAvisos: Record<string, string> = {};
@@ -231,13 +285,18 @@ export const AlertasCertificadosView: React.FC = () => {
         .slice(0, 3)
         .map((a) => a.usuario.email)
         .join(', ')}${alertasFiltradas.length > 3 ? '...' : ''})`,
-      funcionarioNombre: 'Despacho Masivo de Vigencia (15, 30 y 60 días)',
+      funcionarioNombre: 'Despacho Masivo con Plantilla Institucional',
       serialNumber: 'Múltiples Tokens en Umbral',
       diasRestantes: 60,
-      asunto: '[AVISO PREVENTIVO INSTITUCIONAL] Vencimiento de Tokens de Firma Electrónica (Umbrales 15, 30 y 60 días)',
-      cuerpoCorreo: `Se han despachado exitosamente ${alertasFiltradas.length} correos electrónicos preventivos a los funcionarios cuyos dispositivos tokens se encuentran en los tramos de 15, 30 y 60 días para su vencimiento.\n\nDestinatarios incluidos:\n${alertasFiltradas
+      asunto: 'Aviso importante: Su certificado de Firma Electrónica está por caducar',
+      cuerpoCorreo: `Se procesaron ${alertasFiltradas.length} correos con la plantilla institucional personalizada para cada titular (${enviadosReales} enviados por SMTP).\n\nDestinatarios incluidos:\n${alertasFiltradas
         .map((a) => `• ${a.usuario.nombre} (${a.usuario.email}) — Token ${a.serialNumberToken} — ${a.tiempoExpiracionTexto}`)
         .join('\n')}`,
+      enviadoSmtp: enviadosReales > 0,
+      motivoSmtp:
+        enviadosReales > 0
+          ? `${enviadosReales} de ${alertasFiltradas.length} correos enviados vía SMTP`
+          : 'Plantillas generadas (configure SMTP_HOST/SMTP_USER/SMTP_PASS en .env para envío real)',
       timestamp: ahoraStr,
       esMasivo: true,
     });
@@ -447,29 +506,52 @@ export const AlertasCertificadosView: React.FC = () => {
       {/* Confirmación y Vista Previa del Correo Electrónico Enviado */}
       {correoPreview && (
         <Card className="border-2 border-emerald-500/60 bg-emerald-500/5 shadow-lg">
-          <CardHeader className="p-4 pb-2 border-b flex flex-row items-center justify-between">
+          <CardHeader className="p-4 pb-2 border-b flex flex-row items-center justify-between gap-2 flex-wrap">
             <div className="space-y-0.5">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  Correo electrónico despachado
+              <div className="flex items-center gap-2 flex-wrap">
+                <span
+                  className={`text-xs font-semibold flex items-center gap-1.5 ${
+                    correoPreview.enviadoSmtp
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-amber-600 dark:text-amber-400'
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      correoPreview.enviadoSmtp ? 'bg-emerald-500' : 'bg-amber-500'
+                    }`}
+                  />
+                  {correoPreview.enviadoSmtp ? 'Enviado por SMTP' : correoPreview.motivoSmtp || 'Plantilla generada'}
                 </span>
                 <span className="text-[10px] font-mono text-muted-foreground">
                   • {correoPreview.timestamp}
                 </span>
               </div>
               <CardTitle className="text-sm font-bold text-foreground">
-                Comprobante de Envío de Aviso de Vencimiento por Correo
+                Comprobante y Vista Previa de Correo de Aviso de Caducidad
               </CardTitle>
             </div>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => setCorreoPreview(null)}
-              className="h-7 text-xs font-bold"
-            >
-              ✕ Cerrar
-            </Button>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {correoPreview.esSoloPreview && correoPreview.alertaRef && (
+                <Button
+                  size="sm"
+                  variant="default"
+                  disabled={notificandoId === correoPreview.alertaRef.id}
+                  onClick={() => handleEnviarCorreoAviso(correoPreview.alertaRef!, false)}
+                  className="h-7 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  {notificandoId === correoPreview.alertaRef.id ? 'Enviando...' : 'Enviar Correo'}
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setCorreoPreview(null)}
+                className="h-7 text-xs font-bold"
+              >
+                Cerrar
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="p-4 space-y-2 text-xs">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-2.5 rounded bg-background/80 border font-mono text-[11px]">
@@ -486,13 +568,26 @@ export const AlertasCertificadosView: React.FC = () => {
                 <span className="font-bold text-primary">{correoPreview.serialNumber}</span>
               </div>
             </div>
-            <div className="p-3 rounded bg-background border space-y-1.5">
+            <div className="p-3 rounded bg-background border space-y-2">
               <div className="text-[11px] font-semibold text-foreground border-b pb-1">
                 Asunto: {correoPreview.asunto}
               </div>
-              <pre className="text-[11px] font-mono whitespace-pre-wrap text-muted-foreground leading-relaxed">
-                {correoPreview.cuerpoCorreo}
-              </pre>
+              {correoPreview.htmlCorreo ? (
+                <div className="overflow-x-auto bg-zinc-100 p-3 rounded border max-h-[540px] overflow-y-auto">
+                  <div
+                    dangerouslySetInnerHTML={{
+                      __html: correoPreview.htmlCorreo.replace(
+                        /cid:escudo_municoquimbo/g,
+                        '/logo-municipalidad.png',
+                      ),
+                    }}
+                  />
+                </div>
+              ) : (
+                <pre className="text-[11px] font-mono whitespace-pre-wrap text-muted-foreground leading-relaxed">
+                  {correoPreview.cuerpoCorreo}
+                </pre>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -586,15 +681,27 @@ export const AlertasCertificadosView: React.FC = () => {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="default"
-                          size="sm"
-                          disabled={notificandoId === alerta.id}
-                          onClick={() => handleEnviarCorreoAviso(alerta)}
-                          className="text-xs font-bold h-7 px-3 shadow-xs"
-                        >
-                          {notificandoId === alerta.id ? 'Enviando...' : '✉ Enviar Aviso'}
-                        </Button>
+                        <div className="inline-flex items-center gap-1.5 justify-end">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={notificandoId === `PREVIEW-${alerta.id}`}
+                            onClick={() => handleEnviarCorreoAviso(alerta, true)}
+                            className="text-xs font-semibold h-7 px-2.5"
+                            title="Ver vista previa del correo antes de enviar"
+                          >
+                            {notificandoId === `PREVIEW-${alerta.id}` ? 'Cargando...' : 'Vista Previa'}
+                          </Button>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            disabled={notificandoId === alerta.id}
+                            onClick={() => handleEnviarCorreoAviso(alerta, false)}
+                            className="text-xs font-bold h-7 px-3 shadow-xs"
+                          >
+                            {notificandoId === alerta.id ? 'Enviando...' : 'Enviar Aviso'}
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

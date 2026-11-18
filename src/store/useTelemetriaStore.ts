@@ -1,10 +1,5 @@
 import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
-import {
-  MOCK_ESTACIONES,
-  MOCK_HISTORIAL_EVENTOS,
-  buildMockMetricas,
-} from '../lib/mockTestData';
 
 export type EstadoHardwareType = 'DESCONECTADO' | 'CONECTADO';
 
@@ -12,6 +7,7 @@ export type ModoReporteType =
   | 'ULTIMOS_7_DIAS'
   | 'ULTIMOS_15_DIAS'
   | 'ULTIMOS_30_DIAS'
+  | 'ULTIMOS_60_DIAS'
   | 'POR_MES'
   | 'POR_ANIO';
 
@@ -66,6 +62,8 @@ export interface FirmaAsignadaItem {
   estado: 'ACTIVO' | 'POR_VENCER' | 'EXPIRADO';
   accionesFirmaPeriodo: number;
   accionesFirmaTotal: number;
+  promedioUsoDiarioMinutos?: number;
+  tiempoUsoMinutos?: number;
   estacionActual: string | null;
   estadoConexion: EstadoHardwareType;
   codigoContrato?: string;
@@ -248,6 +246,8 @@ export interface MetricasTrazabilidadResponse {
         origenCertificado?: boolean;
       } | null;
       estacionActual: string | null;
+      ultimaIp?: string | null;
+      dependenciaFisica?: string | null;
       estadoEnVivo: 'CONECTADO' | 'DESCONECTADO';
       fechaExpiracion?: string;
       diasRestantes?: number;

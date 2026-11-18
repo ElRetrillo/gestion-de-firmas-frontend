@@ -28,9 +28,10 @@ Por motivos de plazos de entrega institucional, el sistema opera actualmente enf
 ### 1.2. Vistas Activas en el Frontend (`C:\Users\Daniel UCN\gestion-de-firmas-frontend`)
 - **Control de Tokens (`DashboardSupervisores.tsx`)**: KPIs de dispositivos existentes, activos, expirados y promedio de uso diario + tabla centralizada con búsqueda y filtros por vigencia y estado de conexión.
 - **Alertas de Vencimientos (`AlertasCertificadosView.tsx`)**: Monitoreo de certificados próximos a expirar (`<= 15`, `16-30`, `31-60` días y expirados).
-- **Estadísticas (`MetricasTrazabilidadPanel.tsx`)**: Serie temporal por períodos (`7d`, `15d`, `30d`, `Mensual`, `Anual` agrupado en 12 meses), tarjeta informativa de *Peso del Período*, ranking por estación, desglose por dispositivo y exportación de reporte ejecutivo PDF / LaTeX.
-- **Contratos y Asignación (`GestionUsuariosEquipamientoView.tsx`)**: Gestión de contratos de adquisición de tokens y actas de custodia.
+- **Estadísticas (`MetricasTrazabilidadPanel.tsx`)**: Serie temporal por períodos (`7d`, `15d`, `30d`, `60d`, `Mensual`, `Anual` agrupado en 12 meses), tarjeta informativa de *Peso del Período*, interpretación ejecutiva, asignación/caducidad de tokens y exportación de reporte ejecutivo PDF / LaTeX.
 - **Bitácora de Acciones (`AuditoriaView.tsx`)**: Auditoría en 3 pestañas (`Logs Generales`, `Logs de Firmas`, `Logins y Sign Outs`) con formato estandarizado de 7 columnas (`ID / Documento`, `Persona`, `RUT Persona`, `Acción`, `Usuario`, `IP`, `Fecha y Hora`).
+
+*(Nota: El módulo de gestión **`Contratos y Asignación` (`GestionUsuariosEquipamientoView.tsx`)** fue ocultado de la barra lateral para mantener la plataforma 100% informativa/telemetría, conservando su código fuente intacto para reactivación futura).*
 
 ---
 
@@ -87,8 +88,7 @@ Todo el código correspondiente a **Firma Electrónica de Documentos, Integraci�
 
 ### 3.2. Integración API FirmaGob v2 (Etapa A Desatendida y Etapa B con OTP)
 - **Ubicación en Código**:
-  - `C:\Users\Daniel UCN\gestion-de-firmas\backend\src\firmas\firmagob.service.ts`
-  - `C:\Users\Daniel UCN\gestion-de-firmas\backend\src\firmas\firmas.service.ts` (`firmarDocumentoConFirmaGobV2`)
+  - `C:\Users\Daniel UCN\gestion-de-firmas\backend\src\firmas\firmas.service.ts` (`enviarFirmaGobV2DesdeBackend`, `procesarTicketFirmaGobV2`, `generarJwtFirmaGobV2`) y `C:\Users\Daniel UCN\gestion-de-firmas\backend\src\firmas\firmas.controller.ts` (`POST /api/v1/firmas/v2/enviar`)
 - **Características implementadas**:
   - Generación automática de token JWT HS256 con claims oficiales (`entity`, `run`, `expiration`, `purpose`) según manual técnico FirmaGob v18.
   - Pre-estampado visual del PDF con opción `soloEstampaVisual: true` para evitar colisión de diccionarios `/ByteRange` previos en el parser de `api.firma.cert.digital.gob.cl`.
@@ -128,3 +128,51 @@ Para volver a habilitar las vistas de firma de documentos y repositorio en el fr
    - Si se desea vista separada para el rol `FUNCIONARIO`, descomentar/restaurar la condición `if (!esSupervisorOAdmin)` que renderiza `<VistaFirmaUsuario />` y `<RepositorioDocumentosView soloTitular rutTitular={usuario?.rut} />`.
 3. **En `C:\Users\Daniel UCN\gestion-de-firmas-frontend\src\components\DashboardSupervisores.tsx`** (opcional):
    - Si se desea volver a mostrar las columnas `Firmas Período` y `Firmas Totales`, están disponibles en el objeto `metricas.accionesFuncionarios` del store `useTelemetriaStore.ts`.
+
+---
+
+## 5. Guía de Despliegue en Máquina Virtual (VM) de Producción
+
+El repositorio está preparado para levantar el stack completo (`postgres`, `redis`, `minio`, `backend`, `frontend` y `gateway` Nginx TLS) mediante Docker Compose en cualquier VM Linux (Ubuntu/Debian) o Windows con Docker Engine.
+
+### 5.1. Requisitos de la VM
+- **Docker Engine** (`>= 24.x`) y **Docker Compose v2** (`docker compose version`).
+- **Puertos abiertos en Firewall / Security Group**: `80/tcp` (redirección a HTTPS y Let's Encrypt), `443/tcp` (portal web y telemetría `ghost-app`). *(Opcional: `3001/tcp` solo si se expone API directa sin gateway)*.
+- **Estructura esperada de carpetas hermanas** en la VM (según `docker-compose.yml`):
+  - `./gestion-de-firmas/` (`backend/`, `ghost-app/`, `docker/`, `docker-compose.yml`, `.env`)
+  - `./gestion-de-firmas-frontend/` (`src/`, `Dockerfile`, `package.json`, etc.)
+
+### 5.2. Preparación de Variables de Entorno y Certificados TLS
+1. Ubícate en `gestion-de-firmas/` y verifica el archivo `.env` (puedes tomar como base `.env.production.example`):
+   - Configura `PUBLIC_APP_URL` y `CORS_ORIGINS` con el dominio o IP pública de la VM (ej. `https://tokens.municoquimbo.cl`).
+   - Verifica las credenciales SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`) para envío de avisos de caducidad.
+   - Genera claves criptográficas seguras (`openssl rand -hex 32`) para `JWT_SECRET`, `HMAC_SECRET`, `TELEMETRIA_API_KEY` y `POSTGRES_PASSWORD`.
+2. Asegúrate de contar con certificados TLS en `docker/nginx/ssl/server.crt` y `docker/nginx/ssl/server.key` (ya existen certificados base en el repositorio; reemplázalos con los definitivos o Certbot para producción).
+
+### 5.3. Construcción y Arranque del Stack
+```bash
+cd gestion-de-firmas
+docker compose up -d --build
+```
+Verifica que los 6 servicios queden saludables:
+```bash
+docker compose ps
+docker logs -f gestion-firmas-backend
+```
+La imagen `backend/Dockerfile` incluye automáticamente Prisma Client, `dist/`, `ghost-app/` y `assets/escudo-municoquimbo.png` (usado en los correos SMTP). La imagen `frontend/Dockerfile` configura Nginx con fallback SPA (`try_files $uri $uri/ /index.html;`).
+
+### 5.4. Migración de Base de Datos (Opcional — Para Conservar Superadmins y Tokens Existentes)
+Si deseas migrar exactamente los datos actuales (los 2 superadmins `21.374.808-4` y `20.406.484-9`, tokens reales y telemetría) desde el entorno local hacia la VM:
+```bash
+# En entorno origen:
+docker exec -t gestion-firmas-postgres pg_dump -U postgres -d gestion_firmas --clean --if-exists > backup_gestion_firmas.sql
+
+# En la VM destino (con el stack levantado):
+cat backup_gestion_firmas.sql | docker exec -i gestion-firmas-postgres psql -U postgres -d gestion_firmas
+docker restart gestion-firmas-backend
+```
+
+### 5.5. Conexión del Agente `ghost-app` hacia la VM
+- Descarga e instala el agente desde el botón **Descargar agente USB** en el panel de Control de Tokens (o configura `TELEMETRIA_API_URL=https://<tu-dominio-o-ip-vm>/api/v1/telemetria/usb` en el agente Windows de cada estación).
+- Los 2 superadmins (`21.374.808-4` y `20.406.484-9`) inician sesión en el portal único (sin registro público), usando **PIN de 6 caracteres + MFA Authenticator (`Gestion de tokens - I.Municipalidad de Coquimbo`, sesión de 3 horas)**.
+

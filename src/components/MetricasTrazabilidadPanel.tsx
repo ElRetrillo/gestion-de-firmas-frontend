@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Info } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import {
   useTelemetriaStore,
   MetricasTrazabilidadResponse,
@@ -20,6 +20,13 @@ const round2 = (n: number): number => Math.round((n + Number.EPSILON) * 100) / 1
 const formatPct = (n: number): string => {
   const val = round2(n);
   return Number.isInteger(val) ? `${val}%` : `${Number(val.toFixed(2))}%`;
+};
+
+const formatearHorasMinutos = (totalMinutos?: number): string => {
+  const mins = Math.max(0, Math.round(totalMinutos || 0));
+  const hrs = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return `${hrs} hrs ${String(remMins).padStart(2, '0')} mins`;
 };
 
 const computeNormalizedPercentages = (counts: number[]): number[] => {
@@ -299,23 +306,22 @@ const generarLatexFallback = (m: MetricasTrazabilidadResponse | null, etiqueta: 
     m?.resumenDispositivos?.expirados ??
     m?.telemetria?.tokensExpirados ??
     Math.max(0, dispTotal - dispActivos);
-  const firmasAsig = m?.firmasAsignadas?.totalAsignadas ?? m?.administracion?.totalCertificados ?? 0;
+  const pctOperatividad = dispTotal > 0 ? round2((dispActivos / dispTotal) * 100) : 0;
+  const firmasAsig = m?.firmasAsignadas?.totalAsignadas ?? dispTotal;
   const accionesPeriodo =
-    m?.accionesFuncionarios?.totalAccionesFirmaPeriodo ?? m?.telemetria?.eventosFirmando ?? 0;
-  const conexionesExcl =
-    m?.accionesFuncionarios?.conexionesExcluidasPeriodo ?? m?.telemetria?.eventosConectado ?? 0;
-  const desconexionesExcl =
-    m?.accionesFuncionarios?.desconexionesExcluidasPeriodo ?? m?.telemetria?.eventosDesconectado ?? 0;
+    m?.accionesFuncionarios?.totalAccionesFirmaPeriodo ?? m?.telemetria?.totalEventosPeriodo ?? 0;
+  const conexionesPeriodo = m?.telemetria?.eventosConectado ?? 0;
+  const desconexionesPeriodo = m?.telemetria?.eventosDesconectado ?? 0;
   const a15 = m?.alertasVencimiento?.menosDe15Dias ?? 0;
   const a30 = m?.alertasVencimiento?.entre16Y30Dias ?? 0;
   const a60 = m?.alertasVencimiento?.entre31Y60Dias ?? 0;
   const contTotal = m?.contratosResumen?.totalContratos ?? firmasAsig;
 
-  const filasFunc = (m?.accionesFuncionarios?.listadoPorFuncionario || [])
-    .slice(0, 12)
+  const filasFunc = (m?.firmasAsignadas?.listado || [])
+    .slice(0, 20)
     .map(
       (f) =>
-        `${f.nombre.replace(/[&_#%]/g, '')} & ${f.rut} & ${f.serialNumberToken} & ${f.estadoToken} & ${f.diasRestantesToken} d & \\textbf{${f.accionesFirmaPeriodo}} & ${f.accionesFirmaHistorico} \\\\ \\hline`,
+        `${f.funcionario.nombre.replace(/[&_#%]/g, '')} & ${f.serialNumberToken} & ${f.fechaAsignacion || '-'} & ${f.fechaExpiracion || '-'} (${f.diasRestantes} d) & ${f.estado} & \\textbf{${f.accionesFirmaPeriodo}} \\\\ \\hline`,
     )
     .join('\n');
 
@@ -329,34 +335,34 @@ const generarLatexFallback = (m: MetricasTrazabilidadResponse | null, etiqueta: 
 \\geometry{margin=2cm}
 
 \\title{\\textbf{Ilustre Municipalidad de Coquimbo}\\\\
-\\large Summary Estadístico de Control y Seguimiento de Tokens de Firma Electrónica}
+\\large Summary Estadístico de Seguimiento y Telemetría de Tokens USB}
 \\author{Departamento de Gestión de Sistemas y TICs}
 \\date{Período Evaluado: ${etiqueta}}
 
 \\begin{document}
 \\maketitle
 
-\\section*{1. Resumen Ejecutivo de Dispositivos y Firmas Asignadas}
+\\section*{1. Resumen Ejecutivo de Dispositivos, Operatividad y Caducidad}
 \\begin{tabular}{|l|r|r|}
 \\hline
-\\textbf{Indicador de Control de Tokens} & \\textbf{Cantidad} & \\textbf{Detalle / Estado} \\\\ \\hline
+\\textbf{Indicador de Seguimiento de Tokens} & \\textbf{Cantidad} & \\textbf{Detalle / Operatividad} \\\\ \\hline
 Dispositivos Tokens Existentes (Total) & ${dispTotal} & 100\\% Inventario \\\\ \\hline
-Dispositivos Activos (Operativos) & ${dispActivos} & En vigencia \\\\ \\hline
+Dispositivos Activos (Operativos) & ${dispActivos} & ${pctOperatividad}\\% Operatividad \\\\ \\hline
 Dispositivos Expirados / Caducados & ${dispExpirados} & Requieren renovación \\\\ \\hline
-Firmas Electrónicas Asignadas & ${firmasAsig} & Funcionarios titulares \\\\ \\hline
-Acciones de Firma en Período (1 acción = 1 firma) & \\textbf{${accionesPeriodo}} & Excluye ${conexionesExcl} conex. y ${desconexionesExcl} desconex. \\\\ \\hline
-Tokens por Vencer ($\\le$ 15 / 30 / 60 días) & ${a15} / ${a30} / ${a60} & Vigilancia preventiva \\\\ \\hline
-Contratos Individuales de Obtención de Token & ${contTotal} & 1 por funcionario con token \\\\ \\hline
+Firmas / Tokens Asignados a Funcionarios & ${firmasAsig} & Titulares identificados \\\\ \\hline
+Eventos de Telemetría en Período & \\textbf{${accionesPeriodo}} & ${conexionesPeriodo} conex. / ${desconexionesPeriodo} desconex. \\\\ \\hline
+Alertas Caducidad ($\\le$ 15 / 30 / 60 días) & ${a15} / ${a30} / ${a60} & Control de contratos \\\\ \\hline
+Contratos / Custodias Registradas & ${contTotal} & 1 por titular asignado \\\\ \\hline
 \\end{tabular}
 
-\\section*{2. Desglose de Acciones de Firma por Funcionario y Token}
-\\textit{Nota metodológica: Cada acción contabilizada equivale exclusivamente a 1 firma realizada con el token desde la sesión activa (se excluyen conexiones y desconexiones USB).}
+\\section*{2. Desglose por Titular, Fecha de Asignación, Caducidad y Acciones}
+\\textit{Nota metodológica: Cada acción contabilizada refleja los eventos físicos de conexión y desconexión USB reportados en tiempo real por el agente Ghost App.}
 
 \\vspace{0.3cm}
-\\begin{tabular}{|l|l|l|l|r|r|r|}
+\\begin{tabular}{|l|l|l|l|l|r|}
 \\hline
-\\textbf{Funcionario} & \\textbf{RUT} & \\textbf{N° Serie Token} & \\textbf{Estado} & \\textbf{Expiración} & \\textbf{Firmas Período} & \\textbf{Histórico} \\\\ \\hline
-${filasFunc || 'Sin registros en el período & - & - & - & - & 0 & 0 \\\\ \\hline'}
+\\textbf{Funcionario Titular} & \\textbf{ID Token} & \\textbf{Asignación} & \\textbf{Caducidad} & \\textbf{Estado} & \\textbf{Acciones} \\\\ \\hline
+${filasFunc || 'Sin registros en el período & - & - & - & - & 0 \\\\ \\hline'}
 \\end{tabular}
 
 \\end{document}`;
@@ -376,7 +382,6 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
     setPeriodoReporte,
   } = useTelemetriaStore();
 
-  const [infoPesoAbierta, setInfoPesoAbierta] = useState(false);
   const [tabTrazabilidad, setTabTrazabilidad] = useState<
     'VIGENCIA_FIRMAS' | 'SERIE_TEMPORAL' | 'VISOR_LATEX'
   >('VIGENCIA_FIRMAS');
@@ -405,9 +410,11 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
         ? 'Últimos 15 días'
         : modoReporte === 'ULTIMOS_30_DIAS'
           ? 'Últimos 30 días'
-          : modoReporte === 'POR_MES'
-            ? `Mes ${mesSeleccionado}`
-            : `Año ${anioSeleccionado}`);
+          : modoReporte === 'ULTIMOS_60_DIAS'
+            ? 'Últimos 60 días'
+            : modoReporte === 'POR_MES'
+              ? `Mes ${mesSeleccionado}`
+              : `Año ${anioSeleccionado}`);
 
   useEffect(() => {
     if (metricas?.latexPreview?.codigoLatex) {
@@ -551,21 +558,15 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
     desconectadosCount,
   ]);
 
-  // 4. Porcentaje de Acciones en el Período sobre el Histórico (suma exacta 100%, máx 2 decimales)
+  // 4. Total de acciones en el período
   const accionesPeriodo =
     metricas?.accionesFuncionarios?.totalAccionesFirmaPeriodo ?? tel?.eventosFirmando ?? 0;
-  const accionesHistorico =
-    metricas?.accionesFuncionarios?.totalAccionesFirmaHistorico ?? Math.max(accionesPeriodo, 1);
-  const accionesAnteriores = Math.max(0, accionesHistorico - accionesPeriodo);
-  const [pctPeriodoSobreHistorico, pctAnteriores] = computeNormalizedPercentages([
-    accionesPeriodo,
-    accionesAnteriores,
-  ]);
 
   const opcionesPeriodo: Array<{ id: ModoReporteType; label: string }> = [
-    { id: 'ULTIMOS_7_DIAS', label: 'Últimos 7 días' },
-    { id: 'ULTIMOS_15_DIAS', label: 'Últimos 15 días' },
-    { id: 'ULTIMOS_30_DIAS', label: 'Últimos 30 días' },
+    { id: 'ULTIMOS_7_DIAS', label: '7 días' },
+    { id: 'ULTIMOS_15_DIAS', label: '15 días' },
+    { id: 'ULTIMOS_30_DIAS', label: '30 días' },
+    { id: 'ULTIMOS_60_DIAS', label: '60 días' },
     { id: 'POR_MES', label: 'Por Mes' },
     { id: 'POR_ANIO', label: 'Por Año' },
   ];
@@ -665,8 +666,45 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
         </CardHeader>
 
         <CardContent className="p-4 space-y-5">
+          {/* Resumen Superior: Tiempo Promedio de Uso por Día y Tiempo Total de Conexión */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="p-3.5 rounded-xl border border-sky-500/30 bg-sky-500/5 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-sky-700 dark:text-sky-400">
+                  Tiempo Promedio de Uso por Día (General)
+                </div>
+                <div className="text-xl font-bold font-mono text-foreground mt-0.5">
+                  {formatearHorasMinutos(tel?.promedioUsoDiarioGeneralMinutos)}
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  Promedio diario por token en el período ({etiquetaPeriodo})
+                </div>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-sky-500/10 border border-sky-500/30 flex items-center justify-center shrink-0">
+                <Clock className="w-5 h-5 text-sky-600 dark:text-sky-400" />
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl border bg-background/60 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Tiempo Total Acumulado de Conexión
+                </div>
+                <div className="text-xl font-bold font-mono text-foreground mt-0.5">
+                  {formatearHorasMinutos(tel?.tiempoUsoTotalMinutos)}
+                </div>
+                <div className="text-[11px] text-muted-foreground">
+                  Suma de sesiones USB registradas en el período
+                </div>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-muted/50 border flex items-center justify-center shrink-0">
+                <Clock className="w-5 h-5 text-muted-foreground" />
+              </div>
+            </div>
+          </div>
+
           {/* 1. Tarjetas con Gráfico Circular General arriba y Gráfico de Columnas Verticales debajo */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {/* Tarjeta 1: % Dispositivos Operativos */}
             <div className="p-4 rounded-xl border bg-background/60 flex flex-col justify-between gap-3">
               <div className="flex flex-col items-center text-center gap-2">
@@ -766,57 +804,6 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                 ]}
               />
             </div>
-
-            {/* Tarjeta 4: % Actividad del Período sobre el Histórico */}
-            <div className="p-4 rounded-xl border bg-background/60 flex flex-col justify-between gap-3">
-              <div className="flex flex-col items-center text-center gap-2">
-                <span className="relative text-[11px] font-bold uppercase tracking-wider text-muted-foreground inline-flex items-center gap-1">
-                  <span>Peso del Período</span>
-                  <button
-                    type="button"
-                    onClick={() => setInfoPesoAbierta((v) => !v)}
-                    onBlur={() => setTimeout(() => setInfoPesoAbierta(false), 150)}
-                    aria-label="Información sobre Peso del Período"
-                    className="inline-flex items-center justify-center rounded-full p-0.5 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
-                  >
-                    <Info className="w-3.5 h-3.5" />
-                  </button>
-                  {infoPesoAbierta && (
-                    <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 w-60 rounded-xl border border-border bg-card p-3 text-left shadow-xl normal-case tracking-normal">
-                      <div className="text-[11px] font-bold text-foreground mb-1 flex items-center gap-1.5">
-                        <Info className="w-3.5 h-3.5 text-primary shrink-0" />
-                        <span>¿Qué es Peso del Período?</span>
-                      </div>
-                      <p className="text-[11px] font-normal text-muted-foreground leading-relaxed">
-                        Porcentaje del total histórico de firmas del sistema que se realizó dentro del período seleccionado.
-                      </p>
-                    </div>
-                  )}
-                </span>
-                <RingProgress percentage={pctPeriodoSobreHistorico} colorClass="text-primary" />
-                <span className="text-xs text-muted-foreground">
-                  {accionesPeriodo} de {accionesHistorico} firmas
-                </span>
-              </div>
-              <VerticalSubChart
-                slices={[
-                  {
-                    label: 'Período',
-                    pct: pctPeriodoSobreHistorico,
-                    count: accionesPeriodo,
-                    barClass: 'bg-primary',
-                    textClass: 'text-primary',
-                  },
-                  {
-                    label: 'Previas',
-                    pct: pctAnteriores,
-                    count: accionesAnteriores,
-                    barClass: 'bg-muted-foreground/50',
-                    textClass: 'text-muted-foreground',
-                  },
-                ]}
-              />
-            </div>
           </div>
 
           {/* 2. Desglose Inferior (Estado/Expiración, Evolución Diaria y Compilador/Visor LaTeX Integrado) */}
@@ -843,86 +830,117 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                 </div>
               </div>
 
-              {/* Pestaña 1: Vigencia y Expiración de Firmas */}
+              {/* Pestaña 1: Vigencia, Asignación, Caducidad y Acciones de Tokens */}
               {tabTrazabilidad === 'VIGENCIA_FIRMAS' && (
-                <div className="overflow-x-auto rounded-lg border">
-                  <Table>
-                    <TableHeader className="bg-muted/40 text-[11px]">
-                      <TableRow>
-                        <TableHead>Funcionario</TableHead>
-                        <TableHead>Unidad</TableHead>
-                        <TableHead>Token</TableHead>
-                        <TableHead>Estado Vigencia</TableHead>
-                        <TableHead>% Ciclo Anual Restante</TableHead>
-                        <TableHead className="text-right">Firmas Período</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody className="text-xs">
-                      {listadoFirmasAsignadas.length === 0 ? (
+                <div className="space-y-3">
+                  {/* Interpretación Ejecutiva Automática */}
+                  <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 text-xs text-foreground space-y-1">
+                    <div className="font-bold text-primary">
+                      Interpretación de Inventario, Operatividad y Asignación ({etiquetaPeriodo})
+                    </div>
+                    <p className="text-muted-foreground leading-relaxed">
+                      El sistema registra <strong className="text-foreground">{totalExistentes} dispositivo(s)</strong> en seguimiento, con una operatividad del{' '}
+                      <strong className="text-emerald-600 dark:text-emerald-400">{formatPct(pctActivos)}</strong> ({activosCount} activos y {expiradosCount} expirados).{' '}
+                      Existen <strong className="text-foreground">{firmasTotal} token(s) asignado(s)</strong> a funcionarios titulares (ver detalle en la tabla inferior), acumulando{' '}
+                      <strong className="text-foreground">{accionesPeriodo} evento(s) de telemetría USB</strong> en el período ({conectadosCount} en línea ahora).
+                    </p>
+                  </div>
+
+                  <div className="overflow-x-auto rounded-lg border">
+                    <Table>
+                      <TableHeader className="bg-muted/40 text-[11px]">
                         <TableRow>
-                          <TableCell
-                            colSpan={6}
-                            className="h-20 text-center text-xs text-muted-foreground"
-                          >
-                            Cargando firmas asignadas...
-                          </TableCell>
+                          <TableHead>Titular Asignado</TableHead>
+                          <TableHead>Unidad</TableHead>
+                          <TableHead>ID Token</TableHead>
+                          <TableHead>Fecha Asignación</TableHead>
+                          <TableHead>Caducidad Contrato / Cert.</TableHead>
+                          <TableHead>Estado</TableHead>
+                          <TableHead>Promedio Uso / Día</TableHead>
+                          <TableHead className="text-right">Cant. Acciones (Período)</TableHead>
+                          <TableHead className="text-right">% Part.</TableHead>
                         </TableRow>
-                      ) : (
-                        listadoFirmasAsignadas.map((item) => {
-                          const [pctVida] = computeNormalizedPercentages([
-                            Math.max(0, Math.min(365, item.diasRestantes)),
-                            Math.max(0, 365 - Math.max(0, Math.min(365, item.diasRestantes))),
-                          ]);
-                          const colorPunto =
-                            item.estado === 'ACTIVO'
-                              ? 'bg-emerald-500'
-                              : item.estado === 'POR_VENCER'
-                                ? 'bg-amber-500'
-                                : 'bg-rose-500';
-                          const colorTexto =
-                            item.estado === 'ACTIVO'
-                              ? 'text-emerald-600 dark:text-emerald-400'
-                              : item.estado === 'POR_VENCER'
-                                ? 'text-amber-600 dark:text-amber-400'
-                                : 'text-rose-600 dark:text-rose-400';
-                          return (
-                            <TableRow key={item.id} className="hover:bg-muted/30">
-                              <TableCell className="font-bold text-foreground">
-                                {item.funcionario.nombre}
-                              </TableCell>
-                              <TableCell className="text-[11px] text-muted-foreground">
-                                {item.funcionario.unidad}
-                              </TableCell>
-                              <TableCell className="font-mono font-bold text-foreground">
-                                {item.serialNumberToken}
-                              </TableCell>
-                              <TableCell>
-                                <span
-                                  className={`inline-flex items-center gap-1.5 font-semibold text-[11px] ${colorTexto}`}
-                                >
-                                  <span className={`w-1.5 h-1.5 rounded-full ${colorPunto}`} />
-                                  {item.estado === 'POR_VENCER'
-                                    ? 'Por vencer'
-                                    : item.estado === 'ACTIVO'
-                                      ? 'Vigente'
-                                      : 'Expirado'}
-                                </span>
-                              </TableCell>
-                              <TableCell className="font-mono text-xs">
-                                <span className={`font-bold ${colorTexto}`}>{formatPct(pctVida)}</span>
-                                <span className="text-muted-foreground ml-2 text-[11px]">
-                                  ({item.diasRestantes > 0 ? `${item.diasRestantes} días` : 'Expirado'})
-                                </span>
-                              </TableCell>
-                              <TableCell className="text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                                {item.accionesFirmaPeriodo}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })
-                      )}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody className="text-xs">
+                        {listadoFirmasAsignadas.length === 0 ? (
+                          <TableRow>
+                            <TableCell
+                              colSpan={9}
+                              className="h-20 text-center text-xs text-muted-foreground"
+                            >
+                              Sin tokens asignados registrados aún. Inserte un token USB para comenzar la trazabilidad.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          listadoFirmasAsignadas.map((item) => {
+                            const pctPart =
+                              accionesPeriodo > 0
+                                ? round2((item.accionesFirmaPeriodo / accionesPeriodo) * 100)
+                                : 0;
+                            const colorPunto =
+                              item.estado === 'ACTIVO'
+                                ? 'bg-emerald-500'
+                                : item.estado === 'POR_VENCER'
+                                  ? 'bg-amber-500'
+                                  : 'bg-rose-500';
+                            const colorTexto =
+                              item.estado === 'ACTIVO'
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : item.estado === 'POR_VENCER'
+                                  ? 'text-amber-600 dark:text-amber-400'
+                                  : 'text-rose-600 dark:text-rose-400';
+                            return (
+                              <TableRow key={item.id} className="hover:bg-muted/30">
+                                <TableCell className="font-bold text-foreground">
+                                  {item.funcionario.nombre}
+                                </TableCell>
+                                <TableCell className="text-[11px] text-muted-foreground">
+                                  {item.funcionario.unidad}
+                                </TableCell>
+                                <TableCell className="font-mono font-bold text-foreground">
+                                  {item.serialNumberToken}
+                                </TableCell>
+                                <TableCell className="font-mono text-[11px] text-muted-foreground">
+                                  {item.fechaAsignacion || '-'}
+                                </TableCell>
+                                <TableCell className="font-mono text-xs">
+                                  <div className="text-[11px] font-semibold text-foreground">
+                                    {item.fechaExpiracion || '-'}
+                                  </div>
+                                  <div className={`text-[11px] font-semibold ${colorTexto}`}>
+                                    {item.diasRestantes > 0
+                                      ? `Caduca en ${item.diasRestantes}d`
+                                      : `Expirado hace ${Math.abs(item.diasRestantes)}d`}
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <span
+                                    className={`inline-flex items-center gap-1.5 font-semibold text-[11px] ${colorTexto}`}
+                                  >
+                                    <span className={`w-1.5 h-1.5 rounded-full ${colorPunto}`} />
+                                    {item.estado === 'POR_VENCER'
+                                      ? 'Por vencer'
+                                      : item.estado === 'ACTIVO'
+                                        ? 'Vigente'
+                                        : 'Expirado'}
+                                  </span>
+                                </TableCell>
+                                <TableCell className="font-mono text-xs font-semibold text-foreground whitespace-nowrap">
+                                  {formatearHorasMinutos(item.promedioUsoDiarioMinutos)}
+                                </TableCell>
+                                <TableCell className="text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                  {item.accionesFirmaPeriodo}
+                                </TableCell>
+                                <TableCell className="text-right font-mono text-[11px] text-muted-foreground">
+                                  {formatPct(pctPart)}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
               )}
 
@@ -931,10 +949,10 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                 <div className="p-4 rounded-lg border bg-background/50 space-y-3">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-bold text-foreground">
-                      Firmas Realizadas por Día ({etiquetaPeriodo})
+                      Eventos de Telemetría USB por Día ({etiquetaPeriodo})
                     </span>
                     <span className="text-[11px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
-                      Total período: {serie.reduce((acc, d) => acc + (d.firmasRealizadas || 0), 0)} firmas
+                      Total período: {serie.reduce((acc, d) => acc + (d.eventosTelemetria || 0), 0)} eventos USB
                     </span>
                   </div>
 
@@ -948,24 +966,24 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                               const ym = String(d.fecha || '').slice(0, 7);
                               const mIdx = Number(ym.slice(5, 7)) - 1;
                               const label = mesesCortos[mIdx] || ym;
-                              const prev = map.get(ym) || { fecha: ym, etiqueta: label, firmasRealizadas: 0 };
-                              prev.firmasRealizadas += d.firmasRealizadas || 0;
+                              const prev = map.get(ym) || { fecha: ym, etiqueta: label, eventosTelemetria: 0 };
+                              prev.eventosTelemetria += d.eventosTelemetria || 0;
                               map.set(ym, prev);
                               return map;
-                            }, new Map<string, { fecha: string; etiqueta: string; firmasRealizadas: number }>()).values(),
+                            }, new Map<string, { fecha: string; etiqueta: string; eventosTelemetria: number }>()).values(),
                           )
                         : serie;
-                      const maxVal = Math.max(1, ...datosGrafico.map((d) => d.firmasRealizadas || 0));
+                      const maxVal = Math.max(1, ...datosGrafico.map((d) => d.eventosTelemetria || 0));
 
                       return datosGrafico.map((dia) => {
-                        const valor = dia.firmasRealizadas;
+                        const valor = dia.eventosTelemetria || 0;
                         const alturaPct =
                           valor > 0 ? Math.max(14, Math.round((valor / maxVal) * 100)) : 5;
                         return (
                           <div
                             key={dia.fecha}
                             className="flex flex-col items-center justify-end h-full group min-w-[26px] flex-1"
-                            title={`${dia.etiqueta}: ${valor} firmas`}
+                            title={`${dia.etiqueta}: ${valor} eventos USB`}
                           >
                             <div className="text-[10px] font-mono font-bold text-foreground mb-1">
                               {valor > 0 ? valor : ''}

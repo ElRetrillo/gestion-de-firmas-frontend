@@ -83,13 +83,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Estadisticas',
     },
     {
-      id: 'USUARIOS_CUSTODIA',
-      icon: Users,
-      label: 'Contratos y Asignación',
-      badge: formatearBadge(contratosAlerta),
-      badgeVariant: 'warning',
-    },
-    {
       id: 'AUDITORIA',
       icon: History,
       label: 'Bitácora de Acciones',

@@ -175,8 +175,9 @@ export const DashboardSupervisores: React.FC = () => {
     const key = f.serialNumberToken || f.funcionario?.rut || f.id;
     const estacionEnVivo = estaciones.find(
       (e) =>
-        (e.tokenInfo?.serialNumber && e.tokenInfo.serialNumber.toLowerCase() === f.serialNumberToken.toLowerCase()) ||
-        (f.estacionActual && e.codigoPc.toLowerCase() === f.estacionActual.toLowerCase())
+        e.estadoEnVivo === 'CONECTADO' &&
+        e.tokenInfo?.serialNumber &&
+        e.tokenInfo.serialNumber.toLowerCase() === f.serialNumberToken.toLowerCase()
     );
 
     const accionData = listadoAccionesFuncionarios.find(
@@ -266,7 +267,7 @@ export const DashboardSupervisores: React.FC = () => {
         id: t.id || t.serialNumber,
         funcionario: {
           nombre: nombreTitular,
-          rut: t.funcionarioAsignado?.rut || emailTitular || 'Certificado X.509',
+          rut: t.funcionarioAsignado?.rut || emailTitular || 'Certificado del Token',
           email: emailTitular,
           unidad:
             tokenVivo?.titularUnidad ||
@@ -298,8 +299,8 @@ export const DashboardSupervisores: React.FC = () => {
             : 'Vigente'),
         estadoConexion: estacionEnVivo?.estadoEnVivo || t.estadoEnVivo || 'DESCONECTADO',
         estacionActual: estacionEnVivo?.codigoPc || t.estacionActual || null,
-        ipEstacion: cleanIpVisual(estacionEnVivo?.ipAsignada || null),
-        dependenciaFisica: estacionEnVivo?.dependenciaFisica || null,
+        ipEstacion: cleanIpVisual(estacionEnVivo?.ipAsignada || t.ultimaIp || null),
+        dependenciaFisica: estacionEnVivo?.dependenciaFisica || t.dependenciaFisica || null,
         conexiones: t.conexionesPeriodo ?? 0,
         desconexiones: t.desconexionesPeriodo ?? 0,
         promedioUsoDiarioMinutos: t.promedioUsoDiarioMinutos ?? 0,
@@ -361,7 +362,7 @@ export const DashboardSupervisores: React.FC = () => {
       funcionario: {
         id: prevRow?.funcionario.id,
         nombre: nombreTitular || prevRow?.funcionario.nombre || 'Token Criptográfico Detectado',
-        rut: rutTitular || prevRow?.funcionario.rut || emailTitular || 'Certificado X.509',
+        rut: rutTitular || prevRow?.funcionario.rut || emailTitular || 'Certificado del Token',
         email: emailTitular || prevRow?.funcionario.email,
         unidad: unidadTitular || prevRow?.funcionario.unidad || est.dependenciaFisica || 'Ilustre Municipalidad de Coquimbo',
         cargo: cargoTitular || prevRow?.funcionario.cargo || 'Profesional',
@@ -523,7 +524,7 @@ export const DashboardSupervisores: React.FC = () => {
               </Badge>
             </CardTitle>
             <p className="text-[11px] text-muted-foreground mt-0.5">
-              Panel integrado con titular extraído del certificado X.509 del token, vigencia, trazabilidad en sesión y métricas de uso.
+              Panel integrado con titular extraído del certificado del token, vigencia, trazabilidad en sesión y métricas de uso.
             </p>
           </div>
 
@@ -709,7 +710,9 @@ export const DashboardSupervisores: React.FC = () => {
                           )}
                         </div>
                         <div className="text-[10px] font-mono text-muted-foreground">
-                          {fila.ipEstacion ? `IP: ${fila.ipEstacion}` : 'Red Municipal'}
+                          {fila.ipEstacion
+                            ? `${fila.estadoConexion === 'CONECTADO' ? 'IP' : 'Última IP'}: ${fila.ipEstacion}`
+                            : 'Red Municipal'}
                           {fila.dependenciaFisica ? ` • ${fila.dependenciaFisica}` : ''}
                         </div>
                       </div>

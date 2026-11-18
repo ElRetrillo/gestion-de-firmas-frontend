@@ -36,10 +36,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToApp, onOpenLogin
 
           <div className="space-y-2">
             <h1 className="text-[clamp(1.625rem,1.2rem+2.5vw,2.25rem)] font-black tracking-tight text-foreground leading-tight">
-              Firma Electrónica
+              Control y Trazabilidad de Tokens
             </h1>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Accede con tu cuenta institucional para firmar documentos desde tu celular o PC.
+              Plataforma administrativa de monitoreo, vigencia y alertas de dispositivos criptográficos USB — I. Municipalidad de Coquimbo.
             </p>
           </div>
 

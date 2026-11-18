@@ -1,16 +1,12 @@
-import React, { useState } from 'react';
-import { Eye, EyeOff } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Eye, EyeOff, ShieldCheck, KeyRound } from 'lucide-react';
+import QRCode from 'qrcode';
 import { useAuthStore } from '../store/useAuthStore';
 import { LogoMunicipalidad } from './LogoMunicipalidad';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent } from './ui/card';
-import { Badge } from './ui/badge';
 import { formatRut } from '../lib/rut';
-import {
-  CATALOGO_ROLES_RBAC,
-  CALIDADES_CONTRACTUALES_RBAC,
-} from '../lib/rbacFirmas';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -25,112 +21,58 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
   const [password, setPassword] = useState('');
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [exitoRegistro, setExitoRegistro] = useState<string | null>(null);
-
-  // Pestaña Login vs Registro autónomo
-  const [tabAuth, setTabAuth] = useState<'LOGIN' | 'REGISTRO'>('LOGIN');
-
-  // Campos para Registro autónomo
-  const [regRut, setRegRut] = useState('');
-  const [regNombre, setRegNombre] = useState('');
-  const [regApellido, setRegApellido] = useState('');
-  const [regEmail, setRegEmail] = useState('');
-  const [regPassword, setRegPassword] = useState('');
-  const [regPasswordConf, setRegPasswordConf] = useState('');
-  const [regCargo, setRegCargo] = useState('Profesionales');
-  const [regCalidadContractual, setRegCalidadContractual] = useState('CONTRATA');
-  const [regUnidad, setRegUnidad] = useState('');
   const [mostrarPassLogin, setMostrarPassLogin] = useState(false);
-  const [mostrarPassReg, setMostrarPassReg] = useState(false);
-  const [mostrarPassRegConf, setMostrarPassRegConf] = useState(false);
 
-  // Estado para cambio de contraseña obligatorio
+  // Estado para cambio de PIN/contraseña obligatorio y MFA Authenticator
   const [modoCambioPassword, setModoCambioPassword] = useState(false);
+  const [modoMfa, setModoMfa] = useState(false);
+  const [totpSetup, setTotpSetup] = useState<{
+    secretBase32: string;
+    otpauthUrl: string;
+    email?: string;
+  } | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [codigoTotp, setCodigoTotp] = useState('');
   const [tokenTemporal, setTokenTemporal] = useState<string | null>(null);
   const [usuarioTemporal, setUsuarioTemporal] = useState<any>(null);
   const [passwordActual, setPasswordActual] = useState('');
   const [passwordNueva, setPasswordNueva] = useState('');
   const [passwordConfirmacion, setPasswordConfirmacion] = useState('');
 
+  useEffect(() => {
+    let cancelled = false;
+    if (totpSetup?.otpauthUrl) {
+      QRCode.toDataURL(totpSetup.otpauthUrl, { width: 176, margin: 1 })
+        .then((url) => {
+          if (!cancelled) setQrDataUrl(url);
+        })
+        .catch(() => {
+          if (!cancelled) setQrDataUrl(null);
+        });
+    } else {
+      setQrDataUrl(null);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [totpSetup]);
+
   if (!isOpen) return null;
 
-  const handleRegistro = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setExitoRegistro(null);
-
-    if (!regRut.trim() || !regNombre.trim() || !regApellido.trim()) {
-      setError('RUT, Nombre y Apellido son obligatorios.');
-      return;
-    }
-    if (regPassword.length < 10) {
-      setError('La contraseña debe tener al menos 10 caracteres.');
-      return;
-    }
-    if (!/[A-Z]/.test(regPassword) || !/[a-z]/.test(regPassword) || !/\d/.test(regPassword)) {
-      setError('La contraseña debe incluir mayúsculas, minúsculas y números.');
-      return;
-    }
-    if (regPassword !== regPasswordConf) {
-      setError('Las contraseñas no coinciden.');
-      return;
-    }
-    const emailNorm = regEmail.trim().toLowerCase();
-    if (!emailNorm.endsWith('@municoquimbo.cl')) {
-      setError('El correo institucional debe pertenecer al dominio @municoquimbo.cl.');
-      return;
-    }
-
-    setCargando(true);
-    try {
-      const res = await fetch('/api/v1/auth/registro', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rut: formatRut(regRut.trim()) || regRut.trim(),
-          nombre: regNombre.trim(),
-          apellido: regApellido.trim(),
-          email: emailNorm,
-          password: regPassword,
-          cargo: regCargo.trim() || 'Profesionales',
-          condicionContractual: regCalidadContractual,
-          unidad: regUnidad.trim() || 'I. Municipalidad de Coquimbo',
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || 'Error al procesar el registro.');
-      }
-
-      if (data.accessToken && data.usuario) {
-        loginSuccess(data);
-        onLoginSuccess?.();
-        return;
-      }
-
-      setExitoRegistro('¡Registro completado con éxito! Ya puedes iniciar sesión.');
-      setTabAuth('LOGIN');
-      setRut(regRut);
-    } catch (err: any) {
-      setError(err.message || 'Error al comunicarse con el servidor.');
-    } finally {
-      setCargando(false);
-    }
-  };
-
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent, otpOverride?: string) => {
     e.preventDefault();
     setError(null);
     setCargando(true);
 
     try {
+      const otpEnviar = (otpOverride ?? codigoTotp).trim();
       const res = await fetch('/api/v1/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           rut: formatRut(rut.trim()) || rut.trim(),
           password,
+          ...(otpEnviar ? { codigoTotp: otpEnviar } : {}),
         }),
       });
 
@@ -140,17 +82,34 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
         throw new Error(data.message || 'Credenciales institucionales inválidas.');
       }
 
-      // Si el backend indica que debe cambiar contraseña obligatoriamente
+      // Si el backend indica que debe definir PIN/contraseña inicial (+ MFA Authenticator)
       if (data.debeCambiarPassword) {
         setTokenTemporal(data.accessToken);
         setUsuarioTemporal(data.usuario);
         setPasswordActual(password);
+        setTotpSetup(data.totpSetup || null);
+        setCodigoTotp('');
         setModoCambioPassword(true);
+        setModoMfa(false);
         setCargando(false);
         return;
       }
 
-      // Login exitoso definitivo
+      // Si el backend requiere segundo factor TOTP Authenticator
+      if (data.requiereMfa && !data.accessToken) {
+        setUsuarioTemporal({ nombre: data.nombre, rut: data.rut, email: data.email });
+        setTotpSetup(data.totpSetup || null);
+        setCodigoTotp('');
+        setModoMfa(true);
+        setCargando(false);
+        return;
+      }
+
+      // Login exitoso definitivo (sesión de 3 horas)
+      setModoMfa(false);
+      setModoCambioPassword(false);
+      setTotpSetup(null);
+      setCodigoTotp('');
       loginSuccess(data);
       onClose();
       if (onLoginSuccess) onLoginSuccess();
@@ -161,58 +120,25 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
     }
   };
 
-  const handleLoginClaveUnica = async () => {
-    setError(null);
-    setCargando(true);
-    try {
-      const rutTarget = formatRut(rut.trim()) || rut.trim();
-      const res = await fetch('/api/v1/auth/claveunica/callback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          rut: rutTarget || undefined,
-          state: 'cqm-oauth-2026',
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || 'No se pudo autenticar mediante ClaveÚnica.');
-      }
-      if (data.debeCambiarPassword) {
-        setTokenTemporal(data.accessToken);
-        setUsuarioTemporal(data.usuario);
-        setModoCambioPassword(true);
-        setCargando(false);
-        return;
-      }
-      loginSuccess(data);
-      onClose();
-      if (onLoginSuccess) onLoginSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Error al validar sesión con ClaveÚnica.');
-    } finally {
-      setCargando(false);
-    }
-  };
-
   const handleCambioPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (passwordNueva.length < 10) {
-      setError('La nueva contraseña debe tener al menos 10 caracteres.');
+    const pinClean = passwordNueva.trim();
+    if (pinClean.length !== 6) {
+      setError('El nuevo PIN personal debe tener exactamente 6 caracteres.');
       return;
     }
-    if (!/[A-Z]/.test(passwordNueva) || !/[a-z]/.test(passwordNueva) || !/\d/.test(passwordNueva)) {
-      setError('La contraseña debe contener mayúsculas, minúsculas y números.');
+    if (pinClean !== passwordConfirmacion.trim()) {
+      setError('Los PINs ingresados no coinciden.');
       return;
     }
-    if (passwordNueva !== passwordConfirmacion) {
-      setError('Las contraseñas ingresadas no coinciden.');
+    if (pinClean === passwordActual.trim()) {
+      setError('El nuevo PIN debe ser distinto al PIN temporal actual.');
       return;
     }
-    if (passwordNueva === passwordActual) {
-      setError('La nueva contraseña debe ser distinta de la contraseña temporal.');
+    if (totpSetup && !/^\d{6}$/.test(codigoTotp.trim())) {
+      setError('Ingrese el código de 6 dígitos generado por su aplicación Authenticator para vincular MFA.');
       return;
     }
 
@@ -225,21 +151,25 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
           Authorization: `Bearer ${tokenTemporal}`,
         },
         body: JSON.stringify({
-          passwordActual,
-          passwordNueva,
+          passwordActual: passwordActual.trim(),
+          passwordNueva: pinClean,
+          ...(codigoTotp.trim() ? { codigoTotp: codigoTotp.trim() } : {}),
         }),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.message || 'No se pudo actualizar la contraseña.');
+        throw new Error(data.message || 'No se pudo actualizar el PIN personal.');
       }
 
+      setModoCambioPassword(false);
+      setTotpSetup(null);
+      setCodigoTotp('');
       actualizarPasswordCompletada(data);
       onClose();
       if (onLoginSuccess) onLoginSuccess();
     } catch (err: any) {
-      setError(err.message || 'Error al procesar el cambio de contraseña.');
+      setError(err.message || 'Error al procesar el cambio de PIN.');
     } finally {
       setCargando(false);
     }
@@ -247,23 +177,39 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-      <Card className="w-full max-w-md border-border/80 shadow-2xl bg-card overflow-hidden">
+      <Card className="w-full max-w-md max-h-[94vh] overflow-y-auto border-border/80 shadow-2xl bg-card" aria-labelledby="login-modal-title">
         {/* Cabecera del Modal */}
         <div className="p-6 border-b bg-muted/30 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <LogoMunicipalidad variant="sidebar" className="h-10 w-10 shrink-0" />
             <div>
-              <h2 className="text-base font-bold text-foreground">
-                {modoCambioPassword ? 'Actualización de Contraseña' : 'Iniciar Sesión Institucional'}
+              <h2 id="login-modal-title" className="text-base font-bold text-foreground">
+                {modoCambioPassword
+                  ? 'Configurar PIN Personal y MFA'
+                  : modoMfa
+                    ? 'Verificación MFA Authenticator'
+                    : 'Acceso Administradores'}
               </h2>
               <p className="text-[11px] text-muted-foreground">
-                {modoCambioPassword ? 'Actualización de Seguridad' : 'Ilustre Municipalidad de Coquimbo'}
+                {modoCambioPassword
+                  ? 'Primer ingreso de Administrador'
+                  : modoMfa
+                    ? 'Segundo factor de autenticación (sesión 3h)'
+                    : 'Ilustre Municipalidad de Coquimbo'}
               </p>
             </div>
           </div>
           <button
-            onClick={onClose}
+            type="button"
+            onClick={() => {
+              setModoCambioPassword(false);
+              setModoMfa(false);
+              setTotpSetup(null);
+              setCodigoTotp('');
+              onClose();
+            }}
             className="text-muted-foreground hover:text-foreground text-sm font-bold p-1 rounded-md"
+            aria-label="Cerrar ventana"
             title="Cerrar"
           >
             ✕
@@ -272,345 +218,67 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
 
         <CardContent className="p-6 space-y-4">
           {error && (
-            <div className="p-3 text-xs bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 rounded-md">
+            <div role="alert" aria-live="polite" className="p-3 text-xs bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 rounded-md">
               <span className="font-bold">Aviso:</span> {error}
             </div>
           )}
 
-          {exitoRegistro && (
-            <div className="p-3 text-xs bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 rounded-md">
-              <span className="font-bold">✓ Éxito:</span> {exitoRegistro}
-            </div>
-          )}
+          {!modoCambioPassword && !modoMfa ? (
+            <form onSubmit={handleLogin} className="space-y-4" aria-labelledby="login-modal-title">
+              <p className="text-xs text-muted-foreground">
+                Ingresa tu RUT institucional y PIN de acceso (6 caracteres).
+              </p>
 
-          {!modoCambioPassword ? (
-            <div>
-              {/* Selector de Pestañas: Iniciar Sesión vs Registrarse */}
-              <div className="flex border-b border-border mb-4">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTabAuth('LOGIN');
-                    setError(null);
-                  }}
-                  className={`flex-1 py-2 text-xs font-bold border-b-2 transition-colors ${
-                    tabAuth === 'LOGIN'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Iniciar Sesión
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTabAuth('REGISTRO');
-                    setError(null);
-                    setExitoRegistro(null);
-                  }}
-                  className={`flex-1 py-2 text-xs font-bold border-b-2 transition-colors ${
-                    tabAuth === 'REGISTRO'
-                      ? 'border-primary text-primary'
-                      : 'border-transparent text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  Registrarse
-                </button>
-              </div>
-
-              {tabAuth === 'LOGIN' ? (
-                /* Formulario de Login */
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-foreground flex items-center justify-between">
-                      <span>RUT Institucional</span>
-                      <span className="text-[10px] font-mono text-muted-foreground">Ej: 12.345.678-9</span>
-                    </label>
-                    <Input
-                      type="text"
-                      placeholder="12.345.678-9"
-                      value={rut}
-                      onChange={(e) => setRut(formatRut(e.target.value))}
-                      className="font-mono text-sm"
-                      required
-                      autoFocus
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-foreground flex items-center justify-between">
-                      <span>Contraseña</span>
-                      <span className="text-[10px] text-muted-foreground">Clave institucional</span>
-                    </label>
-                    <div className="relative">
-                      <Input
-                        type={mostrarPassLogin ? 'text' : 'password'}
-                        placeholder=""
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="text-sm pr-9"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setMostrarPassLogin((v) => !v)}
-                        aria-label={mostrarPassLogin ? 'Ocultar contraseña' : 'Ver contraseña'}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      >
-                        {mostrarPassLogin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="pt-2 space-y-2.5">
-                    <Button
-                      type="submit"
-                      disabled={cargando}
-                      className="w-full font-bold text-sm h-10 shadow-md"
-                    >
-                      {cargando ? 'Validando credenciales...' : 'Iniciar Sesión (Directorio Municipal)'}
-                    </Button>
-
-                    <div className="relative flex py-1 items-center">
-                      <div className="flex-grow border-t border-border/60" />
-                      <span className="flex-shrink mx-2 text-[10px] uppercase tracking-wider text-muted-foreground">
-                        o autenticación del Estado
-                      </span>
-                      <div className="flex-grow border-t border-border/60" />
-                    </div>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={cargando}
-                      onClick={handleLoginClaveUnica}
-                      className="w-full font-bold text-xs h-9 border-blue-600/40 text-blue-700 dark:text-blue-400 hover:bg-blue-600/10"
-                    >
-                      Ingresar con ClaveÚnica (OAuth2 Estado)
-                    </Button>
-                  </div>
-
-                  <div className="text-center pt-1">
-                    <span className="text-[10px] text-muted-foreground">
-                      Acceso exclusivo para funcionarios de la Municipalidad de Coquimbo
-                    </span>
-                  </div>
-                </form>
-              ) : (
-                /* Formulario de Registro Autónomo */
-                <form onSubmit={handleRegistro} className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-semibold text-foreground">Nombre</label>
-                      <Input
-                        type="text"
-                        placeholder="Ej: Claudia"
-                        value={regNombre}
-                        onChange={(e) => setRegNombre(e.target.value)}
-                        className="text-xs h-8"
-                        required
-                        autoFocus
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-semibold text-foreground">Apellido</label>
-                      <Input
-                        type="text"
-                        placeholder="Ej: Morales Gómez"
-                        value={regApellido}
-                        onChange={(e) => setRegApellido(e.target.value)}
-                        className="text-xs h-8"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-semibold text-foreground flex items-center justify-between">
-                      <span>RUT</span>
-                      <span className="text-[10px] text-muted-foreground font-mono">Con o sin puntos</span>
-                    </label>
-                    <Input
-                      type="text"
-                      placeholder="12.345.678-9"
-                      value={regRut}
-                      onChange={(e) => setRegRut(formatRut(e.target.value))}
-                      className="text-xs font-mono h-8"
-                      required
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-semibold text-foreground">Grado / Rol Funcional (RBAC)</label>
-                      <select
-                        value={regCargo}
-                        onChange={(e) => setRegCargo(e.target.value)}
-                        className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground"
-                      >
-                        {CATALOGO_ROLES_RBAC.map((rolItem) => (
-                          <option key={rolItem.id} value={rolItem.etiqueta}>
-                            {rolItem.etiqueta}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-semibold text-foreground">Calidad Contractual</label>
-                      <select
-                        value={regCalidadContractual}
-                        onChange={(e) => setRegCalidadContractual(e.target.value)}
-                        className="w-full h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground"
-                      >
-                        {CALIDADES_CONTRACTUALES_RBAC.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.etiqueta}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-semibold text-foreground">Unidad</label>
-                      <Input
-                        type="text"
-                        placeholder="Ej: Dirección de Obras"
-                        value={regUnidad}
-                        onChange={(e) => setRegUnidad(e.target.value)}
-                        className="text-xs h-8"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-semibold text-foreground">Correo Institucional (@municoquimbo.cl)</label>
-                    <Input
-                      type="email"
-                      placeholder="nombre@municoquimbo.cl"
-                      value={regEmail}
-                      onChange={(e) => setRegEmail(e.target.value)}
-                      className="text-xs h-8"
-                      required
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-semibold text-foreground">Contraseña</label>
-                      <div className="relative">
-                        <Input
-                          type={mostrarPassReg ? 'text' : 'password'}
-                          placeholder="Mín. 10 car."
-                          value={regPassword}
-                          onChange={(e) => setRegPassword(e.target.value)}
-                          className="text-xs h-8 pr-8"
-                          required
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setMostrarPassReg((v) => !v)}
-                          aria-label={mostrarPassReg ? 'Ocultar contraseña' : 'Ver contraseña'}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        >
-                          {mostrarPassReg ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[11px] font-semibold text-foreground">Confirmar</label>
-                      <div className="relative">
-                        <Input
-                          type={mostrarPassRegConf ? 'text' : 'password'}
-                          placeholder="Repetir"
-                          value={regPasswordConf}
-                          onChange={(e) => setRegPasswordConf(e.target.value)}
-                          className="text-xs h-8 pr-8"
-                          required
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setMostrarPassRegConf((v) => !v)}
-                          aria-label={mostrarPassRegConf ? 'Ocultar confirmación' : 'Ver confirmación'}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        >
-                          {mostrarPassRegConf ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="text-[10px] text-muted-foreground pt-0.5">
-                    Al registrarte con tu correo @municoquimbo.cl, iniciarás sesión de inmediato con acceso según tu grado RBAC.
-                  </div>
-
-                  <div className="pt-2">
-                    <Button
-                      type="submit"
-                      disabled={cargando}
-                      className="w-full font-bold text-xs h-9 shadow-md bg-emerald-600 hover:bg-emerald-700 text-white"
-                    >
-                      {cargando ? 'Procesando registro...' : 'Registrarse en la Plataforma'}
-                    </Button>
-                  </div>
-                </form>
-              )}
-            </div>
-          ) : (
-            /* Formulario de Cambio Obligatorio de Contraseña */
-            <form onSubmit={handleCambioPassword} className="space-y-3.5">
-              <div className="p-3 rounded-md bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-700 dark:text-amber-300">
-                <p className="font-bold mb-1">
-                  Bienvenido, {usuarioTemporal?.nombre || 'Funcionario'}.
-                </p>
-                <p>
-                  Por seguridad, debes actualizar la contraseña temporal asignada por una clave personal definitiva antes de acceder al sistema.
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-foreground">Contraseña Temporal Actual</label>
+              <div className="space-y-1.5">
+                <label htmlFor="login-rut" className="text-xs font-semibold text-foreground flex items-center justify-between">
+                  <span>RUT Institucional</span>
+                  <span className="text-[10px] font-mono text-muted-foreground">Ej: 20.406.484-9</span>
+                </label>
                 <Input
-                  type="password"
-                  value={passwordActual}
-                  onChange={(e) => setPasswordActual(e.target.value)}
-                  className="text-xs font-mono"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-foreground">Nueva Contraseña Definitiva</label>
-                <Input
-                  type="password"
-                  placeholder="Mínimo 10 caracteres (A-Z, a-z, 0-9)"
-                  value={passwordNueva}
-                  onChange={(e) => setPasswordNueva(e.target.value)}
-                  className="text-xs"
+                  id="login-rut"
+                  name="rut"
+                  type="text"
+                  autoComplete="username"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  enterKeyHint="next"
+                  placeholder="12.345.678-9"
+                  value={rut}
+                  onChange={(e) => setRut(formatRut(e.target.value))}
+                  className="font-mono text-sm"
                   required
                   autoFocus
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-foreground">Confirmar Nueva Contraseña</label>
-                <Input
-                  type="password"
-                  placeholder="Reingrese la nueva contraseña"
-                  value={passwordConfirmacion}
-                  onChange={(e) => setPasswordConfirmacion(e.target.value)}
-                  className="text-xs"
-                  required
-                />
-              </div>
-
-              <div className="text-[10px] text-muted-foreground space-y-0.5 pt-1">
-                <div className={passwordNueva.length >= 10 ? 'text-emerald-500 font-semibold' : ''}>
-                  ✓ Mínimo 10 caracteres
-                </div>
-                <div className={/[A-Z]/.test(passwordNueva) && /[a-z]/.test(passwordNueva) ? 'text-emerald-500 font-semibold' : ''}>
-                  ✓ Letras mayúsculas y minúsculas
-                </div>
-                <div className={/\d/.test(passwordNueva) ? 'text-emerald-500 font-semibold' : ''}>
-                  ✓ Al menos un número
+              <div className="space-y-1.5">
+                <label htmlFor="login-pin" className="text-xs font-semibold text-foreground flex items-center justify-between">
+                  <span>PIN de Acceso (6 caracteres)</span>
+                  <span className="text-[10px] text-muted-foreground">PIN de administrador</span>
+                </label>
+                <div className="relative">
+                  <Input
+                    id="login-pin"
+                    name="password"
+                    type={mostrarPassLogin ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    enterKeyHint="done"
+                    placeholder="Ingrese su PIN de 6 caracteres"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="text-sm pr-10 font-mono"
+                    required
+                  />
+                  <button
+                    type="button"
+                    aria-pressed={mostrarPassLogin}
+                    onClick={() => setMostrarPassLogin((v) => !v)}
+                    aria-label={mostrarPassLogin ? 'Ocultar PIN' : 'Mostrar PIN'}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                  >
+                    {mostrarPassLogin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
 
@@ -618,9 +286,211 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
                 <Button
                   type="submit"
                   disabled={cargando}
+                  className="w-full font-bold text-sm h-10 shadow-md"
+                >
+                  {cargando ? 'Validando credenciales...' : 'Iniciar Sesión'}
+                </Button>
+              </div>
+            </form>
+          ) : modoMfa ? (
+            /* Formulario de Segundo Factor MFA Authenticator */
+            <form onSubmit={(e) => handleLogin(e)} className="space-y-4">
+              <div className="p-3 rounded-md bg-primary/10 border border-primary/30 text-[11px] text-foreground space-y-1">
+                <p className="font-bold flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-primary shrink-0" />
+                  <span>{usuarioTemporal?.nombre || 'Administrador Municipal'}</span>
+                </p>
+                <p className="text-muted-foreground">
+                  Para proteger el panel de administración, ingrese el código dinámico de 6 dígitos de Google Authenticator / Microsoft Authenticator.
+                </p>
+              </div>
+
+              {totpSetup && (
+                <div className="p-3 rounded-lg border bg-muted/30 space-y-2.5">
+                  <div className="text-[11px] font-bold text-foreground">
+                    Primera vinculación Authenticator (Escanee el QR o copie la clave):
+                  </div>
+                  {qrDataUrl && (
+                    <div className="flex justify-center bg-white p-2 rounded border">
+                      <img src={qrDataUrl} alt="Código QR para Authenticator" className="w-40 h-40" />
+                    </div>
+                  )}
+                  <div className="text-[10px] font-mono bg-background border rounded p-2 break-all select-all">
+                    <span className="text-muted-foreground block mb-0.5">Clave Secreta (Base32):</span>
+                    <span className="font-bold text-primary">{totpSetup.secretBase32}</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <label htmlFor="mfa-otp-input" className="text-xs font-semibold text-foreground block">
+                  Código Authenticator (6 dígitos)
+                </label>
+                <p id="mfa-otp-hint" className="text-[11px] text-muted-foreground">
+                  Ingrese el código de 6 dígitos vigente en su app Authenticator.
+                </p>
+                <Input
+                  id="mfa-otp-input"
+                  name="otp"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  pattern="\d{6}"
+                  maxLength={6}
+                  aria-describedby="mfa-otp-hint"
+                  placeholder="000000"
+                  value={codigoTotp}
+                  onChange={(e) => setCodigoTotp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  className="font-mono text-lg tracking-[0.35em] text-center h-11"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setModoMfa(false);
+                    setCodigoTotp('');
+                    setError(null);
+                  }}
+                  className="text-xs h-10"
+                >
+                  Volver
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={cargando}
+                  className="flex-1 font-bold text-xs h-10 shadow-md"
+                >
+                  {cargando ? 'Verificando código MFA...' : 'Verificar e Ingresar (Sesión 3h)'}
+                </Button>
+              </div>
+            </form>
+          ) : (
+            /* Formulario de Definición de PIN Personal (6 caracteres) + Enrolamiento MFA */
+            <form onSubmit={handleCambioPassword} className="space-y-3.5">
+              <div className="p-3 rounded-md bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-700 dark:text-amber-300">
+                <p className="font-bold mb-1 flex items-center gap-1.5">
+                  <KeyRound className="w-3.5 h-3.5 shrink-0" />
+                  <span>Bienvenido(a), {usuarioTemporal?.nombre || 'Administrador'}.</span>
+                </p>
+                <p>
+                  Defina su PIN personal de <strong>6 caracteres</strong> y vincule su aplicación Authenticator antes de iniciar sesión (sesión válida por 3 horas).
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <label htmlFor="pin-temporal-actual" className="text-xs font-semibold text-foreground">
+                  PIN Temporal Actual
+                </label>
+                <Input
+                  id="pin-temporal-actual"
+                  type="password"
+                  autoComplete="current-password"
+                  value={passwordActual}
+                  onChange={(e) => setPasswordActual(e.target.value)}
+                  className="text-xs font-mono"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label htmlFor="pin-nuevo-personal" className="text-xs font-semibold text-foreground">
+                    Nuevo PIN (6 caracteres)
+                  </label>
+                  <Input
+                    id="pin-nuevo-personal"
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder="Ej: A9x#21"
+                    maxLength={6}
+                    value={passwordNueva}
+                    onChange={(e) => setPasswordNueva(e.target.value.slice(0, 6))}
+                    className="text-xs font-mono"
+                    required
+                    autoFocus
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label htmlFor="pin-nuevo-confirmar" className="text-xs font-semibold text-foreground">
+                    Confirmar PIN
+                  </label>
+                  <Input
+                    id="pin-nuevo-confirmar"
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder="Repetir PIN"
+                    maxLength={6}
+                    value={passwordConfirmacion}
+                    onChange={(e) => setPasswordConfirmacion(e.target.value.slice(0, 6))}
+                    className="text-xs font-mono"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="text-[10px] text-muted-foreground space-y-0.5">
+                <div className={passwordNueva.trim().length === 6 ? 'text-emerald-500 font-semibold' : ''}>
+                  ✓ Exactamente 6 caracteres ({passwordNueva.trim().length}/6)
+                </div>
+                <div className={passwordNueva.trim().length === 6 && passwordNueva === passwordConfirmacion ? 'text-emerald-500 font-semibold' : ''}>
+                  ✓ Coincidencia de PIN confirmada
+                </div>
+              </div>
+
+              {totpSetup && (
+                <div className="p-3 rounded-lg border bg-muted/30 space-y-2">
+                  <div className="text-[11px] font-bold text-foreground flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5 text-primary" />
+                    <span>Vincular MFA Authenticator (Obligatorio)</span>
+                  </div>
+                  {qrDataUrl && (
+                    <div className="flex justify-center bg-white p-2 rounded border">
+                      <img src={qrDataUrl} alt="QR Authenticator Camila Herrera" className="w-36 h-36" />
+                    </div>
+                  )}
+                  <div className="text-[10px] font-mono bg-background border rounded p-2 break-all select-all">
+                    <span className="text-muted-foreground block mb-0.5">Clave secreta manual (Base32):</span>
+                    <span className="font-bold text-primary">{totpSetup.secretBase32}</span>
+                  </div>
+                  <div className="space-y-1">
+                    <label htmlFor="setup-otp-input" className="text-[11px] font-semibold text-foreground block">
+                      Código Authenticator (6 dígitos)
+                    </label>
+                    <p id="setup-otp-hint" className="text-[10px] text-muted-foreground">
+                      Escanee el QR en Google/Microsoft Authenticator e ingrese el código de 6 dígitos para confirmar.
+                    </p>
+                    <Input
+                      id="setup-otp-input"
+                      name="otp"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      pattern="\d{6}"
+                      maxLength={6}
+                      aria-describedby="setup-otp-hint"
+                      placeholder="000000"
+                      value={codigoTotp}
+                      onChange={(e) => setCodigoTotp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      className="font-mono text-base tracking-[0.35em] text-center h-9"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-1">
+                <Button
+                  type="submit"
+                  disabled={cargando}
                   className="w-full font-bold text-xs h-10 shadow-md bg-emerald-600 hover:bg-emerald-700 text-white"
                 >
-                  {cargando ? 'Guardando y accediendo...' : 'Establecer Contraseña y Acceder'}
+                  {cargando ? 'Guardando PIN y MFA...' : 'Guardar PIN Personal y Acceder'}
                 </Button>
               </div>
             </form>

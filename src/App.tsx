@@ -107,7 +107,6 @@ export const App: React.FC = () => {
             {tabActiva === 'DASHBOARD' && <DashboardSupervisores />}
             {tabActiva === 'ALERTAS' && <AlertasCertificadosView />}
             {tabActiva === 'METRICAS' && <MetricasTrazabilidadPanel vistaCompleta />}
-            {tabActiva === 'USUARIOS_CUSTODIA' && <GestionUsuariosEquipamientoView />}
             {tabActiva === 'AUDITORIA' && <AuditoriaView />}
           </div>
         </main>
