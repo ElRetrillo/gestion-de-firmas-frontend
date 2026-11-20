@@ -1,77 +1,55 @@
-# Frontend - Sistema de Gestión de Firmas y Telemetría USB
+# Frontend — Monitoreo y Telemetría de Tokens USB
 
-### Ilustre Municipalidad de Coquimbo
+**Ilustre Municipalidad de Coquimbo**
 
-Frontend institucional para la supervisión en tiempo real de tokens criptográficos físicos (SafeNet, ePass2003) y orquestación de firmas masivas de decretos (FirmaGob / ESIGN), construido con **React 18 + TypeScript + Vite + Tailwind CSS** y componentes de **[ui.shadcn.com](https://ui.shadcn.com)**.
+Aplicación web administrativa para el monitoreo en tiempo real, control de vigencia, estadísticas de trazabilidad y auditoría de tokens criptográficos USB. Construida con **React 18 + TypeScript + Vite + Tailwind CSS + Zustand**.
 
----
+## Vistas Activas
 
-## 🚀 Requisitos Previos
+- **Portada e Inicio de Sesión** (`LandingPage`, `LoginModal`): acceso administrativo con RUT, PIN de 6 caracteres y verificación MFA (TOTP / Authenticator con código QR).
+- **Control de Tokens** (`DashboardSupervisores`): supervisión en vivo vía WebSocket de tokens conectados/desconectados, titular detectado desde certificado X.509, vigencia, tiempo de uso, envío de avisos por correo y descarga del agente USB.
+- **Alertas de Vencimientos** (`AlertasCertificadosView`): control preventivo por tramos (`≤ 15`, `≤ 30`, `≤ 60` días y expirados) con vista previa y despacho individual o masivo vía SMTP.
+- **Estadísticas** (`MetricasTrazabilidadPanel`, `ReporteHistoricoEsign`): indicadores porcentuales por período, evolución temporal, detección de tokens sin uso, previsualización/exportación de resumen en LaTeX/PDF y reporte histórico E-Sign 2025–2026.
+- **Bitácora de Acciones** (`AuditoriaView`): registro de auditoría general y sesiones (`Logins y Sign Outs`) con filtros, inspector de cambios y exportación CSV/JSON.
+- **Accesos Admin** (`GestionAdminsView`): generación de credenciales iniciales y revocación de cuentas administradoras.
 
-* **Node.js**: v18 o superior (v20 recomendado)
-* **npm**: v9 o superior
-* **Backend Core**: En ejecución en `http://localhost:3001` (mediante Docker en el repositorio `gestion-de-firmas`).
+## Requisitos Previos
 
----
+- **Node.js** 18+ (recomendado v20) y **npm** 9+.
+- **Backend Core** en ejecución en `http://localhost:3001` (repositorio `gestion-de-firmas`).
 
-## 🛠️ Instalación y Puesta en Marcha
+## Desarrollo Local
 
-1. **Instalar dependencias:**
+1. Instalar dependencias:
 
    ```bash
    npm install
    ```
 
-2. **Configurar variables de entorno (Opcional):**
+2. (Opcional) Configurar variables de entorno copiando `.env.example` a `.env`:
 
    ```bash
-   copy .env.example .env
+   cp .env.example .env
    ```
 
-3. **Iniciar servidor de desarrollo (Vite):**
+3. Iniciar servidor de desarrollo:
 
    ```bash
    npm run dev
    ```
 
-   * La aplicación estará disponible en: `http://localhost:3000`
-   * Vite está configurado con proxy inverso local automático para redirigir `/api` y `/socket.io` directamente hacia `http://localhost:3001` sin conflictos de CORS.
+   Disponible en `http://localhost:3000`. Vite redirige automáticamente `/api` y `/socket.io` hacia `http://localhost:3001`.
 
-4. **Compilar para producción:**
+## Compilación para Producción
 
-   ```bash
-   npm run build
-   ```
-
----
-
-## 📦 Estructura del Proyecto
-
-```
-gestion-de-firmas-frontend/
-├── public/                 # Logotipos institucionales (PNG/SVG)
-├── src/
-│   ├── components/         # Vistas y componentes de UI
-│   │   ├── ui/             # Primitivas de diseño de ui.shadcn.com (Card, Badge, Button, Table, etc.)
-│   │   ├── LandingPage.tsx # Portada institucional interactiva (Zig.ai style)
-│   │   ├── DashboardSupervisores.tsx # Bento Grid de telemetría de hardware USB
-│   │   ├── FirmaLotesView.tsx # Pipeline visual BullMQ + Redis
-│   │   ├── ChecksignView.tsx # Portal de verificación criptográfica Ley 19.799
-│   │   ├── AlertasCertificadosView.tsx # Radar preventivo a 60, 30 y 15 días
-│   │   ├── AuditoriaView.tsx # Trazabilidad inalterable forense (Ley 21.663)
-│   │   ├── Sidebar.tsx     # Barra lateral sobria institucional
-│   │   └── TopHeader.tsx   # Header con espacio de foto y selector de tema claro/oscuro
-│   ├── store/              # Gestión de estado (Zustand: telemetría, auth, tema)
-│   ├── types/              # Tipados TypeScript estrictos
-│   └── App.tsx             # Enrutador principal de módulos
-├── tailwind.config.js      # Configuración de paleta institucional HSL
-└── vite.config.ts          # Configuración de proxy y puerto
+```bash
+npm run build
 ```
 
----
+Genera los artefactos estáticos optimizados en `dist/` tras validar los tipos con `tsc`.
 
-## Cumplimiento Normativo
+## Despliegue con Docker Compose en VM
 
-* **Ley N° 19.799**: Sobre Documentos Electrónicos, Firma Electrónica y Servicios de Certificación.
-* **Ley N° 21.180**: Transformación Digital del Estado.
-* **Ley N° 21.663**: Ley Marco de Ciberseguridad e Infraestructura Crítica de la Información (ANCI).
+El proyecto incluye un `Dockerfile` multi-stage (`node:20-alpine` → `nginx:1.27-alpine`) que compila el frontend y sirve `dist/` sobre el puerto `80` con fallback SPA (`try_files $uri $uri/ /index.html`).
+
+En entorno productivo (VM), el servicio frontend se despliega junto al backend y PostgreSQL mediante el `docker-compose.yml` del repositorio backend (`gestion-de-firmas`), donde Nginx enruta el tráfico de la aplicación y delega `/api` y `/socket.io` al servicio backend.

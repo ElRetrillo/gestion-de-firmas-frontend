@@ -12,7 +12,6 @@ import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '.
 import { formatRutVisual } from '../lib/rut';
 
 interface MetricasTrazabilidadPanelProps {
-  vistaOrigen?: 'DISPOSITIVOS' | 'CUSTODIA' | 'AUDITORIA';
   compacto?: boolean;
   vistaCompleta?: boolean;
 }
@@ -234,7 +233,6 @@ const LatexPaperPreview: React.FC<{ tex: string }> = ({ tex }) => {
   const doc = parseLatexDocument(tex);
   return (
     <div className="bg-white text-zinc-900 rounded-lg border shadow-inner p-4 sm:p-8 overflow-y-auto max-h-[500px] font-serif">
-      {/* Cabecera estilo artículo LaTeX (\maketitle) */}
       <div className="text-center border-b border-zinc-300 pb-4 mb-5 space-y-1">
         <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">
           LaTeX2e Typeset Preview • article (11pt, a4paper)
@@ -245,7 +243,6 @@ const LatexPaperPreview: React.FC<{ tex: string }> = ({ tex }) => {
         {doc.date && <p className="text-[11px] text-zinc-600 italic">{doc.date}</p>}
       </div>
 
-      {/* Secciones y Tablas LaTeX */}
       <div className="space-y-6 text-xs">
         {doc.sections.map((sec, idx) => (
           <div key={idx} className="space-y-2.5">
@@ -317,7 +314,7 @@ const generarLatexFallback = (m: MetricasTrazabilidadResponse | null, etiqueta: 
   const a15 = m?.alertasVencimiento?.menosDe15Dias ?? 0;
   const a30 = m?.alertasVencimiento?.entre16Y30Dias ?? 0;
   const a60 = m?.alertasVencimiento?.entre31Y60Dias ?? 0;
-  const contTotal = m?.contratosResumen?.totalContratos ?? firmasAsig;
+  const contTotal = firmasAsig;
 
   const filasFunc = (m?.firmasAsignadas?.listado || [])
     .slice(0, 20)
@@ -389,15 +386,9 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
   >('VIGENCIA_FIRMAS');
   const [busquedaSinUso, setBusquedaSinUso] = useState('');
 
-  // Estado del Compilador y Visor LaTeX + Descarga PDF
   const [modalLatexOpen, setModalLatexOpen] = useState(false);
   const [codigoLatex, setCodigoLatex] = useState('');
-  const [cargandoLatex, setCargandoLatex] = useState(false);
-  const [compilandoPdf, setCompilandoPdf] = useState(false);
   const [compiledPdfBlobUrl, setCompiledPdfBlobUrl] = useState<string | null>(null);
-  const [modoVisorDerecho, setModoVisorDerecho] = useState<'PAPER_LATEX' | 'PDF_NATIVO'>('PDF_NATIVO');
-  const [copiadoLatex, setCopiadoLatex] = useState(false);
-  const [vistaModal, setVistaModal] = useState<'SPLIT' | 'LATEX' | 'PDF'>('SPLIT');
 
   useEffect(() => {
     if (!metricas) {
@@ -441,7 +432,6 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
   const handleCompilarLatexAPdf = async (texSource?: string) => {
     const sourceToCompile = texSource ?? codigoLatex;
     if (!sourceToCompile.trim()) return;
-    setCompilandoPdf(true);
     try {
       const res = await fetch('/api/v1/telemetria/metricas/compile-latex', {
         method: 'POST',
@@ -461,15 +451,12 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
         });
       }
     } catch {
-      // Fallback a pdfInlineUrl o vista Paper LaTeX
-    } finally {
-      setCompilandoPdf(false);
+      // Mantiene fallback de descarga directa PDF
     }
   };
 
   const abrirPrevisualizacionLatexPdf = async () => {
     setModalLatexOpen(true);
-    setCargandoLatex(true);
     let texFinal =
       metricas?.latexPreview?.codigoLatex || generarLatexFallback(metricas, etiquetaPeriodo);
     try {
@@ -481,30 +468,12 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
         }
       }
     } catch {
-      // Usa fallback
+      // Usa plantilla local si falla la consulta
     }
     setCodigoLatex(texFinal);
-    setCargandoLatex(false);
     handleCompilarLatexAPdf(texFinal);
   };
 
-  const handleCopiarLatex = () => {
-    navigator.clipboard.writeText(codigoLatex);
-    setCopiadoLatex(true);
-    setTimeout(() => setCopiadoLatex(false), 2500);
-  };
-
-  const handleDescargarTex = () => {
-    const blob = new Blob([codigoLatex], { type: 'text/plain;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Summary-Control-Tokens-${modoReporte.toLowerCase()}.tex`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const pdfInlineUrl = compiledPdfBlobUrl || `/api/v1/telemetria/metricas/pdf?${buildQueryParams()}`;
   const pdfDownloadUrl = `/api/v1/telemetria/metricas/pdf?${buildQueryParams()}&download=1`;
 
   const mesesDisponibles = metricas?.periodo?.mesesDisponibles || [];
@@ -517,9 +486,7 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
   const tel = metricas?.telemetria;
   const adm = metricas?.administracion;
   const serie = metricas?.serieTemporal || [];
-  const maxFirmasDia = Math.max(1, ...serie.map((d) => d.firmasRealizadas || d.totalActividad || 1));
 
-  // 1. Métrica: Tasa de Retención y Uso Activo de Tokens (Tokens que registran uso efectivo en el período vs en desuso)
   const totalExistentes =
     metricas?.resumenDispositivos?.totalExistentes ?? tel?.tokensRegistrados ?? 0;
   const listaDispositivos = tel?.trazabilidadDispositivos || [];
@@ -533,7 +500,6 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
   const tokensEnDesusoCount = Math.max(0, totalExistentes - tokensEnUsoCount);
   const [pctUsoActivo, pctEnDesuso] = computeNormalizedPercentages([tokensEnUsoCount, tokensEnDesusoCount]);
 
-  // 2. Porcentaje de Vigencia de Firmas Asignadas (suma exacta 100%, máx 2 decimales)
   const firmasTotal =
     metricas?.firmasAsignadas?.totalAsignadas ?? adm?.totalCertificados ?? 0;
   const firmasVigentes =
@@ -550,7 +516,6 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
     firmasExpiradas,
   ]);
 
-  // 3. Porcentaje de Tokens Conectados en Sesión Actual (suma exacta 100%, máx 2 decimales)
   const conectadosCount =
     listaDispositivos.length > 0
       ? listaDispositivos.filter((d) => d.estadoEnVivo === 'CONECTADO').length
@@ -563,11 +528,9 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
     desconectadosCount,
   ]);
 
-  // 4. Total de acciones en el período
   const accionesPeriodo =
     metricas?.accionesFuncionarios?.totalAccionesFirmaPeriodo ?? tel?.eventosFirmando ?? 0;
 
-  // 5. Usuarios / tokens sin uso registrado en el período evaluado
   interface UsuarioSinUsoItem {
     id: string;
     nombre: string;
@@ -684,7 +647,6 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
   return (
     <>
       <Card className="border-border/80 bg-card shadow-sm overflow-hidden">
-        {/* Cabecera con Selector de Períodos y Compilador/Visor LaTeX */}
         <CardHeader className="p-4 border-b bg-muted/20 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
           <div className="space-y-0.5 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
@@ -776,7 +738,6 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
         </CardHeader>
 
         <CardContent className="p-4 space-y-5">
-          {/* Resumen Superior: Tiempo Total Acumulado de Conexión */}
           <div className="p-4 rounded-xl border bg-background/60 flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -794,9 +755,7 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
             </div>
           </div>
 
-          {/* 1. Tarjetas con Gráfico Circular General arriba y Gráfico de Columnas Verticales debajo */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Tarjeta 1: Adopción y Uso Efectivo en el Período */}
             <div className="p-4 rounded-xl border bg-background/60 flex flex-col justify-between gap-3">
               <div className="flex flex-col items-center text-center gap-2">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -827,7 +786,6 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
               />
             </div>
 
-            {/* Tarjeta 2: % Vigencia de Firmas */}
             <div className="p-4 rounded-xl border bg-background/60 flex flex-col justify-between gap-3">
               <div className="flex flex-col items-center text-center gap-2">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -865,7 +823,6 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
               />
             </div>
 
-            {/* Tarjeta 3: % Conexión en Sesión */}
             <div className="p-4 rounded-xl border bg-background/60 flex flex-col justify-between gap-3">
               <div className="flex flex-col items-center text-center gap-2">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -897,7 +854,6 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
             </div>
           </div>
 
-          {/* 2. Desglose Inferior (Estado/Expiración, Evolución Diaria y Compilador/Visor LaTeX Integrado) */}
           {(!compacto || vistaCompleta) && (
             <div className="space-y-4 pt-1">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-2.5">
@@ -930,10 +886,8 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                 </div>
               </div>
 
-              {/* Pestaña 1: Vigencia, Asignación, Caducidad y Acciones de Tokens */}
               {tabTrazabilidad === 'VIGENCIA_FIRMAS' && (
                 <div className="space-y-3">
-                  {/* Interpretación Ejecutiva Automática */}
                   <div className="rounded-lg border border-primary/25 bg-primary/5 p-3 text-xs text-foreground space-y-1">
                     <div className="font-bold text-primary">
                       Interpretación de Inventario, Operatividad y Asignación ({etiquetaPeriodo})
@@ -1042,7 +996,6 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                     </Table>
                   </div>
 
-                  {/* Tarjetas móviles para Vigencia y Asignación */}
                   <div className="block md:hidden space-y-2.5">
                     {listadoFirmasAsignadas.length === 0 ? (
                       <div className="rounded-lg border p-4 text-center text-xs text-muted-foreground">
@@ -1101,7 +1054,6 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                 </div>
               )}
 
-              {/* Pestaña 2: Serie Temporal */}
               {tabTrazabilidad === 'SERIE_TEMPORAL' && (
                 <div className="p-4 rounded-lg border bg-background/50 space-y-3">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
@@ -1163,7 +1115,6 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                 </div>
               )}
 
-              {/* Pestaña 3: Usuarios sin uso de token */}
               {tabTrazabilidad === 'SIN_USO' && (
                 <div className="space-y-3">
                   <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1314,7 +1265,6 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                 </div>
               )}
 
-              {/* Pestaña 4: Visualizar Reporte (Renderizado Tipográfico LaTeX) */}
               {tabTrazabilidad === 'VISOR_LATEX' && (
                 <div className="p-4 rounded-xl border bg-background/50 flex flex-col space-y-2">
                   <div className="flex items-center justify-end">
@@ -1336,7 +1286,6 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
         </CardContent>
       </Card>
 
-      {/* Modal de Previsualización de Código LaTeX + Documento Summary PDF */}
       {modalLatexOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-6">
           <Card className="w-full max-w-6xl max-h-[92dvh] flex flex-col border-primary/50 bg-card shadow-2xl overflow-hidden">

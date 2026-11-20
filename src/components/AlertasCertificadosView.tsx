@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
-import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from './ui/table';
@@ -55,7 +54,6 @@ export const AlertasCertificadosView: React.FC = () => {
   const [notificandoId, setNotificandoId] = useState<string | null>(null);
   const [avisosEnviadosMap, setAvisosEnviadosMap] = useState<Record<string, string>>({});
   const [correoPreview, setCorreoPreview] = useState<CorreoDespachadoPreview | null>(null);
-  const [modoPreviewCorreo, setModoPreviewCorreo] = useState<'HTML' | 'TEXTO'>('HTML');
 
   const cargarAlertas = async () => {
     setCargando(true);
@@ -124,7 +122,6 @@ export const AlertasCertificadosView: React.FC = () => {
     cargarAlertas();
   }, []);
 
-  // Consolidar fuente de alertas (endpoint directo o metricas.alertasVencimiento)
   const alertas: AlertaToken[] =
     alertasRemotas.length > 0
       ? alertasRemotas
@@ -185,7 +182,7 @@ export const AlertasCertificadosView: React.FC = () => {
     let cuerpoCorreo = `Estimado(a) ${alerta.usuario.nombre},\n\nSu certificado de Firma Electrónica Avanzada (RUT: ${alerta.usuario.rut}) presenta fecha de vencimiento ${alerta.fechaExpiracion} (${alerta.tiempoExpiracionTexto}).`;
     let htmlCorreo: string | undefined;
     let enviadoSmtp = false;
-    let remitenteSmtp = 'datrigob@gmail.com';
+    let remitenteSmtp = 'SMTP configurado';
     let motivoSmtp = soloPreview ? 'Vista previa lista para enviar' : 'Vista previa local';
 
     try {
@@ -212,7 +209,7 @@ export const AlertasCertificadosView: React.FC = () => {
         if (data?.asunto) asunto = data.asunto;
         if (data?.cuerpoCorreo) cuerpoCorreo = data.cuerpoCorreo;
         if (data?.htmlCorreo) htmlCorreo = data.htmlCorreo;
-        if (data?.remitenteSmtp) remitenteSmtp = data.remitenteSmtp;
+        remitenteSmtp = data?.remitenteSmtp || 'SMTP configurado';
         enviadoSmtp = Boolean(data?.enviadoSmtp);
         motivoSmtp = data?.motivoSmtp || motivoSmtp;
       }
@@ -305,7 +302,6 @@ export const AlertasCertificadosView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* 1. Panel Superior de Vigilancia de Vencimiento a 15, 30 y 60 Días (Req 4) */}
       <Card className="border-border/80 bg-card">
         <CardHeader className="p-4 sm:p-5 pb-3 border-b flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="min-w-0">
@@ -349,7 +345,6 @@ export const AlertasCertificadosView: React.FC = () => {
         </CardHeader>
 
         <CardContent className="p-4 sm:p-5 space-y-4">
-          {/* Tarjetas por Tramo: 15 días, 30 días, 60 días y Expirados */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
             <div
               onClick={() => setFiltroTramo('15_DIAS')}
@@ -448,7 +443,6 @@ export const AlertasCertificadosView: React.FC = () => {
             </div>
           </div>
 
-          {/* Barra de Filtros por Tramo y Búsqueda */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
             <div className="flex flex-wrap items-center gap-1.5">
               <Button
@@ -503,7 +497,6 @@ export const AlertasCertificadosView: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Confirmación y Vista Previa del Correo Electrónico Enviado */}
       {correoPreview && (
         <Card className="border-2 border-emerald-500/60 bg-emerald-500/5 shadow-lg">
           <CardHeader className="p-4 pb-2 border-b flex flex-row items-center justify-between gap-2 flex-wrap">
@@ -593,7 +586,6 @@ export const AlertasCertificadosView: React.FC = () => {
         </Card>
       )}
 
-      {/* 2. Listado de Tokens en Umbral de Vencimiento (15, 30, 60 días y Expirados) */}
       {cargando && alertas.length === 0 ? (
         <Card className="p-8 text-center border-dashed">
           <p className="text-sm text-muted-foreground animate-pulse">
@@ -710,7 +702,6 @@ export const AlertasCertificadosView: React.FC = () => {
             </Table>
           </div>
 
-          {/* Vista en tarjetas para móviles */}
           <div className="block md:hidden divide-y divide-border/70">
             {alertasFiltradas.map((alerta) => {
               const isExpirado = alerta.diasRestantes <= 0 || alerta.tramoAlerta === 'EXPIRADO';

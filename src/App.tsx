@@ -9,26 +9,16 @@ import { MetricasTrazabilidadPanel } from './components/MetricasTrazabilidadPane
 import { ReporteHistoricoEsign } from './components/ReporteHistoricoEsign';
 import { GestionAdminsView } from './components/GestionAdminsView';
 import { AuditoriaView } from './components/AuditoriaView';
-import { GestionUsuariosEquipamientoView } from './components/GestionUsuariosEquipamientoView';
-import { RepositorioDocumentosView } from './components/RepositorioDocumentosView';
-import { VistaFirmaUsuario } from './components/VistaFirmaUsuario';
-import { ValidadorDocumentoView } from './components/ValidadorDocumentoView';
-import { LogoMunicipalidad } from './components/LogoMunicipalidad';
-import { Button } from './components/ui/button';
-import { Badge } from './components/ui/badge';
-import { formatRutVisual } from './lib/rut';
 import { useTelemetriaStore } from './store/useTelemetriaStore';
 import { useAuthStore } from './store/useAuthStore';
 
 export const App: React.FC = () => {
   const [tabActiva, setTabActiva] = useState<NavTab>('DASHBOARD');
-  const [tabFuncionario, setTabFuncionario] = useState<'FIRMAR' | 'MIS_DOCUMENTOS'>('FIRMAR');
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
   const [mostrarLoginModal, setMostrarLoginModal] = useState(false);
 
   const { inicializarSocket, cargarEstaciones, cargarEventosRecientes, cargarMetricas } = useTelemetriaStore();
-  const { usuario, isAutenticado, verificarSesion, cargandoSesion, debeCambiarPassword, logout } = useAuthStore();
-  const esSupervisorOAdmin = usuario?.rol === 'ADMIN' || usuario?.rol === 'SUPERVISOR';
+  const { usuario, isAutenticado, verificarSesion, cargandoSesion, debeCambiarPassword } = useAuthStore();
 
   useEffect(() => {
     verificarSesion();
@@ -50,13 +40,6 @@ export const App: React.FC = () => {
       return () => window.clearInterval(intervalId);
     }
   }, [isAutenticado, inicializarSocket, cargarEstaciones, cargarEventosRecientes, cargarMetricas]);
-
-  const esValidadorPublico =
-    typeof window !== 'undefined' && window.location.pathname.startsWith('/validar');
-
-  if (esValidadorPublico) {
-    return <ValidadorDocumentoView />;
-  }
 
   if (cargandoSesion && localStorage.getItem('access_token')) {
     return (
@@ -101,7 +84,6 @@ export const App: React.FC = () => {
         <TopHeader
           tabActiva={tabActiva}
           onOpenMobileSidebar={() => setSidebarMobileOpen(true)}
-          onSelectTab={setTabActiva}
         />
 
         <main className="flex-1 min-w-0 p-3 sm:p-5 lg:p-6 bg-background">

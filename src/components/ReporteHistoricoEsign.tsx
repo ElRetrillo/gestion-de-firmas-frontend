@@ -92,7 +92,7 @@ export const ReporteHistoricoEsign: React.FC = () => {
             Estadísticas del Sistema — Reporte Histórico E-Sign (2025–2026)
           </h2>
           <CardDescription className="text-xs">
-            Vista estática generada desde ReporteFG_2026106.xls (no modificable por telemetría en vivo).
+            Vista estática histórica (no modificable por telemetría en vivo).
           </CardDescription>
         </div>
 
@@ -202,7 +202,7 @@ export const ReporteHistoricoEsign: React.FC = () => {
         </div>
 
         <p className="text-center text-[11px] font-mono text-muted-foreground">
-          E-Sign 2025–2026 • Fuente fija: ReporteFG_2026106.xls
+          E-Sign 2025–2026.
         </p>
 
         <div className="pt-2 border-t border-border/70">

@@ -23,7 +23,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
   const [error, setError] = useState<string | null>(null);
   const [mostrarPassLogin, setMostrarPassLogin] = useState(false);
 
-  // Estado para cambio de PIN/contraseña obligatorio y MFA Authenticator
   const [modoCambioPassword, setModoCambioPassword] = useState(false);
   const [modoMfa, setModoMfa] = useState(false);
   const [totpSetup, setTotpSetup] = useState<{
@@ -82,7 +81,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
         throw new Error(data.message || 'Credenciales institucionales inválidas.');
       }
 
-      // Si el backend indica que debe definir PIN/contraseña inicial (+ MFA Authenticator)
       if (data.debeCambiarPassword) {
         setTokenTemporal(data.accessToken);
         setUsuarioTemporal(data.usuario);
@@ -95,7 +93,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
         return;
       }
 
-      // Si el backend requiere segundo factor TOTP Authenticator
       if (data.requiereMfa && !data.accessToken) {
         setUsuarioTemporal({ nombre: data.nombre, rut: data.rut, email: data.email });
         setTotpSetup(data.totpSetup || null);
@@ -105,7 +102,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
         return;
       }
 
-      // Login exitoso definitivo (sesión de 3 horas)
       setModoMfa(false);
       setModoCambioPassword(false);
       setTotpSetup(null);
@@ -178,7 +174,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
       <Card className="w-full max-w-md max-h-[94dvh] overflow-y-auto border-border/80 shadow-2xl bg-card" aria-labelledby="login-modal-title">
-        {/* Cabecera del Modal */}
         <div className="p-4 sm:p-6 border-b bg-muted/30 flex items-center justify-between gap-2">
           <div className="flex items-center space-x-3 min-w-0">
             <LogoMunicipalidad variant="sidebar" className="h-10 w-10 shrink-0" />
@@ -293,7 +288,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
               </div>
             </form>
           ) : modoMfa ? (
-            /* Formulario de Segundo Factor MFA Authenticator */
             <form onSubmit={(e) => handleLogin(e)} className="space-y-4">
               <div className="p-3 rounded-md bg-primary/10 border border-primary/30 text-[11px] text-foreground space-y-1">
                 <p className="font-bold flex items-center gap-1.5">
@@ -370,7 +364,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
               </div>
             </form>
           ) : (
-            /* Formulario de Definición de PIN Personal (6 caracteres) + Enrolamiento MFA */
             <form onSubmit={handleCambioPassword} className="space-y-3.5">
               <div className="p-3 rounded-md bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-700 dark:text-amber-300">
                 <p className="font-bold mb-1 flex items-center gap-1.5">
@@ -451,7 +444,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
                   </div>
                   {qrDataUrl && (
                     <div className="flex justify-center bg-white p-2 rounded border">
-                      <img src={qrDataUrl} alt="QR Authenticator Camila Herrera" className="w-36 h-36" />
+                      <img src={qrDataUrl} alt="Código QR para Authenticator" className="w-36 h-36" />
                     </div>
                   )}
                   <div className="text-[10px] font-mono bg-background border rounded p-2 break-all select-all">

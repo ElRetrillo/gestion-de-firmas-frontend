@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Info, User, Download, Terminal, Usb, Laptop, Mail, CheckCircle2, Eye, X } from 'lucide-react';
+import { User, Download, Mail, CheckCircle2, Eye, X } from 'lucide-react';
 import { useTelemetriaStore } from '../store/useTelemetriaStore';
 import { useAuthStore } from '../store/useAuthStore';
 import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
@@ -9,94 +9,6 @@ import { Input } from './ui/input';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from './ui/table';
 import { formatRutVisual } from '../lib/rut';
 import { cleanIpVisual } from '../lib/ip';
-
-interface InfoPeriodoTooltipProps {
-  periodoEtiqueta?: string;
-  align?: 'left' | 'center' | 'right';
-  className?: string;
-}
-
-const InfoPeriodoTooltip: React.FC<InfoPeriodoTooltipProps> = ({
-  periodoEtiqueta = 'Últimos 30 días',
-  align = 'right',
-  className = '',
-}) => {
-  const [abierto, setAbierto] = useState(false);
-
-  const alignClasses =
-    align === 'right'
-      ? 'right-0'
-      : align === 'left'
-        ? 'left-0'
-        : 'left-1/2 -translate-x-1/2';
-
-  const arrowClasses =
-    align === 'right'
-      ? 'right-2'
-      : align === 'left'
-        ? 'left-2'
-        : 'left-1/2 -translate-x-1/2';
-
-  return (
-    <div
-      className={`relative inline-flex items-center group ${className}`}
-      onMouseEnter={() => setAbierto(true)}
-      onMouseLeave={() => setAbierto(false)}
-    >
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          setAbierto((prev) => !prev);
-        }}
-        onFocus={() => setAbierto(true)}
-        onBlur={() => setAbierto(false)}
-        aria-label="¿Qué es el Período Actual?"
-        title="¿Qué es el Período Actual? (Haz hover o clic para ver la definición)"
-        className="cursor-pointer text-primary/70 hover:text-primary dark:text-primary-foreground/70 dark:hover:text-primary-foreground transition-colors focus:outline-none rounded-full p-0.5 inline-flex items-center justify-center hover:bg-primary/10"
-      >
-        <Info className="w-3.5 h-3.5" />
-      </button>
-
-      {/* Popover / Tooltip explicativo */}
-      <div
-        role="tooltip"
-        className={`absolute top-full mt-2 w-72 sm:w-80 p-3.5 bg-popover text-popover-foreground text-xs rounded-lg shadow-xl border border-border z-50 transition-all duration-150 ${alignClasses} ${abierto ? 'flex flex-col' : 'hidden'
-          }`}
-      >
-        <div className="font-bold text-[11px] text-primary flex items-center gap-1.5 pb-1.5 border-b border-border/60 mb-2">
-          <Info className="w-3.5 h-3.5 shrink-0 text-primary" />
-          <span>Definición: Período Actual</span>
-        </div>
-
-        <div className="space-y-2 text-[11px] leading-relaxed text-muted-foreground">
-          <p>
-            El <strong className="text-foreground font-semibold">Período Actual</strong> corresponde a la <span className="text-primary font-semibold font-mono">ventana temporal activa de evaluación</span> ({periodoEtiqueta}) configurada para el monitoreo institucional.
-          </p>
-
-          <div className="p-2 rounded bg-muted/40 border border-border/50 text-[10px] font-mono space-y-1">
-            <div className="text-foreground font-bold">Criterio de contabilización:</div>
-            <div className="text-emerald-600 dark:text-emerald-400 font-semibold">
-              • 1 acción = 1 firma electrónica válida
-            </div>
-            <div className="text-muted-foreground">
-              • Excluye eventos de conexión/desconexión USB para no alterar la métrica.
-            </div>
-          </div>
-
-          <p className="text-[10px] text-muted-foreground">
-            <strong className="text-foreground">Diferencia con Histórico:</strong> Mientras el histórico totaliza todas las firmas desde la puesta en marcha, el período actual permite evaluar el ritmo de uso y adopción reciente.
-          </p>
-        </div>
-
-        {/* Flecha indicadora superior */}
-        <div
-          className={`absolute bottom-full w-0 h-0 border-x-4 border-x-transparent border-b-4 border-b-popover ${arrowClasses}`}
-        />
-      </div>
-    </div>
-  );
-};
 
 export const DashboardSupervisores: React.FC = () => {
   const {
@@ -123,7 +35,6 @@ export const DashboardSupervisores: React.FC = () => {
     return Math.max(est.minutosConectado || 0, calc);
   };
 
-  // Estados para envío de aviso por correo electrónico
   const [enviandoAvisoId, setEnviandoAvisoId] = useState<string | null>(null);
   const [avisosEnviadosMap, setAvisosEnviadosMap] = useState<Record<string, string>>({});
   const [correoPreview, setCorreoPreview] = useState<{
@@ -144,20 +55,10 @@ export const DashboardSupervisores: React.FC = () => {
     setMensajeAccion('Descargando script autoinstalador .bat del Agente USB para probar en vivo...');
   };
 
-  // 1. Estado de conexión en vivo
   const conectados = estaciones.filter((e) => e.estadoEnVivo === 'CONECTADO').length;
-
-  // 2. Firmas Asignadas y Acciones
   const listadoFirmas = metricas?.firmasAsignadas?.listado || [];
   const listadoAccionesFuncionarios = metricas?.accionesFuncionarios?.listadoPorFuncionario || [];
   const trazabilidadDispositivos = metricas?.telemetria?.trazabilidadDispositivos || [];
-  const totalAccionesPeriodo =
-    metricas?.accionesFuncionarios?.totalAccionesFirmaPeriodo ??
-    listadoAccionesFuncionarios.reduce((acc, item) => acc + item.accionesFirmaPeriodo, 0);
-  const totalAccionesHistorico =
-    metricas?.accionesFuncionarios?.totalAccionesFirmaHistorico ??
-    listadoAccionesFuncionarios.reduce((acc, item) => acc + item.accionesFirmaHistorico, 0);
-  const periodoEtiqueta = metricas?.periodo?.etiquetaPeriodo || 'Últimos 30 días';
 
   const formatearHorasMinutos = (totalMinutos?: number): string => {
     const mins = Math.max(0, Math.round(totalMinutos || 0));
@@ -166,7 +67,6 @@ export const DashboardSupervisores: React.FC = () => {
     return `${hrs} hrs ${String(remMins).padStart(2, '0')} mins`;
   };
 
-  // Consolidación de datos unificados por Funcionario/Token
   interface FilaCentralizada {
     id: string;
     funcionario: {
@@ -198,10 +98,8 @@ export const DashboardSupervisores: React.FC = () => {
     minutosSesionEnVivo?: number;
   }
 
-  // Mapa combinado
   const mapaFilas = new Map<string, FilaCentralizada>();
 
-  // 1. Poblamos desde listadoFirmas
   listadoFirmas.forEach((f) => {
     const key = f.serialNumberToken || f.funcionario?.rut || f.id;
     const estacionEnVivo = estaciones.find(
@@ -270,7 +168,6 @@ export const DashboardSupervisores: React.FC = () => {
     });
   });
 
-  // 2. Complementamos desde trazabilidadDispositivos (incluye tokens físicos detectados por Ghost App)
   trazabilidadDispositivos.forEach((t) => {
     const yaExiste = Array.from(mapaFilas.values()).some(
       (f) => f.token.serialNumber.toLowerCase() === t.serialNumber.toLowerCase()
@@ -343,7 +240,7 @@ export const DashboardSupervisores: React.FC = () => {
     }
   });
 
-  // 3. Sincronizar dinámicamente TODAS las estaciones activas (solo por N° de serie del token activo, sin pisar otros tokens de la misma PC)
+  // Sincroniza estaciones activas por N° de serie sin sobrescribir otros tokens de la misma PC
   estaciones.forEach((est) => {
     const tokenVivo = est.tokenInfo;
     if (!tokenVivo?.serialNumber) return;
@@ -373,7 +270,6 @@ export const DashboardSupervisores: React.FC = () => {
       ? tokenVivo.certNotAfter.slice(0, 10)
       : trazaPorSerial?.fechaExpiracion;
 
-    // Buscar fila existente únicamente por N° de serie del token
     const existingEntry = Array.from(mapaFilas.entries()).find(
       ([, val]) => val.token.serialNumber.toLowerCase() === serialDetectado.toLowerCase()
     );
@@ -570,7 +466,6 @@ export const DashboardSupervisores: React.FC = () => {
         </div>
       )}
 
-      {/* 1. Fila Compacta de KPIs Esenciales de Trazabilidad de Tokens */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <Card className="p-3.5 min-w-0">
           <div className="text-[10px] font-bold uppercase text-muted-foreground">
@@ -619,7 +514,6 @@ export const DashboardSupervisores: React.FC = () => {
         </Card>
       </div>
 
-      {/* Comprobante / Vista Previa de Correo Despachado */}
       {correoPreview && (
         <Card className="border-2 border-emerald-500/60 bg-emerald-500/5 shadow-lg overflow-hidden animate-in fade-in-50 duration-200">
           <CardHeader className="p-4 pb-2 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -711,7 +605,6 @@ export const DashboardSupervisores: React.FC = () => {
         </Card>
       )}
 
-      {/* 2. Tabla Centralizada Unificada de Supervisión */}
       <Card className="border-border/80 bg-card overflow-hidden">
         <CardHeader className="p-3.5 border-b bg-muted/20 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div className="min-w-0">
@@ -734,7 +627,6 @@ export const DashboardSupervisores: React.FC = () => {
               className="h-8 text-xs w-full sm:w-64 bg-background"
             />
 
-            {/* Filtro por Vigencia de Firma */}
             <div className="inline-flex flex-wrap rounded-md border bg-background p-0.5 w-full sm:w-auto" title="Filtrar por estado de vigencia del token">
               {(['TODOS', 'ACTIVO', 'POR_VENCER', 'EXPIRADO'] as const).map((est) => (
                 <button
@@ -752,7 +644,6 @@ export const DashboardSupervisores: React.FC = () => {
               ))}
             </div>
 
-            {/* Filtro por Conexión */}
             <div className="inline-flex flex-wrap rounded-md border bg-background p-0.5 w-full sm:w-auto" title="Filtrar por estado de conexión física">
               {(['TODOS', 'CONECTADO', 'DESCONECTADO'] as const).map((cEst) => (
                 <button
@@ -774,7 +665,6 @@ export const DashboardSupervisores: React.FC = () => {
               ))}
             </div>
 
-            {/* Botón Descarga Agente USB */}
             <Button
               size="sm"
               variant="outline"
@@ -820,7 +710,6 @@ export const DashboardSupervisores: React.FC = () => {
                         : 'hover:bg-muted/30'
                     }`}
                   >
-                    {/* 1. Funcionario Titular / Identificación */}
                     <TableCell>
                       <div className="font-bold text-foreground flex items-center gap-1.5 flex-wrap">
                         <User className="w-3.5 h-3.5 text-primary shrink-0" />
@@ -838,7 +727,6 @@ export const DashboardSupervisores: React.FC = () => {
                       </div>
                     </TableCell>
 
-                    {/* 2. Unidad / Cargo */}
                     <TableCell>
                       <div className="text-[11px] font-medium text-foreground">{fila.funcionario.unidad}</div>
                       {fila.funcionario.cargo && (
@@ -848,7 +736,6 @@ export const DashboardSupervisores: React.FC = () => {
                       )}
                     </TableCell>
 
-                    {/* 3. Token (Info) */}
                     <TableCell>
                       <div className="font-mono font-bold text-foreground">{fila.token.serialNumber}</div>
                       <div className="text-[10px] font-mono text-muted-foreground">
@@ -856,7 +743,6 @@ export const DashboardSupervisores: React.FC = () => {
                       </div>
                     </TableCell>
 
-                    {/* 4. Estado del Token */}
                     <TableCell>
                       <Badge
                         variant={
@@ -872,7 +758,6 @@ export const DashboardSupervisores: React.FC = () => {
                       </Badge>
                     </TableCell>
 
-                    {/* 5. Tiempo Vigencia Actual */}
                     <TableCell>
                       {fila.fechaExpiracion && (
                         <div className="font-mono text-[11px] font-semibold text-foreground">
@@ -892,7 +777,6 @@ export const DashboardSupervisores: React.FC = () => {
                       </div>
                     </TableCell>
 
-                    {/* 6. Estado de Conexión y Red */}
                     <TableCell>
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-1.5">
@@ -917,7 +801,6 @@ export const DashboardSupervisores: React.FC = () => {
                       </div>
                     </TableCell>
 
-                    {/* 7. Contador de Trazabilidad (Conexiones / Desconexiones) */}
                     <TableCell>
                       <div className="font-mono text-[11px] text-muted-foreground flex flex-col gap-0.5">
                         <span className="text-emerald-700 dark:text-emerald-400 font-medium">
@@ -929,7 +812,6 @@ export const DashboardSupervisores: React.FC = () => {
                       </div>
                     </TableCell>
 
-                    {/* 8. Tiempo de uso total en el período y promedio diario (hrs; mins) */}
                     <TableCell className="font-mono text-xs whitespace-nowrap">
                       <div className="font-bold text-foreground">
                         Total: {formatearHorasMinutos(
@@ -946,7 +828,6 @@ export const DashboardSupervisores: React.FC = () => {
                       )}
                     </TableCell>
 
-                    {/* 9. Botón Enviar Aviso por Correo */}
                     <TableCell className="text-right whitespace-nowrap">
                       <div className="inline-flex items-center gap-1.5 justify-end">
                         {avisosEnviadosMap[fila.id] ? (
@@ -1000,7 +881,6 @@ export const DashboardSupervisores: React.FC = () => {
           </Table>
         </div>
 
-        {/* Vista en tarjetas para móviles */}
         <div className="block md:hidden divide-y divide-border/70">
           {filasFiltradas.length === 0 ? (
             <div className="text-center py-8 px-4 text-xs text-muted-foreground italic">

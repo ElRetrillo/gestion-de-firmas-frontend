@@ -261,7 +261,6 @@ export const GestionAdminsView: React.FC = () => {
 
   return (
     <div className="space-y-5">
-      {/* Bloque 1: Formulario Generar Credenciales de Administrador */}
       <Card className="border-border/80 bg-card shadow-sm">
         <CardHeader className="p-4 border-b bg-muted/20">
           <div className="flex items-center gap-2">
@@ -496,7 +495,6 @@ export const GestionAdminsView: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Bloque 2: Tabla simple Administradores con Acceso */}
       <Card className="border-border/80 bg-card shadow-sm">
         <CardHeader className="p-4 border-b bg-muted/20 flex flex-row items-center justify-between gap-2">
           <div>

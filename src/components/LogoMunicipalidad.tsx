@@ -9,7 +9,6 @@ export const LogoMunicipalidad: React.FC<LogoMunicipalidadProps> = ({
   className = '',
   variant = 'header',
 }) => {
-  // Intentamos primero con .png (color oficial de Coquimbo) y si falla pasamos a .svg
   const [currentSrc, setCurrentSrc] = useState<string>('/logo-municipalidad.png');
   const [hasError, setHasError] = useState(false);
 

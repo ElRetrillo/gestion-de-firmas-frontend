@@ -113,35 +113,6 @@ export interface TokenAlertaItem {
   ultimoAvisoEnviado?: string | null;
 }
 
-export interface ContratoTokenItem {
-  id: string;
-  codigoContrato: string;
-  titulo: string;
-  proveedor: string;
-  funcionarioNombre?: string;
-  funcionarioRut?: string;
-  funcionarioCargo?: string;
-  funcionarioUnidad?: string;
-  serialNumberToken?: string;
-  marcaModeloToken?: string;
-  firmadoObtencion?: boolean;
-  ordenCompra?: string;
-  resolucionAprueba?: string;
-  fechaInicio: string;
-  fechaTermino: string;
-  diasRestantes: number;
-  mesesRestantes?: number;
-  tiempoCaducidadTexto: string;
-  porcentajeVigenciaTranscurrida: number;
-  estadoContrato: 'VIGENTE' | 'POR_CADUCAR' | 'CADUCADO';
-  cantidadTokensContratados: number;
-  cantidadTokensActivos?: number;
-  montoTotalClp?: number;
-  administradorContrato?: string;
-  observaciones?: string;
-  pdfUrl?: string;
-}
-
 export interface MetricasTrazabilidadResponse {
   periodo: {
     modo: ModoReporteType;
@@ -189,14 +160,6 @@ export interface MetricasTrazabilidadResponse {
     totalEnUmbral60Dias: number;
     expirados: number;
     tokensEnAlerta: TokenAlertaItem[];
-  };
-  contratosResumen?: {
-    totalContratos: number;
-    contratosVigentes: number;
-    contratosPorCaducar: number;
-    contratosCaducados: number;
-    totalTokensContratados: number;
-    listado: ContratoTokenItem[];
   };
   latexPreview?: {
     codigoLatex: string;
@@ -267,32 +230,6 @@ export interface MetricasTrazabilidadResponse {
     tiempoUsoTotalMinutos?: number;
     promedioUsoDiarioGeneralMinutos?: number;
     porcentajeUsoMedioMensual?: number;
-  };
-  firmas: {
-    totalSolicitudesPeriodo: number;
-    firmadas: number;
-    pendientes: number;
-    rechazadas: number;
-    tasaExitoFirmaPct: number;
-    tasaPendientesPct: number;
-    tasaRechazoPct: number;
-    fePublicaOtorgada: number;
-    fePublicaPendiente: number;
-    porcentajeFePublica: number;
-    porClasificacion: Array<{
-      clasificacion: 'PUBLICA' | 'INTERNA' | 'CONFIDENCIAL' | 'CRITICA';
-      cantidad: number;
-      porcentaje: number;
-    }>;
-    porUnidad: Array<{
-      unidad: string;
-      total: number;
-      firmadas: number;
-      pendientes: number;
-      rechazadas: number;
-      porcentajeExito: number;
-      porcentajeParticipacion: number;
-    }>;
   };
   administracion: {
     totalUsuarios: number;
@@ -483,7 +420,6 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
   },
 
   registrarAccionFirma: async (payload) => {
-    // 1. Actualización optimista inmediata en el estado local para flujo de pruebas fluido
     set((state) => {
       const m = state.metricas;
       if (!m) return state;
@@ -558,7 +494,6 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
       };
     });
 
-    // 2. Sincronizar con el backend si está disponible
     try {
       await fetch('/api/v1/telemetria/accion-firma', {
         method: 'POST',
@@ -566,7 +501,7 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
         body: JSON.stringify(payload),
       });
     } catch {
-      // Mantiene actualización optimista
+      // Mantiene estado local optimista si el backend no responde
     }
     return true;
   },

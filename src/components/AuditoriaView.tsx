@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Download, FileSpreadsheet, FileJson, X } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './ui/card';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from './ui/table';
-import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { useTelemetriaStore } from '../store/useTelemetriaStore';
@@ -24,6 +23,23 @@ interface EventoAuditoria {
   timestamp: string;
   diffJson: Record<string, any>;
 }
+
+const esEventoSesion = (accion: string) => {
+  const a = accion.toUpperCase();
+  return a.includes('LOGIN') || a.includes('SIGN_OUT') || a.includes('LOGOUT');
+};
+
+const esEventoNotificacion = (accion: string) => {
+  const a = accion.toUpperCase();
+  return (
+    a.includes('ALERTA') ||
+    a.includes('AVISO') ||
+    a.includes('CORREO') ||
+    a.includes('NOTIFICACION') ||
+    a.includes('VENCIMIENTO') ||
+    a.includes('SMTP')
+  );
+};
 
 export const AuditoriaView: React.FC = () => {
   const { modoReporte, mesSeleccionado } = useTelemetriaStore();
@@ -57,27 +73,27 @@ export const AuditoriaView: React.FC = () => {
                 uid: `${rawId}-${idx}`,
                 id: shortId,
                 tablaAfectada: item.tablaAfectada || 'historial_cambios',
-              registroId: item.registroId || 'N/A',
-              accion: item.accion || 'UPDATE',
-              usuario: item.usuario || item.usuarioEmail || item.usuario?.email || 'sistema',
-              personaNombre: item.personaNombre || item.diffJson?.personaNombre || item.diffJsonb?.personaNombre || null,
-              personaRut: formatRutVisual(
-                item.personaRut ||
-                  item.diffJson?.personaRut ||
-                  item.diffJson?.runGob ||
-                  item.diffJson?.run ||
-                  item.diffJsonb?.personaRut ||
-                  (item.tablaAfectada === 'usuarios' && /^[\d.\-kK]{7,12}$/.test(String(item.registroId || '').trim())
-                    ? item.registroId
-                    : null),
-              ),
-              ip: cleanIpVisual(item.ip || item.ipOrigen || '-'),
-              timestamp: item.timestamp
-                ? item.timestamp
-                : item.createdAt
-                ? new Date(item.createdAt).toLocaleString('es-CL')
-                : new Date().toLocaleString('es-CL'),
-              diffJson: item.diffJson || item.diffJsonb || {},
+                registroId: item.registroId || 'N/A',
+                accion: item.accion || 'UPDATE',
+                usuario: item.usuario || item.usuarioEmail || item.usuario?.email || 'sistema',
+                personaNombre: item.personaNombre || item.diffJson?.personaNombre || item.diffJsonb?.personaNombre || null,
+                personaRut: formatRutVisual(
+                  item.personaRut ||
+                    item.diffJson?.personaRut ||
+                    item.diffJson?.runGob ||
+                    item.diffJson?.run ||
+                    item.diffJsonb?.personaRut ||
+                    (item.tablaAfectada === 'usuarios' && /^[\d.\-kK]{7,12}$/.test(String(item.registroId || '').trim())
+                      ? item.registroId
+                      : null),
+                ),
+                ip: cleanIpVisual(item.ip || item.ipOrigen || '-'),
+                timestamp: item.timestamp
+                  ? item.timestamp
+                  : item.createdAt
+                  ? new Date(item.createdAt).toLocaleString('es-CL')
+                  : new Date().toLocaleString('es-CL'),
+                diffJson: item.diffJson || item.diffJsonb || {},
               };
             }),
           );
@@ -87,65 +103,23 @@ export const AuditoriaView: React.FC = () => {
       .finally(() => setCargando(false));
   }, [modoReporte, mesSeleccionado]);
 
-  const esEventoFirma = (accion: string) => {
-    const a = accion.toUpperCase();
-    return a.includes('FIRMA') || a.includes('VISACION');
-  };
-
-  const esEventoSesion = (accion: string) => {
-    const a = accion.toUpperCase();
-    return a.includes('LOGIN') || a.includes('SIGN_OUT') || a.includes('LOGOUT');
-  };
-
-  const obtenerAccionFirmaSimplificada = (ev: EventoAuditoria): string => {
-    const diff = ev.diffJson || {};
-    const modalidad = String(diff.modalidadFirma || '').toUpperCase();
-    const proveedor = String(diff.proveedorCriptografico || '').toUpperCase();
-    const purpose = String(diff.purposeGob || diff.purpose || '').toLowerCase();
-    const serial = String(diff.certificadoSerial || diff.tokenUsbActivo || '').toUpperCase();
-
-    if (modalidad.includes('DESATENDID') || purpose.includes('desatendid')) {
-      return 'FirmaGob Desatendida';
-    }
-    if (
-      modalidad.includes('TOKEN') ||
-      modalidad.includes('USB') ||
-      modalidad.includes('ESIGN') ||
-      proveedor.includes('ESIGN') ||
-      (serial.startsWith('SN-') && !modalidad.includes('FIRMAGOB'))
-    ) {
-      return 'Firma con Token';
-    }
-    if (
-      modalidad.includes('ATENDID') ||
-      modalidad.includes('OTP') ||
-      modalidad.includes('FIRMAGOB') ||
-      ev.accion.includes('FIRMAGOB') ||
-      purpose.includes('propósito general') ||
-      purpose.includes('proposito general')
-    ) {
-      return 'FirmaGob Atendida';
-    }
-    return 'Firma con Token';
-  };
-
   const eventosSesiones = eventos.filter((e) => esEventoSesion(e.accion));
+  const eventosNotificaciones = eventos.filter((e) => !esEventoSesion(e.accion) && esEventoNotificacion(e.accion));
+  const eventosAdministracion = eventos.filter((e) => !esEventoSesion(e.accion) && !esEventoNotificacion(e.accion));
 
-  const eventosPorSubseccion =
-    subseccion === 'SESIONES'
-      ? eventosSesiones
-      : eventos;
+  const eventosPorSubseccion = subseccion === 'SESIONES' ? eventosSesiones : eventos;
 
   const eventosFiltrados = eventosPorSubseccion.filter((e) => {
+    const q = filtro.toLowerCase();
     const matchesTexto =
-      e.registroId.toLowerCase().includes(filtro.toLowerCase()) ||
-      e.usuario.toLowerCase().includes(filtro.toLowerCase()) ||
-      (e.personaNombre || '').toLowerCase().includes(filtro.toLowerCase()) ||
-      (e.personaRut || '').toLowerCase().includes(filtro.toLowerCase()) ||
-      e.tablaAfectada.toLowerCase().includes(filtro.toLowerCase()) ||
-      e.accion.toLowerCase().includes(filtro.toLowerCase()) ||
-      e.ip.toLowerCase().includes(filtro.toLowerCase()) ||
-      e.id.toLowerCase().includes(filtro.toLowerCase());
+      e.registroId.toLowerCase().includes(q) ||
+      e.usuario.toLowerCase().includes(q) ||
+      (e.personaNombre || '').toLowerCase().includes(q) ||
+      (e.personaRut || '').toLowerCase().includes(q) ||
+      e.tablaAfectada.toLowerCase().includes(q) ||
+      e.accion.toLowerCase().includes(q) ||
+      e.ip.toLowerCase().includes(q) ||
+      e.id.toLowerCase().includes(q);
 
     if (subseccion !== 'GENERAL') {
       return matchesTexto;
@@ -156,10 +130,10 @@ export const AuditoriaView: React.FC = () => {
         ? true
         : filtroAccion === 'SESIONES'
         ? esEventoSesion(e.accion)
-        : filtroAccion === 'ACTA_CUSTODIA'
-        ? e.accion.includes('ACTA') || e.accion.includes('TOKEN')
-        : filtroAccion === 'CREACION'
-        ? !esEventoSesion(e.accion) && !e.accion.includes('ACTA') && !e.accion.includes('TOKEN')
+        : filtroAccion === 'NOTIFICACIONES'
+        ? !esEventoSesion(e.accion) && esEventoNotificacion(e.accion)
+        : filtroAccion === 'ADMIN'
+        ? !esEventoSesion(e.accion) && !esEventoNotificacion(e.accion)
         : e.accion === filtroAccion;
 
     return matchesTexto && matchesAccion;
@@ -172,9 +146,9 @@ export const AuditoriaView: React.FC = () => {
       ? 'Todas las Actividades'
       : filtroAccion === 'SESIONES'
       ? 'Logins y Sign Outs'
-      : filtroAccion === 'ACTA_CUSTODIA'
-      ? 'Custodia de Dispositivos'
-      : 'Creación y Modificaciones';
+      : filtroAccion === 'NOTIFICACIONES'
+      ? 'Notificaciones / Alertas'
+      : 'Administración';
 
   const descargarCsvHistorial = () => {
     const escapeCsv = (val: unknown) => {
@@ -187,7 +161,7 @@ export const AuditoriaView: React.FC = () => {
       ev.registroId,
       ev.personaNombre || ev.usuario,
       formatRutVisual(ev.personaRut),
-      esEventoFirma(ev.accion) ? obtenerAccionFirmaSimplificada(ev) : ev.accion,
+      ev.accion,
       ev.usuario,
       ev.ip,
       ev.timestamp,
@@ -227,7 +201,6 @@ export const AuditoriaView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Navegación por subsecciones de bitácora */}
       <div className="flex flex-wrap items-center gap-2 border-b border-border/80 pb-3">
         {[
           { id: 'GENERAL' as SubseccionBitacora, label: 'Logs Generales', count: eventos.length },
@@ -260,9 +233,7 @@ export const AuditoriaView: React.FC = () => {
         })}
       </div>
 
-      {/* 1. Header y Filtros */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Columna Izquierda: Monitor de Auditoría */}
         <Card className={`${subseccion === 'GENERAL' ? 'lg:col-span-8' : 'lg:col-span-12'} border-border/80 bg-card`}>
           <CardHeader className="p-4 sm:p-5 pb-3 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
@@ -307,7 +278,9 @@ export const AuditoriaView: React.FC = () => {
                 <div className="font-bold text-xl text-emerald-600 dark:text-emerald-400">
                   {eventosPorSubseccion.length > 0 ? 'CORRECTO' : '0 REGISTROS'}
                 </div>
-                <div className="text-[10px] text-muted-foreground">{eventosPorSubseccion.length > 0 ? 'Sin inconsistencias' : 'Sin eventos previos'}</div>
+                <div className="text-[10px] text-muted-foreground">
+                  {eventosPorSubseccion.length > 0 ? 'Sin inconsistencias' : 'Sin eventos previos'}
+                </div>
               </div>
             </div>
 
@@ -328,7 +301,6 @@ export const AuditoriaView: React.FC = () => {
           </CardFooter>
         </Card>
 
-        {/* Columna Derecha: Filtros (solo en Logs Generales) */}
         {subseccion === 'GENERAL' && (
           <Card className="lg:col-span-4 border-border/80 bg-card flex flex-col justify-between">
             <CardHeader className="p-4 sm:p-5 pb-3 border-b">
@@ -343,26 +315,9 @@ export const AuditoriaView: React.FC = () => {
             <CardContent className="p-4 sm:p-5 space-y-2 text-xs">
               {[
                 { id: 'TODOS', label: 'Todas las Actividades', count: eventos.length },
-                {
-                  id: 'SESIONES',
-                  label: 'Logins y Sign Outs',
-                  count: eventosSesiones.length,
-                },
-                {
-                  id: 'ACTA_CUSTODIA',
-                  label: 'Custodia de Dispositivos',
-                  count: eventos.filter((e) => e.accion.includes('ACTA') || e.accion.includes('TOKEN')).length,
-                },
-                {
-                  id: 'CREACION',
-                  label: 'Creación y Modificaciones',
-                  count: eventos.filter(
-                    (e) =>
-                      !esEventoSesion(e.accion) &&
-                      !e.accion.includes('ACTA') &&
-                      !e.accion.includes('TOKEN'),
-                  ).length,
-                },
+                { id: 'SESIONES', label: 'Logins y Sign Outs', count: eventosSesiones.length },
+                { id: 'NOTIFICACIONES', label: 'Notificaciones / Alertas', count: eventosNotificaciones.length },
+                { id: 'ADMIN', label: 'Administración', count: eventosAdministracion.length },
               ].map((cat) => (
                 <button
                   key={cat.id}
@@ -396,7 +351,6 @@ export const AuditoriaView: React.FC = () => {
         )}
       </div>
 
-      {/* 2. Tabla de Auditoría Forense y Visor JSONB */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         <Card className={`${eventoSeleccionado ? 'lg:col-span-7' : 'lg:col-span-12'} border-border/80 bg-card overflow-hidden`}>
           <CardHeader className="p-3.5 sm:p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-2">
@@ -424,7 +378,7 @@ export const AuditoriaView: React.FC = () => {
             <Table>
               <TableHeader>
                 <TableRow className="border-b">
-                  <TableHead className="text-xs font-bold">ID / Documento</TableHead>
+                  <TableHead className="text-xs font-bold">ID / Registro</TableHead>
                   <TableHead className="text-xs font-bold">Persona</TableHead>
                   <TableHead className="text-xs font-bold">RUT Persona</TableHead>
                   <TableHead className="text-xs font-bold">Acción</TableHead>
@@ -449,8 +403,6 @@ export const AuditoriaView: React.FC = () => {
                 ) : (
                   eventosFiltrados.map((ev) => {
                     const isSelected = eventoSeleccionado?.uid === ev.uid;
-                    const esFirma = esEventoFirma(ev.accion);
-                    const accionSimple = esFirma ? obtenerAccionFirmaSimplificada(ev) : null;
                     const registroVisual =
                       ev.tablaAfectada === 'usuarios' && /^[\d.\-kK]{7,12}$/.test(ev.registroId.trim())
                         ? formatRutVisual(ev.registroId)
@@ -474,45 +426,34 @@ export const AuditoriaView: React.FC = () => {
                           {formatRutVisual(ev.personaRut)}
                         </TableCell>
                         <TableCell>
-                          {esFirma && accionSimple ? (
-                            <Badge
-                              variant="outline"
-                              className={`text-[11px] font-semibold ${
-                                accionSimple === 'Firma con Token'
-                                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                                  : accionSimple === 'FirmaGob Atendida'
-                                  ? 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300'
-                                  : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
-                              }`}
-                            >
-                              {accionSimple}
-                            </Badge>
-                          ) : (
+                          <span
+                            className={`inline-flex items-center gap-1 font-semibold text-[11px] font-mono ${
+                              ev.accion.includes('FALLIDO')
+                                ? 'text-rose-600 dark:text-rose-400'
+                                : ev.accion.includes('SIGN_OUT') || ev.accion.includes('LOGOUT')
+                                ? 'text-amber-600 dark:text-amber-400'
+                                : ev.accion.includes('LOGIN') || ev.accion === 'UPDATE'
+                                ? 'text-blue-600 dark:text-blue-400'
+                                : esEventoNotificacion(ev.accion)
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : 'text-foreground'
+                            }`}
+                          >
                             <span
-                              className={`inline-flex items-center gap-1 font-semibold text-[11px] font-mono ${
+                              className={`w-1.5 h-1.5 rounded-full ${
                                 ev.accion.includes('FALLIDO')
-                                  ? 'text-rose-600 dark:text-rose-400'
+                                  ? 'bg-rose-500'
                                   : ev.accion.includes('SIGN_OUT') || ev.accion.includes('LOGOUT')
-                                  ? 'text-amber-600 dark:text-amber-400'
+                                  ? 'bg-amber-500'
                                   : ev.accion.includes('LOGIN') || ev.accion === 'UPDATE'
-                                  ? 'text-blue-600 dark:text-blue-400'
-                                  : 'text-foreground'
+                                  ? 'bg-blue-500'
+                                  : esEventoNotificacion(ev.accion)
+                                  ? 'bg-emerald-500'
+                                  : 'bg-muted-foreground'
                               }`}
-                            >
-                              <span
-                                className={`w-1.5 h-1.5 rounded-full ${
-                                  ev.accion.includes('FALLIDO')
-                                    ? 'bg-rose-500'
-                                    : ev.accion.includes('SIGN_OUT') || ev.accion.includes('LOGOUT')
-                                    ? 'bg-amber-500'
-                                    : ev.accion.includes('LOGIN') || ev.accion === 'UPDATE'
-                                    ? 'bg-blue-500'
-                                    : 'bg-muted-foreground'
-                                }`}
-                              />
-                              {ev.accion}
-                            </span>
-                          )}
+                            />
+                            {ev.accion}
+                          </span>
                         </TableCell>
                         <TableCell className="text-xs font-mono text-muted-foreground">
                           {ev.usuario}
@@ -531,7 +472,6 @@ export const AuditoriaView: React.FC = () => {
             </Table>
           </CardContent>
 
-          {/* Vista en tarjetas para móviles */}
           <div className="block md:hidden divide-y divide-border/70">
             {cargando ? (
               <div className="py-8 px-4 text-center text-xs text-muted-foreground">
@@ -544,8 +484,6 @@ export const AuditoriaView: React.FC = () => {
             ) : (
               eventosFiltrados.map((ev) => {
                 const isSelected = eventoSeleccionado?.uid === ev.uid;
-                const esFirma = esEventoFirma(ev.accion);
-                const accionSimple = esFirma ? obtenerAccionFirmaSimplificada(ev) : null;
                 return (
                   <button
                     key={`mobile-${ev.uid}`}
@@ -571,7 +509,7 @@ export const AuditoriaView: React.FC = () => {
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
                       <span className="font-mono font-semibold text-primary break-all">
-                        {esFirma && accionSimple ? accionSimple : ev.accion}
+                        {ev.accion}
                       </span>
                       <span className="font-mono text-muted-foreground">
                         {ev.usuario} • {ev.ip}
@@ -584,7 +522,6 @@ export const AuditoriaView: React.FC = () => {
           </div>
         </Card>
 
-        {/* Panel Inspector de Detalles */}
         {eventoSeleccionado && (
           <Card className="lg:col-span-5 border-border/80 bg-card flex flex-col justify-between">
             <CardHeader className="p-4 border-b flex flex-wrap items-center justify-between gap-2">
@@ -640,7 +577,6 @@ export const AuditoriaView: React.FC = () => {
         )}
       </div>
 
-      {/* Modal de Vista Previa y Exportación del Historial Filtrado */}
       {modalExportOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-3 sm:p-6">
           <Card className="w-full max-w-4xl max-h-[90dvh] flex flex-col border-border/80 bg-card shadow-2xl overflow-hidden">
@@ -708,9 +644,7 @@ export const AuditoriaView: React.FC = () => {
                               {formatRutVisual(ev.personaRut)}
                             </div>
                           </TableCell>
-                          <TableCell className="font-mono text-[11px]">
-                            {esEventoFirma(ev.accion) ? obtenerAccionFirmaSimplificada(ev) : ev.accion}
-                          </TableCell>
+                          <TableCell className="font-mono text-[11px]">{ev.accion}</TableCell>
                           <TableCell className="font-mono text-[11px]">{ev.usuario}</TableCell>
                           <TableCell className="font-mono text-[11px]">{ev.ip}</TableCell>
                           <TableCell className="font-mono text-[11px] whitespace-nowrap">{ev.timestamp}</TableCell>

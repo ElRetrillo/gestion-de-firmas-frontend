@@ -4,23 +4,18 @@ import { useTelemetriaStore } from '../store/useTelemetriaStore';
 import { ThemeToggle } from './ThemeToggle';
 import { LogoMunicipalidad } from './LogoMunicipalidad';
 import { Button } from './ui/button';
-import { Badge } from './ui/badge';
 import { NavTab } from './Sidebar';
 import { Usb, Menu } from 'lucide-react';
 
 interface TopHeaderProps {
   tabActiva: NavTab;
   onOpenMobileSidebar: () => void;
-  onSelectTab?: (tab: NavTab) => void;
 }
 
 const TAB_TITLES: Record<NavTab, string> = {
   DASHBOARD: 'Control y Trazabilidad de Tokens Criptográficos',
-  FIRMAR: 'Firma Electrónica Avanzada con Token USB',
-  DOCUMENTOS: 'Repositorio de Documentos Firmados',
   ALERTAS: 'Alertas de Vencimientos de Tokens',
   METRICAS: 'Estadisticas de Trazabilidad',
-  USUARIOS_CUSTODIA: 'Contratos de Obtención de Tokens y Asignación a Funcionarios',
   AUDITORIA: 'Bitácora de Acciones y Telemetría',
   ADMINS: 'Gestión de Credenciales de Administrador',
 };
@@ -33,34 +28,29 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
   const { estaciones, metricas } = useTelemetriaStore();
   const currentTitle = TAB_TITLES[tabActiva] || TAB_TITLES.DASHBOARD;
 
-  // Buscar dinámicamente cualquier estación con un token físico conectado (priorizando aquel con titular identificado por Ghost App)
   const estacionUsuario =
     estaciones.find((e) => e.estadoEnVivo === 'CONECTADO' && Boolean(e.tokenInfo?.titularNombre)) ||
     estaciones.find(
       (e) =>
         e.estadoEnVivo === 'CONECTADO' &&
-        (e.codigoPc.toUpperCase().includes('1LK714Q') ||
-          (usuario?.rut && e.tokenInfo?.titularRut === usuario.rut))
+        Boolean(usuario?.rut && e.tokenInfo?.titularRut === usuario.rut),
     ) ||
-    estaciones.find((e) => e.estadoEnVivo === 'CONECTADO' && Boolean(e.tokenInfo?.serialNumber));
+    estaciones.find((e) => e.estadoEnVivo === 'CONECTADO' && Boolean(e.tokenInfo?.serialNumber)) ||
+    estaciones.find((e) => e.estadoEnVivo === 'CONECTADO');
 
   const estaConectado = estacionUsuario?.estadoEnVivo === 'CONECTADO';
   const infoToken = estacionUsuario?.tokenInfo;
 
-  // Obtener la última persona que conectó un token si actualmente no hay ninguno en línea
   const ultimaPersonaConectada = (() => {
-    // 1. Si hay alguna estación con token o metadatos previos
     const estConTitular = estaciones.find((e) => Boolean(e.tokenInfo?.titularNombre));
     if (estConTitular?.tokenInfo?.titularNombre) {
       return estConTitular.tokenInfo.titularNombre;
     }
-    // 2. Si no, revisar en trazabilidad de dispositivos (el más reciente activo)
     const traza = metricas?.telemetria?.trazabilidadDispositivos || [];
     const conTitular = traza.find((t) => Boolean(t.funcionarioAsignado?.nombre));
     if (conTitular?.funcionarioAsignado?.nombre) {
       return conTitular.funcionarioAsignado.nombre;
     }
-    // 3. Fallback al usuario autenticado actual si es funcionario
     return usuario?.nombre || null;
   })();
 
@@ -99,7 +89,6 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {usuario && (
             <div className="flex items-center gap-2">
-              {/* Indicador de Token Físico / Último Token Detectado */}
               <div
                 className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-mono max-w-[220px] xl:max-w-[320px] transition-colors ${
                   estaConectado
@@ -149,7 +138,6 @@ export const TopHeader: React.FC<TopHeaderProps> = ({
         </div>
       </div>
 
-      {/* Barra compacta en móviles/tablets para mantener visible el último token y usuario */}
       {usuario && (
         <div className="md:hidden flex items-center justify-between gap-2 px-3 py-1.5 border-t border-border/60 bg-muted/20 text-[11px]">
           <div

@@ -1,8 +1,6 @@
 import { create } from 'zustand';
-import { EvaluacionRbacFirma } from '../lib/rbacFirmas';
 
 export type UserRole = 'ADMIN' | 'SUPERVISOR' | 'MINISTRO_DE_FE' | 'FUNCIONARIO' | 'CIUDADANO' | 'PENDIENTE';
-export type VistaGeneral = 'ADMIN' | 'FUNCIONARIO';
 
 export interface UserProfile {
   id?: string;
@@ -13,11 +11,9 @@ export interface UserProfile {
   unidad: string;
   rol: UserRole;
   condicionContractual?: string;
-  rbac?: EvaluacionRbacFirma;
   estado?: string;
   pinBloqueado?: boolean;
   debeCambiarPassword?: boolean;
-  pinToken?: string;
   certificados?: any[];
 }
 
@@ -28,7 +24,6 @@ export const GUEST_USER: UserProfile = {
   cargo: '',
   unidad: '',
   rol: 'FUNCIONARIO',
-  pinToken: '',
 };
 
 interface AuthState {
@@ -38,11 +33,9 @@ interface AuthState {
   isAutenticado: boolean;
   debeCambiarPassword: boolean;
   cargandoSesion: boolean;
-  vistaGeneralActiva: VistaGeneral;
   loginSuccess: (data: { accessToken: string; debeCambiarPassword: boolean; usuario: UserProfile }) => void;
   logout: () => void;
   actualizarPasswordCompletada: (data: { accessToken: string; usuario: UserProfile }) => void;
-  setVistaGeneralActiva: (vista: VistaGeneral) => void;
   verificarSesion: () => Promise<void>;
 }
 
@@ -92,11 +85,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isAutenticado: false,
   debeCambiarPassword: false,
   cargandoSesion: true,
-  vistaGeneralActiva: 'ADMIN',
 
   loginSuccess: ({ accessToken, debeCambiarPassword, usuario }) => {
     localStorage.setItem('access_token', accessToken);
-    const esAdminOSuper = usuario.rol === 'ADMIN' || usuario.rol === 'SUPERVISOR' || usuario.rol === 'MINISTRO_DE_FE';
     const expMs = !debeCambiarPassword
       ? programarExpiracionSesion(accessToken, () => get().logout())
       : decodeJwtExpMs(accessToken);
@@ -107,13 +98,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       debeCambiarPassword: Boolean(debeCambiarPassword),
       isAutenticado: !debeCambiarPassword,
       cargandoSesion: false,
-      vistaGeneralActiva: esAdminOSuper ? 'ADMIN' : 'FUNCIONARIO',
     });
   },
 
   actualizarPasswordCompletada: ({ accessToken, usuario }) => {
     localStorage.setItem('access_token', accessToken);
-    const esAdminOSuper = usuario.rol === 'ADMIN' || usuario.rol === 'SUPERVISOR' || usuario.rol === 'MINISTRO_DE_FE';
     const expMs = programarExpiracionSesion(accessToken, () => get().logout());
     set({
       accessToken,
@@ -122,7 +111,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       debeCambiarPassword: false,
       isAutenticado: true,
       cargandoSesion: false,
-      vistaGeneralActiva: esAdminOSuper ? 'ADMIN' : 'FUNCIONARIO',
     });
   },
 
@@ -143,12 +131,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       isAutenticado: false,
       debeCambiarPassword: false,
       cargandoSesion: false,
-      vistaGeneralActiva: 'ADMIN',
     });
-  },
-
-  setVistaGeneralActiva: (vista) => {
-    set({ vistaGeneralActiva: vista });
   },
 
   verificarSesion: async () => {
@@ -186,7 +169,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       if (res.ok) {
         const u = await res.json();
-        const esAdminOSuper = u.rol === 'ADMIN' || u.rol === 'SUPERVISOR' || u.rol === 'MINISTRO_DE_FE';
         const scheduledExpMs = !u.debeCambiarPassword
           ? programarExpiracionSesion(token, () => get().logout())
           : expMs;
@@ -197,7 +179,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           debeCambiarPassword: Boolean(u.debeCambiarPassword),
           isAutenticado: !u.debeCambiarPassword,
           cargandoSesion: false,
-          vistaGeneralActiva: esAdminOSuper ? 'ADMIN' : 'FUNCIONARIO',
         });
       } else {
         limpiarTimerSesion();

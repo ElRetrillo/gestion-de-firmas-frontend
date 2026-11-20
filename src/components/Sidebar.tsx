@@ -1,30 +1,23 @@
 import React, { useEffect } from 'react';
 import {
   Monitor,
-  Users,
   BellRing,
   History,
   BarChart3,
-  FileCheck2,
-  PenTool,
   ShieldCheck,
   X,
   LucideIcon,
 } from 'lucide-react';
 import { useTelemetriaStore } from '../store/useTelemetriaStore';
 import { useAuthStore } from '../store/useAuthStore';
-import { Badge } from './ui/badge';
 import { LogoMunicipalidad } from './LogoMunicipalidad';
 import { Button } from './ui/button';
 import { formatRutVisual } from '../lib/rut';
 
 export type NavTab =
   | 'DASHBOARD'
-  | 'FIRMAR'
-  | 'DOCUMENTOS'
   | 'ALERTAS'
   | 'METRICAS'
-  | 'USUARIOS_CUSTODIA'
   | 'AUDITORIA'
   | 'ADMINS';
 
@@ -56,9 +49,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const alertasVencimientos =
     (metricas?.alertasVencimiento?.totalEnUmbral60Dias ?? 0) +
     (metricas?.alertasVencimiento?.expirados ?? 0);
-  const contratosAlerta =
-    (metricas?.contratosResumen?.contratosPorCaducar ?? 0) +
-    (metricas?.contratosResumen?.contratosCaducados ?? 0);
   const conectadosEnVivo = estaciones.filter((e) => e.estadoEnVivo === 'CONECTADO').length;
 
   const formatearBadge = (count: number): string | undefined => {
