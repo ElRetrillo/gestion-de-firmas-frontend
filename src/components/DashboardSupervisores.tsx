@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Info, User, Download, Terminal, Usb, Laptop, Mail, CheckCircle2, Eye, X } from 'lucide-react';
 import { useTelemetriaStore } from '../store/useTelemetriaStore';
 import { useAuthStore } from '../store/useAuthStore';
@@ -109,6 +109,19 @@ export const DashboardSupervisores: React.FC = () => {
   const [filtroEstadoFirma, setFiltroEstadoFirma] = useState<'TODOS' | 'ACTIVO' | 'POR_VENCER' | 'EXPIRADO'>('TODOS');
   const [filtroEstadoConexion, setFiltroEstadoConexion] = useState<'TODOS' | 'CONECTADO' | 'DESCONECTADO'>('TODOS');
   const [mensajeAccion, setMensajeAccion] = useState<string | null>(null);
+  const [ahoraMs, setAhoraMs] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    const id = window.setInterval(() => setAhoraMs(Date.now()), 30000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const calcularMinutosEnVivo = (est?: { estadoEnVivo?: string; minutosConectado?: number; conectadoDesde?: string }) => {
+    if (!est || est.estadoEnVivo !== 'CONECTADO') return 0;
+    const desdeMs = est.conectadoDesde ? new Date(est.conectadoDesde).getTime() : NaN;
+    const calc = !Number.isNaN(desdeMs) ? Math.max(0, Math.floor((ahoraMs - desdeMs) / 60000)) : 0;
+    return Math.max(est.minutosConectado || 0, calc);
+  };
 
   // Estados para envío de aviso por correo electrónico
   const [enviandoAvisoId, setEnviandoAvisoId] = useState<string | null>(null);
@@ -253,7 +266,7 @@ export const DashboardSupervisores: React.FC = () => {
       desconexiones: trazaData?.desconexionesPeriodo ?? accionData?.desconexionesIgnoradasPeriodo ?? 0,
       tiempoUsoMinutos: trazaData?.tiempoUsoMinutos ?? f.tiempoUsoMinutos ?? 0,
       promedioUsoDiarioMinutos: trazaData?.promedioUsoDiarioMinutos ?? f.promedioUsoDiarioMinutos ?? 0,
-      minutosSesionEnVivo: estacionEnVivo?.minutosConectado,
+      minutosSesionEnVivo: calcularMinutosEnVivo(estacionEnVivo),
     });
   });
 
@@ -325,7 +338,7 @@ export const DashboardSupervisores: React.FC = () => {
         desconexiones: t.desconexionesPeriodo ?? 0,
         tiempoUsoMinutos: t.tiempoUsoMinutos ?? 0,
         promedioUsoDiarioMinutos: t.promedioUsoDiarioMinutos ?? 0,
-        minutosSesionEnVivo: estacionEnVivo?.minutosConectado,
+        minutosSesionEnVivo: calcularMinutosEnVivo(estacionEnVivo),
       });
     }
   });
@@ -430,7 +443,7 @@ export const DashboardSupervisores: React.FC = () => {
         trazaPorSerial?.promedioUsoDiarioMinutos ??
         prevRow?.promedioUsoDiarioMinutos ??
         0,
-      minutosSesionEnVivo: est.minutosConectado ?? prevRow?.minutosSesionEnVivo,
+      minutosSesionEnVivo: calcularMinutosEnVivo(est) || prevRow?.minutosSesionEnVivo,
     });
   });
 
@@ -546,11 +559,11 @@ export const DashboardSupervisores: React.FC = () => {
   return (
     <div className="space-y-5">
       {mensajeAccion && (
-        <div className="p-2.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-xs font-mono text-foreground flex items-center justify-between">
-          <span>✓ {mensajeAccion}</span>
+        <div className="p-2.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-xs font-mono text-foreground flex flex-wrap items-center justify-between gap-2">
+          <span className="break-words">✓ {mensajeAccion}</span>
           <button
             onClick={() => setMensajeAccion(null)}
-            className="text-[10px] underline ml-4 text-muted-foreground hover:text-foreground"
+            className="text-[10px] underline ml-auto text-muted-foreground hover:text-foreground shrink-0"
           >
             Cerrar
           </button>
@@ -558,8 +571,8 @@ export const DashboardSupervisores: React.FC = () => {
       )}
 
       {/* 1. Fila Compacta de KPIs Esenciales de Trazabilidad de Tokens */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card className="p-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card className="p-3.5 min-w-0">
           <div className="text-[10px] font-bold uppercase text-muted-foreground">
             Dispositivos Existentes
           </div>
@@ -569,7 +582,7 @@ export const DashboardSupervisores: React.FC = () => {
           </div>
         </Card>
 
-        <Card className="p-3.5 border-emerald-500/30 bg-emerald-500/5">
+        <Card className="p-3.5 min-w-0 border-emerald-500/30 bg-emerald-500/5">
           <div className="text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400">
             Dispositivos Activos
           </div>
@@ -581,7 +594,7 @@ export const DashboardSupervisores: React.FC = () => {
           </div>
         </Card>
 
-        <Card className="p-3.5 border-rose-500/30 bg-rose-500/5">
+        <Card className="p-3.5 min-w-0 border-rose-500/30 bg-rose-500/5">
           <div className="text-[10px] font-bold uppercase text-rose-600 dark:text-rose-400">
             Dispositivos Expirados
           </div>
@@ -593,11 +606,11 @@ export const DashboardSupervisores: React.FC = () => {
           </div>
         </Card>
 
-        <Card className="p-3.5 border-sky-500/30 bg-sky-500/5">
+        <Card className="p-3.5 min-w-0 border-sky-500/30 bg-sky-500/5">
           <div className="text-[10px] font-bold uppercase text-sky-600 dark:text-sky-400">
             Promedio Uso Diario
           </div>
-          <div className="text-xl font-bold text-foreground mt-1 font-mono">
+          <div className="text-lg sm:text-xl font-bold text-foreground mt-1 font-mono truncate">
             {formatearHorasMinutos(promedioUsoDiarioGeneralMinutos)}
           </div>
           <div className="text-[11px] text-muted-foreground font-mono">
@@ -609,8 +622,8 @@ export const DashboardSupervisores: React.FC = () => {
       {/* Comprobante / Vista Previa de Correo Despachado */}
       {correoPreview && (
         <Card className="border-2 border-emerald-500/60 bg-emerald-500/5 shadow-lg overflow-hidden animate-in fade-in-50 duration-200">
-          <CardHeader className="p-4 pb-2 border-b flex flex-row items-center justify-between gap-2 flex-wrap">
-            <div className="space-y-0.5">
+          <CardHeader className="p-4 pb-2 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="space-y-0.5 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span
                   className={`text-xs font-semibold flex items-center gap-1.5 ${
@@ -620,7 +633,7 @@ export const DashboardSupervisores: React.FC = () => {
                   }`}
                 >
                   <span
-                    className={`w-2 h-2 rounded-full ${
+                    className={`w-2 h-2 rounded-full shrink-0 ${
                       correoPreview.enviadoSmtp ? 'bg-emerald-500' : 'bg-amber-500'
                     }`}
                   />
@@ -634,7 +647,7 @@ export const DashboardSupervisores: React.FC = () => {
                 Comprobante y Detalle del Aviso por Correo al Titular del Token
               </CardTitle>
             </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-1.5 flex-wrap shrink-0">
               {correoPreview.filaRef && !avisosEnviadosMap[correoPreview.filaRef.id] && (
                 <Button
                   size="sm"
@@ -644,7 +657,7 @@ export const DashboardSupervisores: React.FC = () => {
                   className="h-7 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
                 >
                   <Mail className="w-3 h-3" />
-                  <span>{enviandoAvisoId === correoPreview.filaRef.id ? 'Despachando...' : 'Confirmar Envío Real'}</span>
+                  <span>{enviandoAvisoId === correoPreview.filaRef.id ? 'Despachando...' : 'Confirmar Envío'}</span>
                 </Button>
               )}
               <Button
@@ -660,21 +673,21 @@ export const DashboardSupervisores: React.FC = () => {
           </CardHeader>
           <CardContent className="p-4 space-y-3 text-xs">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-2.5 rounded bg-background/80 border font-mono text-[11px]">
-              <div>
+              <div className="min-w-0">
                 <span className="text-muted-foreground block text-[10px]">CORREO DESTINATARIO:</span>
-                <span className="font-bold text-foreground">{correoPreview.emailDestino}</span>
+                <span className="font-bold text-foreground break-all">{correoPreview.emailDestino}</span>
               </div>
-              <div>
+              <div className="min-w-0">
                 <span className="text-muted-foreground block text-[10px]">TITULAR NOTIFICADO:</span>
-                <span className="font-bold text-foreground">{correoPreview.funcionarioNombre}</span>
+                <span className="font-bold text-foreground break-words">{correoPreview.funcionarioNombre}</span>
               </div>
-              <div>
+              <div className="min-w-0">
                 <span className="text-muted-foreground block text-[10px]">TOKEN ASOCIADO:</span>
-                <span className="font-bold text-primary">{correoPreview.serialNumber}</span>
+                <span className="font-bold text-primary break-all">{correoPreview.serialNumber}</span>
               </div>
             </div>
             <div className="p-3 rounded bg-background border space-y-2">
-              <div className="text-[11px] font-semibold text-foreground border-b pb-1">
+              <div className="text-[11px] font-semibold text-foreground border-b pb-1 break-words">
                 Asunto: {correoPreview.asunto}
               </div>
               {correoPreview.htmlCorreo ? (
@@ -700,9 +713,9 @@ export const DashboardSupervisores: React.FC = () => {
 
       {/* 2. Tabla Centralizada Unificada de Supervisión */}
       <Card className="border-border/80 bg-card overflow-hidden">
-        <CardHeader className="p-3.5 border-b bg-muted/20 flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div>
-            <CardTitle className="text-sm font-bold flex items-center gap-2">
+        <CardHeader className="p-3.5 border-b bg-muted/20 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="min-w-0">
+            <CardTitle className="text-sm font-bold flex flex-wrap items-center gap-2">
               <span>Supervisión Centralizada de Tokens y Trazabilidad USB</span>
               <Badge variant="outline" className="text-[10px] font-mono">
                 {filasFiltradas.length} de {todasLasFilas.length} registros
@@ -713,7 +726,7 @@ export const DashboardSupervisores: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
             <Input
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
@@ -722,13 +735,13 @@ export const DashboardSupervisores: React.FC = () => {
             />
 
             {/* Filtro por Vigencia de Firma */}
-            <div className="inline-flex rounded-md border bg-background p-0.5" title="Filtrar por estado de vigencia del token">
+            <div className="inline-flex flex-wrap rounded-md border bg-background p-0.5 w-full sm:w-auto" title="Filtrar por estado de vigencia del token">
               {(['TODOS', 'ACTIVO', 'POR_VENCER', 'EXPIRADO'] as const).map((est) => (
                 <button
                   key={est}
                   type="button"
                   onClick={() => setFiltroEstadoFirma(est)}
-                  className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
+                  className={`flex-1 sm:flex-initial px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
                     filtroEstadoFirma === est
                       ? 'bg-primary text-primary-foreground'
                       : 'text-muted-foreground hover:text-foreground'
@@ -740,13 +753,13 @@ export const DashboardSupervisores: React.FC = () => {
             </div>
 
             {/* Filtro por Conexión */}
-            <div className="inline-flex rounded-md border bg-background p-0.5" title="Filtrar por estado de conexión física">
+            <div className="inline-flex flex-wrap rounded-md border bg-background p-0.5 w-full sm:w-auto" title="Filtrar por estado de conexión física">
               {(['TODOS', 'CONECTADO', 'DESCONECTADO'] as const).map((cEst) => (
                 <button
                   key={cEst}
                   type="button"
                   onClick={() => setFiltroEstadoConexion(cEst)}
-                  className={`px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
+                  className={`flex-1 sm:flex-initial px-2 py-1 rounded text-[11px] font-semibold transition-colors ${
                     filtroEstadoConexion === cEst
                       ? cEst === 'CONECTADO'
                         ? 'bg-emerald-600 text-white'
@@ -766,7 +779,7 @@ export const DashboardSupervisores: React.FC = () => {
               size="sm"
               variant="outline"
               onClick={handleDescargarAgenteBat}
-              className="h-8 text-xs font-semibold gap-1.5 text-primary border-primary/40 hover:bg-primary/10 shadow-xs"
+              className="h-8 w-full sm:w-auto justify-center text-xs font-semibold gap-1.5 text-primary border-primary/40 hover:bg-primary/10 shadow-sm"
               title="Descargar instalador para el agente de telemetría USB en esta máquina"
             >
               <Download className="w-3.5 h-3.5" />
@@ -775,7 +788,7 @@ export const DashboardSupervisores: React.FC = () => {
           </div>
         </CardHeader>
 
-        <div className="overflow-x-auto">
+        <div className="hidden md:block overflow-x-auto">
           <Table>
             <TableHeader className="bg-muted/40 text-[11px]">
               <TableRow>
@@ -970,7 +983,7 @@ export const DashboardSupervisores: React.FC = () => {
                               variant="default"
                               disabled={enviandoAvisoId === fila.id}
                               onClick={() => handleEnviarAvisoCorreo(fila, false)}
-                              className="h-7 text-xs font-semibold px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs gap-1"
+                              className="h-7 text-xs font-semibold px-2.5 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm gap-1"
                               title={`Enviar aviso formal por correo a ${fila.funcionario.nombre}`}
                             >
                               <Mail className="w-3 h-3" />
@@ -985,6 +998,160 @@ export const DashboardSupervisores: React.FC = () => {
               )}
             </TableBody>
           </Table>
+        </div>
+
+        {/* Vista en tarjetas para móviles */}
+        <div className="block md:hidden divide-y divide-border/70">
+          {filasFiltradas.length === 0 ? (
+            <div className="text-center py-8 px-4 text-xs text-muted-foreground italic">
+              No se encontraron funcionarios o dispositivos con los filtros seleccionados.
+            </div>
+          ) : (
+            filasFiltradas.map((fila) => (
+              <div
+                key={`mobile-${fila.id}`}
+                className={`p-3.5 space-y-2.5 text-xs ${
+                  fila.funcionario.extraidoDeToken || (usuario?.rut && fila.funcionario.rut === usuario.rut)
+                    ? 'bg-primary/5 border-l-4 border-l-primary'
+                    : ''
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-bold text-foreground flex items-center gap-1.5 flex-wrap">
+                      <User className="w-3.5 h-3.5 text-primary shrink-0" />
+                      <span className="break-words">{fila.funcionario.nombre}</span>
+                      {fila.funcionario.extraidoDeToken && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded font-mono font-bold bg-emerald-600 text-white uppercase tracking-wider">
+                          Titular Token USB
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[10px] font-mono text-muted-foreground mt-0.5">
+                      {fila.funcionario.rut.includes('@')
+                        ? fila.funcionario.rut
+                        : formatRutVisual(fila.funcionario.rut)}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <Badge
+                      variant={
+                        fila.estadoFirma === 'ACTIVO'
+                          ? 'success'
+                          : fila.estadoFirma === 'POR_VENCER'
+                          ? 'warning'
+                          : 'danger'
+                      }
+                      className="text-[10px] font-mono font-bold whitespace-nowrap"
+                    >
+                      {fila.estadoFirma === 'POR_VENCER' ? 'POR VENCER' : fila.estadoFirma}
+                    </Badge>
+                    <Badge
+                      variant={fila.estadoConexion === 'CONECTADO' ? 'success' : 'danger'}
+                      className="text-[9px] font-mono font-bold"
+                    >
+                      {fila.estadoConexion}
+                    </Badge>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-[11px] bg-muted/20 p-2.5 rounded-md border border-border/50">
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-muted-foreground block">Token / Modelo</span>
+                    <span className="font-mono font-bold text-foreground break-all">{fila.token.serialNumber}</span>
+                    <span className="text-[10px] text-muted-foreground block truncate">
+                      {[fila.token.marca, fila.token.modelo].filter(Boolean).join(' ') || 'SafeNet / eToken'}
+                    </span>
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[10px] text-muted-foreground block">Unidad</span>
+                    <span className="font-medium text-foreground block break-words">{fila.funcionario.unidad}</span>
+                    {fila.estacionActual && (
+                      <span className="text-[10px] font-mono text-muted-foreground block truncate">
+                        {fila.estacionActual}
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block">Vigencia</span>
+                    <span className="font-mono font-semibold text-foreground block">
+                      {fila.fechaExpiracion || '-'}
+                    </span>
+                    <span
+                      className={`text-[10px] font-mono font-bold ${
+                        fila.diasRestantes !== undefined && fila.diasRestantes <= 15
+                          ? 'text-rose-500'
+                          : fila.diasRestantes !== undefined && fila.diasRestantes <= 60
+                          ? 'text-amber-500'
+                          : 'text-emerald-600 dark:text-emerald-400'
+                      }`}
+                    >
+                      {fila.tiempoExpiracionTexto || (fila.diasRestantes !== undefined ? `${fila.diasRestantes} días` : 'Vigente')}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-muted-foreground block">Uso y Trazabilidad</span>
+                    <span className="font-mono font-bold text-foreground block">
+                      {formatearHorasMinutos(
+                        Math.max(fila.tiempoUsoMinutos, fila.estadoConexion === 'CONECTADO' ? (fila.minutosSesionEnVivo || 0) : 0),
+                      )}
+                    </span>
+                    {fila.estadoConexion === 'CONECTADO' && (
+                      <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold block">
+                        Sesión actual: {formatearHorasMinutos(fila.minutosSesionEnVivo || 0)}
+                      </span>
+                    )}
+                    <span className="text-[10px] font-mono text-muted-foreground">
+                      {fila.conexiones} conex. / {fila.desconexiones} desc.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-1.5 pt-0.5">
+                  {avisosEnviadosMap[fila.id] ? (
+                    <>
+                      <span className="inline-flex items-center gap-1 text-[11px] font-mono font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2 py-1 rounded">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>Enviado ({avisosEnviadosMap[fila.id]})</span>
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEnviarAvisoCorreo(fila, true)}
+                        className="h-7 px-2 text-xs"
+                      >
+                        <Eye className="w-3.5 h-3.5 mr-1" />
+                        <span>Ver</span>
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={enviandoAvisoId === fila.id}
+                        onClick={() => handleEnviarAvisoCorreo(fila, true)}
+                        className="h-7 text-xs px-2.5"
+                      >
+                        <Eye className="w-3 h-3 mr-1" />
+                        <span>Ver</span>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="default"
+                        disabled={enviandoAvisoId === fila.id}
+                        onClick={() => handleEnviarAvisoCorreo(fila, false)}
+                        className="h-7 text-xs font-semibold px-3 bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm gap-1"
+                      >
+                        <Mail className="w-3 h-3" />
+                        <span>{enviandoAvisoId === fila.id ? 'Enviando...' : 'Aviso Correo'}</span>
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </Card>
     </div>

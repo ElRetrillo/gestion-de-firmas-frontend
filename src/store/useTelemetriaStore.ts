@@ -18,6 +18,7 @@ export interface EstacionTrabajo {
   dependenciaFisica: string;
   estadoEnVivo: EstadoHardwareType;
   ultimoPing: string;
+  conectadoDesde?: string;
   minutosConectado?: number;
   tokenInfo?: {
     serialNumber?: string;
@@ -653,6 +654,20 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
               }
             : undefined);
 
+      const conectadoDesde = isDesconectado
+        ? undefined
+        : estacionPrevia?.estadoEnVivo === 'CONECTADO' && estacionPrevia.conectadoDesde
+          ? estacionPrevia.conectadoDesde
+          : payload.timestamp || new Date().toISOString();
+
+      const minutosCalculados = isDesconectado
+        ? 0
+        : typeof (payload as any).minutosConectado === 'number'
+          ? (payload as any).minutosConectado
+          : conectadoDesde
+            ? Math.max(0, Math.floor((Date.now() - new Date(conectadoDesde).getTime()) / 60000))
+            : 0;
+
       const nuevasEstaciones: EstacionTrabajo[] = existe
         ? state.estaciones.map((est) =>
             est.codigoPc === payload.codigoPc
@@ -660,6 +675,8 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
                   ...est,
                   estadoEnVivo: payload.estadoHardware,
                   ultimoPing: payload.timestamp || new Date().toISOString(),
+                  conectadoDesde,
+                  minutosConectado: minutosCalculados,
                   tokenInfo: isDesconectado ? undefined : (tokenRecibido || est.tokenInfo),
                   ipAsignada: payload.ipAsignada || est.ipAsignada,
                   dependenciaFisica: payload.dependenciaFisica || est.dependenciaFisica,
@@ -674,6 +691,8 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
               dependenciaFisica: payload.dependenciaFisica || 'Estación Municipal',
               estadoEnVivo: payload.estadoHardware,
               ultimoPing: payload.timestamp || new Date().toISOString(),
+              conectadoDesde,
+              minutosConectado: minutosCalculados,
               tokenInfo: isDesconectado ? undefined : tokenRecibido,
             },
           ];
@@ -703,20 +722,43 @@ export const useTelemetriaStore = create<TelemetriaState>((set, get) => ({
       if (resEst.ok) {
         const data = await resEst.json();
         if (Array.isArray(data)) {
-          const mappedEstaciones: EstacionTrabajo[] = data.map((d: any) => ({
-            id: d.id,
-            codigoPc: d.codigoPc,
-            ipAsignada: d.ipAsignada || '10.20.1.10',
-            dependenciaFisica: d.dependenciaFisica || 'Unidad Municipal',
-            estadoEnVivo: d.estadoEnVivo || d.estadoHardware || 'CONECTADO',
-            ultimoPing: d.ultimoPing || new Date().toISOString(),
-            tokenInfo: d.tokenInfo || (d.token ? {
-              serialNumber: d.token.serialNumber,
-              vendorId: d.token.vendorId,
-              marca: d.token.marca,
-              modelo: d.token.modelo,
-            } : undefined),
-          }));
+          const prevEstaciones = get().estaciones;
+          const mappedEstaciones: EstacionTrabajo[] = data.map((d: any) => {
+            const estadoEnVivo: EstadoHardwareType = d.estadoEnVivo || d.estadoHardware || 'CONECTADO';
+            const prev = prevEstaciones.find((p) => p.codigoPc === d.codigoPc);
+            const isConectado = estadoEnVivo === 'CONECTADO';
+            const conectadoDesde = !isConectado
+              ? undefined
+              : d.conectadoDesde ||
+                d.sessionStart ||
+                (prev?.estadoEnVivo === 'CONECTADO' ? prev.conectadoDesde : undefined) ||
+                d.ultimoPing ||
+                new Date().toISOString();
+            const minutosConectado = !isConectado
+              ? 0
+              : typeof d.minutosConectado === 'number'
+                ? d.minutosConectado
+                : conectadoDesde
+                  ? Math.max(0, Math.floor((Date.now() - new Date(conectadoDesde).getTime()) / 60000))
+                  : 0;
+
+            return {
+              id: d.id,
+              codigoPc: d.codigoPc,
+              ipAsignada: d.ipAsignada || '10.20.1.10',
+              dependenciaFisica: d.dependenciaFisica || 'Unidad Municipal',
+              estadoEnVivo,
+              ultimoPing: d.ultimoPing || new Date().toISOString(),
+              conectadoDesde,
+              minutosConectado,
+              tokenInfo: d.tokenInfo || (d.token ? {
+                serialNumber: d.token.serialNumber,
+                vendorId: d.token.vendorId,
+                marca: d.token.marca,
+                modelo: d.token.modelo,
+              } : undefined),
+            };
+          });
           set({ estaciones: mappedEstaciones });
         }
       }

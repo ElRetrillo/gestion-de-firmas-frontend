@@ -14,7 +14,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToApp, onOpenLogin
   const { isAutenticado, usuario } = useAuthStore();
 
   return (
-    <div className="min-h-[100dvh] bg-background text-foreground flex flex-col bg-tech-grid transition-colors">
+    <div className="min-h-screen min-h-[100dvh] bg-background text-foreground flex flex-col bg-tech-grid transition-colors">
       {/* Barra superior compacta */}
       <header className="border-b border-border/60 bg-background/85 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
@@ -30,7 +30,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onGoToApp, onOpenLogin
       </header>
 
       {/* Área central enfocada: sin badges ni ruido visual */}
-      <main className="flex-1 flex items-center justify-center px-5 py-8">
+      <main className="flex-1 flex items-center justify-center px-4 py-6 sm:px-5 sm:py-8">
         <div className="w-full max-w-sm mx-auto flex flex-col items-center text-center gap-7">
           <LogoMunicipalidad variant="sidebar" className="h-16 w-16" />
 

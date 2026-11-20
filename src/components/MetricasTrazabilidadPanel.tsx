@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Clock } from 'lucide-react';
+import { Clock, UserX } from 'lucide-react';
 import {
   useTelemetriaStore,
   MetricasTrazabilidadResponse,
@@ -7,7 +7,9 @@ import {
 } from '../store/useTelemetriaStore';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from './ui/card';
 import { Button } from './ui/button';
+import { Input } from './ui/input';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from './ui/table';
+import { formatRutVisual } from '../lib/rut';
 
 interface MetricasTrazabilidadPanelProps {
   vistaOrigen?: 'DISPOSITIVOS' | 'CUSTODIA' | 'AUDITORIA';
@@ -231,7 +233,7 @@ const parseLatexDocument = (tex: string): ParsedLatexDoc => {
 const LatexPaperPreview: React.FC<{ tex: string }> = ({ tex }) => {
   const doc = parseLatexDocument(tex);
   return (
-    <div className="bg-white text-zinc-900 rounded-lg border shadow-inner p-6 sm:p-8 overflow-y-auto max-h-[500px] font-serif">
+    <div className="bg-white text-zinc-900 rounded-lg border shadow-inner p-4 sm:p-8 overflow-y-auto max-h-[500px] font-serif">
       {/* Cabecera estilo artículo LaTeX (\maketitle) */}
       <div className="text-center border-b border-zinc-300 pb-4 mb-5 space-y-1">
         <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">
@@ -383,8 +385,9 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
   } = useTelemetriaStore();
 
   const [tabTrazabilidad, setTabTrazabilidad] = useState<
-    'VIGENCIA_FIRMAS' | 'SERIE_TEMPORAL' | 'VISOR_LATEX'
+    'VIGENCIA_FIRMAS' | 'SERIE_TEMPORAL' | 'SIN_USO' | 'VISOR_LATEX'
   >('VIGENCIA_FIRMAS');
+  const [busquedaSinUso, setBusquedaSinUso] = useState('');
 
   // Estado del Compilador y Visor LaTeX + Descarga PDF
   const [modalLatexOpen, setModalLatexOpen] = useState(false);
@@ -564,6 +567,111 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
   const accionesPeriodo =
     metricas?.accionesFuncionarios?.totalAccionesFirmaPeriodo ?? tel?.eventosFirmando ?? 0;
 
+  // 5. Usuarios / tokens sin uso registrado en el período evaluado
+  interface UsuarioSinUsoItem {
+    id: string;
+    nombre: string;
+    rut: string;
+    email?: string;
+    unidad: string;
+    cargo?: string;
+    serialNumber: string;
+    marcaModelo: string;
+    estado: 'ACTIVO' | 'POR_VENCER' | 'EXPIRADO';
+    fechaExpiracion?: string;
+    diasRestantes?: number;
+    ultimaActividad?: string;
+  }
+
+  const usuariosSinUso: UsuarioSinUsoItem[] = (() => {
+    const mapa = new Map<string, UsuarioSinUsoItem>();
+    const esSerialValido = (sn?: string) =>
+      Boolean(sn && !(sn.startsWith('SN-WIN-') && sn.endsWith('-UNKNOWN')));
+
+    listadoFirmasAsignadas.forEach((f) => {
+      if (!esSerialValido(f.serialNumberToken)) return;
+      const disp = listaDispositivos.find(
+        (d) =>
+          d.serialNumber.toLowerCase() === f.serialNumberToken.toLowerCase() ||
+          (f.funcionario?.rut && d.funcionarioAsignado?.rut === f.funcionario.rut),
+      );
+      const tiempoUso = Math.max(f.tiempoUsoMinutos || 0, disp?.tiempoUsoMinutos || 0);
+      const eventos = disp?.totalEventosPeriodo || 0;
+      const conexiones = disp?.conexionesPeriodo || 0;
+      const acciones = f.accionesFirmaPeriodo || 0;
+      const conectadoAhora = f.estadoConexion === 'CONECTADO' || disp?.estadoEnVivo === 'CONECTADO';
+
+      if (tiempoUso <= 0 && eventos <= 0 && conexiones <= 0 && acciones <= 0 && !conectadoAhora) {
+        const key = (f.serialNumberToken || f.funcionario?.rut || f.id).toLowerCase();
+        mapa.set(key, {
+          id: f.id || key,
+          nombre: disp?.funcionarioAsignado?.nombre || f.funcionario?.nombre || 'Funcionario Municipal',
+          rut: f.funcionario?.rut || disp?.funcionarioAsignado?.rut || '-',
+          email: f.funcionario?.email || disp?.funcionarioAsignado?.email,
+          unidad: disp?.funcionarioAsignado?.unidad || f.funcionario?.unidad || 'Municipalidad',
+          cargo: f.funcionario?.cargo || disp?.funcionarioAsignado?.cargo,
+          serialNumber: f.serialNumberToken,
+          marcaModelo: [f.marca, f.modelo].filter(Boolean).join(' ') || 'Token USB',
+          estado: f.estado,
+          fechaExpiracion: f.fechaExpiracion || disp?.fechaExpiracion,
+          diasRestantes: f.diasRestantes ?? disp?.diasRestantes,
+          ultimaActividad: disp?.ultimaActividad,
+        });
+      }
+    });
+
+    listaDispositivos.forEach((d) => {
+      if (!esSerialValido(d.serialNumber)) return;
+      const key = d.serialNumber.toLowerCase();
+      if (mapa.has(key)) return;
+      const yaEnFirmas = listadoFirmasAsignadas.some(
+        (f) => f.serialNumberToken.toLowerCase() === key,
+      );
+      if (yaEnFirmas) return;
+
+      const tiempoUso = d.tiempoUsoMinutos || 0;
+      const eventos = d.totalEventosPeriodo || 0;
+      const conexiones = d.conexionesPeriodo || 0;
+      if (tiempoUso <= 0 && eventos <= 0 && conexiones <= 0 && d.estadoEnVivo !== 'CONECTADO') {
+        const dias = d.diasRestantes;
+        const estado: 'ACTIVO' | 'POR_VENCER' | 'EXPIRADO' =
+          d.estadoPatrimonial === 'EXPIRADO' || (dias !== undefined && dias <= 0)
+            ? 'EXPIRADO'
+            : dias !== undefined && dias <= 60
+              ? 'POR_VENCER'
+              : 'ACTIVO';
+        mapa.set(key, {
+          id: d.id || key,
+          nombre: d.funcionarioAsignado?.nombre || 'Token Sin Titular Identificado',
+          rut: d.funcionarioAsignado?.rut || d.funcionarioAsignado?.email || '-',
+          email: d.funcionarioAsignado?.email,
+          unidad: d.funcionarioAsignado?.unidad || d.dependenciaFisica || 'Municipalidad',
+          cargo: d.funcionarioAsignado?.cargo,
+          serialNumber: d.serialNumber,
+          marcaModelo: [d.marca, d.modelo].filter(Boolean).join(' ') || 'Token USB',
+          estado,
+          fechaExpiracion: d.fechaExpiracion,
+          diasRestantes: dias,
+          ultimaActividad: d.ultimaActividad,
+        });
+      }
+    });
+
+    return Array.from(mapa.values());
+  })();
+
+  const usuariosSinUsoFiltrados = usuariosSinUso.filter((u) => {
+    const q = busquedaSinUso.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      u.nombre.toLowerCase().includes(q) ||
+      u.rut.toLowerCase().includes(q) ||
+      u.unidad.toLowerCase().includes(q) ||
+      u.serialNumber.toLowerCase().includes(q) ||
+      (u.email || '').toLowerCase().includes(q)
+    );
+  });
+
   const opcionesPeriodo: Array<{ id: ModoReporteType; label: string }> = [
     { id: 'ULTIMOS_7_DIAS', label: '7 días' },
     { id: 'ULTIMOS_15_DIAS', label: '15 días' },
@@ -575,10 +683,10 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
 
   return (
     <>
-      <Card className="border-border/80 bg-card shadow-xs overflow-hidden">
+      <Card className="border-border/80 bg-card shadow-sm overflow-hidden">
         {/* Cabecera con Selector de Períodos y Compilador/Visor LaTeX */}
         <CardHeader className="p-4 border-b bg-muted/20 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
-          <div className="space-y-0.5">
+          <div className="space-y-0.5 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               {cargandoMetricas && (
                 <span className="text-[10px] text-muted-foreground font-mono animate-pulse">
@@ -594,7 +702,7 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
             </CardDescription>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
             <div className="inline-flex flex-wrap items-center rounded-lg border bg-background p-0.5 gap-0.5">
               {opcionesPeriodo.map((op) => (
                 <button
@@ -602,7 +710,7 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                   type="button"
                   onClick={() => setPeriodoReporte(op.id, mesSeleccionado, anioSeleccionado)}
                   className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${modoReporte === op.id
-                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
                     : 'text-muted-foreground hover:text-foreground'
                     }`}
                 >
@@ -660,7 +768,7 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
               variant="default"
               size="sm"
               onClick={abrirPrevisualizacionLatexPdf}
-              className="h-8 px-3 text-xs font-bold shadow-xs"
+              className="h-8 px-3 text-xs font-bold shadow-sm w-full sm:w-auto"
             >
               Visualizar / Exportar resumen de datos
             </Button>
@@ -670,11 +778,11 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
         <CardContent className="p-4 space-y-5">
           {/* Resumen Superior: Tiempo Total Acumulado de Conexión */}
           <div className="p-4 rounded-xl border bg-background/60 flex items-center justify-between gap-3">
-            <div>
+            <div className="min-w-0">
               <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                 Tiempo Total Acumulado de Conexión
               </div>
-              <div className="text-2xl font-bold font-mono text-foreground mt-0.5">
+              <div className="text-xl sm:text-2xl font-bold font-mono text-foreground mt-0.5">
                 {formatearHorasMinutos(tel?.tiempoUsoTotalMinutos)}
               </div>
               <div className="text-[11px] text-muted-foreground">
@@ -687,7 +795,7 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
           </div>
 
           {/* 1. Tarjetas con Gráfico Circular General arriba y Gráfico de Columnas Verticales debajo */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {/* Tarjeta 1: Adopción y Uso Efectivo en el Período */}
             <div className="p-4 rounded-xl border bg-background/60 flex flex-col justify-between gap-3">
               <div className="flex flex-col items-center text-center gap-2">
@@ -810,6 +918,15 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                   >
                     Evolución Diaria ({serie.length}d)
                   </Button>
+                  <Button
+                    size="sm"
+                    variant={tabTrazabilidad === 'SIN_USO' ? 'default' : 'outline'}
+                    onClick={() => setTabTrazabilidad('SIN_USO')}
+                    className="h-8 text-xs font-bold gap-1.5"
+                  >
+                    <UserX className="w-3.5 h-3.5" />
+                    <span>Usuarios sin uso de token ({usuariosSinUso.length})</span>
+                  </Button>
                 </div>
               </div>
 
@@ -829,7 +946,7 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                     </p>
                   </div>
 
-                  <div className="overflow-x-auto rounded-lg border">
+                  <div className="hidden md:block overflow-x-auto rounded-lg border">
                     <Table>
                       <TableHeader className="bg-muted/40 text-[11px]">
                         <TableRow>
@@ -924,13 +1041,70 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                       </TableBody>
                     </Table>
                   </div>
+
+                  {/* Tarjetas móviles para Vigencia y Asignación */}
+                  <div className="block md:hidden space-y-2.5">
+                    {listadoFirmasAsignadas.length === 0 ? (
+                      <div className="rounded-lg border p-4 text-center text-xs text-muted-foreground">
+                        Sin tokens asignados registrados aún. Inserte un token USB para comenzar la trazabilidad.
+                      </div>
+                    ) : (
+                      listadoFirmasAsignadas.map((item) => {
+                        const pctPart =
+                          accionesPeriodo > 0
+                            ? round2((item.accionesFirmaPeriodo / accionesPeriodo) * 100)
+                            : 0;
+                        const colorTexto =
+                          item.estado === 'ACTIVO'
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : item.estado === 'POR_VENCER'
+                              ? 'text-amber-600 dark:text-amber-400'
+                              : 'text-rose-600 dark:text-rose-400';
+                        return (
+                          <div key={`mobile-vig-${item.id}`} className="rounded-lg border bg-background/60 p-3 space-y-2 text-xs">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="font-bold text-foreground break-words">{item.funcionario.nombre}</div>
+                                <div className="text-[11px] text-muted-foreground break-words">{item.funcionario.unidad}</div>
+                              </div>
+                              <span className={`text-[11px] font-semibold shrink-0 ${colorTexto}`}>
+                                {item.estado === 'POR_VENCER' ? 'Por vencer' : item.estado === 'ACTIVO' ? 'Vigente' : 'Expirado'}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-border/50">
+                              <div className="min-w-0">
+                                <span className="text-[10px] text-muted-foreground block">ID Token</span>
+                                <span className="font-mono font-bold break-all">{item.serialNumberToken}</span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-muted-foreground block">Caducidad</span>
+                                <span className={`font-mono font-semibold ${colorTexto}`}>
+                                  {item.fechaExpiracion || '-'} ({item.diasRestantes > 0 ? `${item.diasRestantes}d` : `-${Math.abs(item.diasRestantes)}d`})
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-muted-foreground block">Tiempo Uso</span>
+                                <span className="font-mono font-bold text-primary">{formatearHorasMinutos(item.tiempoUsoMinutos)}</span>
+                              </div>
+                              <div>
+                                <span className="text-[10px] text-muted-foreground block">Acciones (% Part.)</span>
+                                <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                  {item.accionesFirmaPeriodo} ({formatPct(pctPart)})
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
               )}
 
               {/* Pestaña 2: Serie Temporal */}
               {tabTrazabilidad === 'SERIE_TEMPORAL' && (
                 <div className="p-4 rounded-lg border bg-background/50 space-y-3">
-                  <div className="flex items-center justify-between text-xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
                     <span className="font-bold text-foreground">
                       Eventos de Telemetría USB por Día ({etiquetaPeriodo})
                     </span>
@@ -989,7 +1163,158 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                 </div>
               )}
 
-              {/* Pestaña 3: Visualizar Reporte (Renderizado Tipográfico LaTeX) */}
+              {/* Pestaña 3: Usuarios sin uso de token */}
+              {tabTrazabilidad === 'SIN_USO' && (
+                <div className="space-y-3">
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="text-xs space-y-0.5 min-w-0">
+                      <div className="font-bold text-foreground flex items-center gap-1.5">
+                        <UserX className="w-4 h-4 text-amber-500 shrink-0" />
+                        <span>Usuarios / Tokens sin actividad registrada ({etiquetaPeriodo})</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground">
+                        Lista de funcionarios o tokens con 0 minutos de uso, 0 eventos USB y sin conexión activa durante el período seleccionado.
+                      </p>
+                    </div>
+                    <Input
+                      value={busquedaSinUso}
+                      onChange={(e) => setBusquedaSinUso(e.target.value)}
+                      placeholder="Filtrar por nombre, RUT, unidad o token..."
+                      className="h-8 text-xs w-full sm:w-64 bg-background shrink-0"
+                    />
+                  </div>
+
+                  {usuariosSinUsoFiltrados.length === 0 ? (
+                    <div className="rounded-lg border border-dashed p-6 text-center text-xs text-muted-foreground">
+                      {usuariosSinUso.length === 0
+                        ? `Todos los tokens monitoreados registraron uso o conexión durante ${etiquetaPeriodo}.`
+                        : 'No hay usuarios sin uso que coincidan con el filtro ingresado.'}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="hidden md:block overflow-x-auto rounded-lg border">
+                        <Table>
+                          <TableHeader className="bg-muted/40 text-[11px]">
+                            <TableRow>
+                              <TableHead>Titular / RUT</TableHead>
+                              <TableHead>Unidad / Cargo</TableHead>
+                              <TableHead>ID Token</TableHead>
+                              <TableHead>Vigencia / Estado</TableHead>
+                              <TableHead>Última Actividad</TableHead>
+                              <TableHead className="text-right">Uso en Período</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody className="text-xs">
+                            {usuariosSinUsoFiltrados.map((u) => {
+                              const colorTexto =
+                                u.estado === 'ACTIVO'
+                                  ? 'text-emerald-600 dark:text-emerald-400'
+                                  : u.estado === 'POR_VENCER'
+                                    ? 'text-amber-600 dark:text-amber-400'
+                                    : 'text-rose-600 dark:text-rose-400';
+                              return (
+                                <TableRow key={u.id} className="hover:bg-muted/30">
+                                  <TableCell>
+                                    <div className="font-bold text-foreground">{u.nombre}</div>
+                                    <div className="text-[10px] font-mono text-muted-foreground">
+                                      {u.rut.includes('@') ? u.rut : formatRutVisual(u.rut)}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="text-[11px] font-medium text-foreground">{u.unidad}</div>
+                                    {u.cargo && (
+                                      <div className="text-[10px] text-muted-foreground">{u.cargo}</div>
+                                    )}
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="font-mono font-bold text-foreground">{u.serialNumber}</div>
+                                    <div className="text-[10px] text-muted-foreground">{u.marcaModelo}</div>
+                                  </TableCell>
+                                  <TableCell className="font-mono text-xs">
+                                    <div className="text-[11px] font-semibold text-foreground">
+                                      {u.fechaExpiracion || '-'}
+                                    </div>
+                                    <div className={`text-[11px] font-semibold ${colorTexto}`}>
+                                      {u.estado === 'POR_VENCER'
+                                        ? 'Por vencer'
+                                        : u.estado === 'ACTIVO'
+                                          ? 'Vigente'
+                                          : 'Expirado'}
+                                      {u.diasRestantes !== undefined
+                                        ? u.diasRestantes > 0
+                                          ? ` (${u.diasRestantes}d)`
+                                          : ` (-${Math.abs(u.diasRestantes)}d)`
+                                        : ''}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="font-mono text-[11px] text-muted-foreground">
+                                    {u.ultimaActividad
+                                      ? new Date(u.ultimaActividad).toLocaleString('es-CL')
+                                      : 'Sin registro reciente'}
+                                  </TableCell>
+                                  <TableCell className="text-right font-mono text-[11px] text-muted-foreground whitespace-nowrap">
+                                    0 hrs 00 mins • 0 eventos
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+
+                      <div className="block md:hidden space-y-2.5">
+                        {usuariosSinUsoFiltrados.map((u) => {
+                          const colorTexto =
+                            u.estado === 'ACTIVO'
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : u.estado === 'POR_VENCER'
+                                ? 'text-amber-600 dark:text-amber-400'
+                                : 'text-rose-600 dark:text-rose-400';
+                          return (
+                            <div key={`mobile-sinuso-${u.id}`} className="rounded-lg border bg-background/60 p-3 space-y-2 text-xs">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="font-bold text-foreground break-words">{u.nombre}</div>
+                                  <div className="text-[10px] font-mono text-muted-foreground">
+                                    {u.rut.includes('@') ? u.rut : formatRutVisual(u.rut)}
+                                  </div>
+                                </div>
+                                <span className={`text-[11px] font-semibold shrink-0 ${colorTexto}`}>
+                                  {u.estado === 'POR_VENCER' ? 'Por vencer' : u.estado === 'ACTIVO' ? 'Vigente' : 'Expirado'}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-border/50">
+                                <div className="min-w-0">
+                                  <span className="text-[10px] text-muted-foreground block">ID Token</span>
+                                  <span className="font-mono font-bold break-all">{u.serialNumber}</span>
+                                </div>
+                                <div className="min-w-0">
+                                  <span className="text-[10px] text-muted-foreground block">Unidad</span>
+                                  <span className="break-words">{u.unidad}</span>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-muted-foreground block">Última Actividad</span>
+                                  <span className="font-mono text-muted-foreground">
+                                    {u.ultimaActividad
+                                      ? new Date(u.ultimaActividad).toLocaleDateString('es-CL')
+                                      : 'Sin registro'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-muted-foreground block">Uso en Período</span>
+                                  <span className="font-mono text-muted-foreground">0 hrs 00 mins • 0 ev.</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Pestaña 4: Visualizar Reporte (Renderizado Tipográfico LaTeX) */}
               {tabTrazabilidad === 'VISOR_LATEX' && (
                 <div className="p-4 rounded-xl border bg-background/50 flex flex-col space-y-2">
                   <div className="flex items-center justify-end">
@@ -997,7 +1322,7 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                       type="button"
                       size="sm"
                       onClick={() => navigator.clipboard.writeText(codigoLatex)}
-                      className="h-7 px-3 text-xs font-bold shadow-xs"
+                      className="h-7 px-3 text-xs font-bold shadow-sm"
                     >
                       Copiar Código LaTeX
                     </Button>
@@ -1013,11 +1338,11 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
 
       {/* Modal de Previsualización de Código LaTeX + Documento Summary PDF */}
       {modalLatexOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-3 sm:p-6">
-          <Card className="w-full max-w-6xl max-h-[92vh] flex flex-col border-primary/50 bg-card shadow-2xl overflow-hidden">
-            <CardHeader className="p-4 border-b bg-muted/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-6">
+          <Card className="w-full max-w-6xl max-h-[92dvh] flex flex-col border-primary/50 bg-card shadow-2xl overflow-hidden">
+            <CardHeader className="p-3 sm:p-4 border-b bg-muted/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-[11px] font-mono font-bold text-primary">
                     Compilador y Visor Summary PDF en LaTeX
                   </span>
@@ -1031,7 +1356,7 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                 </CardTitle>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
                 <Button
                   size="sm"
                   variant="outline"
@@ -1043,14 +1368,14 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
               </div>
             </CardHeader>
 
-            <CardContent className="p-4 flex-1 overflow-y-auto flex flex-col space-y-2 min-h-[480px]">
-              <div className="flex items-center justify-end gap-2">
+            <CardContent className="p-3 sm:p-4 flex-1 overflow-y-auto flex flex-col space-y-2 min-h-0">
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
                   onClick={() => navigator.clipboard.writeText(codigoLatex)}
-                  className="h-7 px-3 text-xs font-bold shadow-xs"
+                  className="h-7 px-3 text-xs font-bold shadow-sm"
                 >
                   Copiar Código LaTeX
                 </Button>
@@ -1059,7 +1384,7 @@ export const MetricasTrazabilidadPanel: React.FC<MetricasTrazabilidadPanelProps>
                   download={`Summary-LaTeX-${modoReporte.toLowerCase()}.pdf`}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 h-7 px-3 text-xs font-bold shadow-xs"
+                  className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground hover:bg-primary/90 h-7 px-3 text-xs font-bold shadow-sm"
                 >
                   Descargar PDF
                 </a>

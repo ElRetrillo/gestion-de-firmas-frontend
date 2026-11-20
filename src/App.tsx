@@ -87,7 +87,7 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex w-full bg-background text-foreground">
+    <div className="min-h-screen min-h-[100dvh] flex w-full max-w-[100vw] overflow-x-clip bg-background text-foreground">
       <Sidebar
         tabActiva={tabActiva}
         onSelectTab={setTabActiva}
@@ -95,15 +95,15 @@ export const App: React.FC = () => {
         onCloseMobile={() => setSidebarMobileOpen(false)}
       />
 
-      <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
+      <div className="flex flex-1 flex-col min-w-0">
         <TopHeader
           tabActiva={tabActiva}
           onOpenMobileSidebar={() => setSidebarMobileOpen(true)}
           onSelectTab={setTabActiva}
         />
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 bg-background">
-          <div className="max-w-7xl mx-auto space-y-5">
+        <main className="flex-1 min-w-0 p-3 sm:p-5 lg:p-6 bg-background">
+          <div className="w-full max-w-7xl mx-auto space-y-4 sm:space-y-5 min-w-0">
             {tabActiva === 'DASHBOARD' && <DashboardSupervisores />}
             {tabActiva === 'ALERTAS' && <AlertasCertificadosView />}
             {tabActiva === 'METRICAS' && <MetricasTrazabilidadPanel vistaCompleta />}

@@ -176,25 +176,25 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
-      <Card className="w-full max-w-md max-h-[94vh] overflow-y-auto border-border/80 shadow-2xl bg-card" aria-labelledby="login-modal-title">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+      <Card className="w-full max-w-md max-h-[94dvh] overflow-y-auto border-border/80 shadow-2xl bg-card" aria-labelledby="login-modal-title">
         {/* Cabecera del Modal */}
-        <div className="p-6 border-b bg-muted/30 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
+        <div className="p-4 sm:p-6 border-b bg-muted/30 flex items-center justify-between gap-2">
+          <div className="flex items-center space-x-3 min-w-0">
             <LogoMunicipalidad variant="sidebar" className="h-10 w-10 shrink-0" />
-            <div>
-              <h2 id="login-modal-title" className="text-base font-bold text-foreground">
+            <div className="min-w-0">
+              <h2 id="login-modal-title" className="text-base font-bold text-foreground leading-snug">
                 {modoCambioPassword
                   ? 'Configurar PIN Personal y MFA'
                   : modoMfa
                     ? 'Verificación MFA Authenticator'
                     : 'Acceso Administradores'}
               </h2>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-[11px] text-muted-foreground truncate">
                 {modoCambioPassword
                   ? 'Primer ingreso de Administrador'
                   : modoMfa
-                    ? 'Segundo factor de autenticación (sesión 3h)'
+                    ? 'Segundo factor de autenticación'
                     : 'Ilustre Municipalidad de Coquimbo'}
               </p>
             </div>
@@ -208,7 +208,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
               setCodigoTotp('');
               onClose();
             }}
-            className="text-muted-foreground hover:text-foreground text-sm font-bold p-1 rounded-md"
+            className="text-muted-foreground hover:text-foreground text-sm font-bold p-1 rounded-md shrink-0"
             aria-label="Cerrar ventana"
             title="Cerrar"
           >
@@ -216,7 +216,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
           </button>
         </div>
 
-        <CardContent className="p-6 space-y-4">
+        <CardContent className="p-4 sm:p-6 space-y-4">
           {error && (
             <div role="alert" aria-live="polite" className="p-3 text-xs bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 rounded-md">
               <span className="font-bold">Aviso:</span> {error}
@@ -230,9 +230,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
               </p>
 
               <div className="space-y-1.5">
-                <label htmlFor="login-rut" className="text-xs font-semibold text-foreground flex items-center justify-between">
+                <label htmlFor="login-rut" className="text-xs font-semibold text-foreground flex items-center justify-between gap-2">
                   <span>RUT Institucional</span>
-                  <span className="text-[10px] font-mono text-muted-foreground">Ej: 20.406.484-9</span>
+                  <span className="text-[10px] font-mono text-muted-foreground">Ej: 12.345.678-9</span>
                 </label>
                 <Input
                   id="login-rut"
@@ -347,7 +347,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
                 />
               </div>
 
-              <div className="flex gap-2 pt-1">
+              <div className="flex flex-col-reverse sm:flex-row gap-2 pt-1">
                 <Button
                   type="button"
                   variant="outline"
@@ -356,7 +356,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
                     setCodigoTotp('');
                     setError(null);
                   }}
-                  className="text-xs h-10"
+                  className="text-xs h-10 w-full sm:w-auto"
                 >
                   Volver
                 </Button>
@@ -365,7 +365,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
                   disabled={cargando}
                   className="flex-1 font-bold text-xs h-10 shadow-md"
                 >
-                  {cargando ? 'Verificando código MFA...' : 'Verificar e Ingresar (Sesión 3h)'}
+                  {cargando ? 'Verificando código MFA...' : 'Verificar e Ingresar'}
                 </Button>
               </div>
             </form>
@@ -397,7 +397,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div className="space-y-1">
                   <label htmlFor="pin-nuevo-personal" className="text-xs font-semibold text-foreground">
                     Nuevo PIN (6 caracteres)

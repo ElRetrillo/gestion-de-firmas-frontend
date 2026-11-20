@@ -307,8 +307,8 @@ export const AlertasCertificadosView: React.FC = () => {
     <div className="space-y-6">
       {/* 1. Panel Superior de Vigilancia de Vencimiento a 15, 30 y 60 Días (Req 4) */}
       <Card className="border-border/80 bg-card">
-        <CardHeader className="p-5 pb-3 border-b flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          <div>
+        <CardHeader className="p-4 sm:p-5 pb-3 border-b flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className="text-[11px] font-mono font-bold text-primary">
                 Vigencia y Vencimiento de Tokens
@@ -326,12 +326,12 @@ export const AlertasCertificadosView: React.FC = () => {
             </CardDescription>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto shrink-0">
             <Button
               variant="outline"
               size="sm"
               onClick={cargarAlertas}
-              className="h-9 text-xs font-semibold"
+              className="h-9 text-xs font-semibold flex-1 sm:flex-none"
             >
               ↻ Actualizar Vigencias
             </Button>
@@ -339,7 +339,7 @@ export const AlertasCertificadosView: React.FC = () => {
               onClick={handleDespachoMasivo}
               size="sm"
               disabled={alertasFiltradas.length === 0 || notificandoId === 'MASIVO'}
-              className="font-bold text-xs h-9 px-4 shrink-0 shadow-xs"
+              className="font-bold text-xs h-9 px-4 flex-1 sm:flex-none shadow-sm"
             >
               {notificandoId === 'MASIVO'
                 ? 'Enviando Correos...'
@@ -348,14 +348,14 @@ export const AlertasCertificadosView: React.FC = () => {
           </div>
         </CardHeader>
 
-        <CardContent className="p-5 space-y-4">
+        <CardContent className="p-4 sm:p-5 space-y-4">
           {/* Tarjetas por Tramo: 15 días, 30 días, 60 días y Expirados */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
             <div
               onClick={() => setFiltroTramo('15_DIAS')}
               className={`p-3.5 rounded-lg border cursor-pointer transition-all space-y-1 ${
                 filtroTramo === '15_DIAS'
-                  ? 'border-rose-500 bg-rose-500/15 shadow-xs'
+                  ? 'border-rose-500 bg-rose-500/15 shadow-sm'
                   : 'border-rose-500/30 bg-rose-500/5 hover:border-rose-500/60'
               }`}
             >
@@ -379,7 +379,7 @@ export const AlertasCertificadosView: React.FC = () => {
               onClick={() => setFiltroTramo('30_DIAS')}
               className={`p-3.5 rounded-lg border cursor-pointer transition-all space-y-1 ${
                 filtroTramo === '30_DIAS'
-                  ? 'border-amber-500 bg-amber-500/15 shadow-xs'
+                  ? 'border-amber-500 bg-amber-500/15 shadow-sm'
                   : 'border-amber-500/30 bg-amber-500/5 hover:border-amber-500/60'
               }`}
             >
@@ -403,7 +403,7 @@ export const AlertasCertificadosView: React.FC = () => {
               onClick={() => setFiltroTramo('60_DIAS')}
               className={`p-3.5 rounded-lg border cursor-pointer transition-all space-y-1 ${
                 filtroTramo === '60_DIAS'
-                  ? 'border-blue-500 bg-blue-500/15 shadow-xs'
+                  ? 'border-blue-500 bg-blue-500/15 shadow-sm'
                   : 'border-blue-500/30 bg-blue-500/5 hover:border-blue-500/60'
               }`}
             >
@@ -427,7 +427,7 @@ export const AlertasCertificadosView: React.FC = () => {
               onClick={() => setFiltroTramo('EXPIRADO')}
               className={`p-3.5 rounded-lg border cursor-pointer transition-all space-y-1 ${
                 filtroTramo === 'EXPIRADO'
-                  ? 'border-rose-600 bg-rose-600/15 shadow-xs'
+                  ? 'border-rose-600 bg-rose-600/15 shadow-sm'
                   : 'border-border bg-muted/30 hover:border-rose-500/40'
               }`}
             >
@@ -497,7 +497,7 @@ export const AlertasCertificadosView: React.FC = () => {
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               placeholder="Buscar por funcionario, RUT, correo o N° serie token..."
-              className="h-8 text-xs sm:w-72"
+              className="h-8 text-xs w-full sm:w-72"
             />
           </div>
         </CardContent>
@@ -555,21 +555,21 @@ export const AlertasCertificadosView: React.FC = () => {
           </CardHeader>
           <CardContent className="p-4 space-y-2 text-xs">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-2.5 rounded bg-background/80 border font-mono text-[11px]">
-              <div>
+              <div className="min-w-0">
                 <span className="text-muted-foreground block text-[10px]">PARA (DESTINATARIO):</span>
-                <span className="font-bold text-foreground">{correoPreview.emailDestino}</span>
+                <span className="font-bold text-foreground break-all">{correoPreview.emailDestino}</span>
               </div>
-              <div>
+              <div className="min-w-0">
                 <span className="text-muted-foreground block text-[10px]">FUNCIONARIO / ALCANCE:</span>
-                <span className="font-bold text-foreground">{correoPreview.funcionarioNombre}</span>
+                <span className="font-bold text-foreground break-words">{correoPreview.funcionarioNombre}</span>
               </div>
-              <div>
+              <div className="min-w-0">
                 <span className="text-muted-foreground block text-[10px]">TOKEN NOTIFICADO:</span>
-                <span className="font-bold text-primary">{correoPreview.serialNumber}</span>
+                <span className="font-bold text-primary break-all">{correoPreview.serialNumber}</span>
               </div>
             </div>
             <div className="p-3 rounded bg-background border space-y-2">
-              <div className="text-[11px] font-semibold text-foreground border-b pb-1">
+              <div className="text-[11px] font-semibold text-foreground border-b pb-1 break-words">
                 Asunto: {correoPreview.asunto}
               </div>
               {correoPreview.htmlCorreo ? (
@@ -613,7 +613,7 @@ export const AlertasCertificadosView: React.FC = () => {
         </Card>
       ) : (
         <Card className="border-border/80 bg-card overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="hidden md:block overflow-x-auto">
             <Table>
               <TableHeader className="bg-muted/40 text-[11px]">
                 <TableRow>
@@ -697,7 +697,7 @@ export const AlertasCertificadosView: React.FC = () => {
                             size="sm"
                             disabled={notificandoId === alerta.id}
                             onClick={() => handleEnviarCorreoAviso(alerta, false)}
-                            className="text-xs font-bold h-7 px-3 shadow-xs"
+                            className="text-xs font-bold h-7 px-3 shadow-sm"
                           >
                             {notificandoId === alerta.id ? 'Enviando...' : 'Enviar Aviso'}
                           </Button>
@@ -708,6 +708,93 @@ export const AlertasCertificadosView: React.FC = () => {
                 })}
               </TableBody>
             </Table>
+          </div>
+
+          {/* Vista en tarjetas para móviles */}
+          <div className="block md:hidden divide-y divide-border/70">
+            {alertasFiltradas.map((alerta) => {
+              const isExpirado = alerta.diasRestantes <= 0 || alerta.tramoAlerta === 'EXPIRADO';
+              const is15 = !isExpirado && (alerta.diasRestantes <= 15 || alerta.tramoAlerta === '15_DIAS');
+              const is30 = !isExpirado && !is15 && (alerta.diasRestantes <= 30 || alerta.tramoAlerta === '30_DIAS');
+              const avisoHora = avisosEnviadosMap[alerta.id] || alerta.ultimoAvisoEnviado;
+
+              return (
+                <div key={`mobile-${alerta.id}`} className="p-3.5 space-y-2.5 text-xs">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-bold text-foreground break-words">{alerta.usuario.nombre}</div>
+                      <div className="text-[10px] font-mono text-muted-foreground">
+                        {formatRutVisual(alerta.usuario.rut)}
+                      </div>
+                      <div className="text-[11px] font-mono text-muted-foreground break-all mt-0.5">
+                        {alerta.usuario.email}
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      {avisoHora ? (
+                        <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold">
+                          ✓ Notificado
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-mono text-muted-foreground">Sin notificar</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 p-2.5 rounded-md bg-muted/20 border border-border/50 text-[11px]">
+                    <div className="min-w-0">
+                      <span className="text-[10px] text-muted-foreground block">Token / Modelo</span>
+                      <span className="font-mono font-bold text-foreground break-all">{alerta.serialNumberToken}</span>
+                      <span className="text-[10px] text-muted-foreground block truncate">{alerta.hardwareModelo}</span>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="text-[10px] text-muted-foreground block">Vencimiento</span>
+                      <span
+                        className={`inline-flex items-center gap-1.5 font-bold ${
+                          isExpirado || is15
+                            ? 'text-rose-600 dark:text-rose-400'
+                            : is30
+                            ? 'text-amber-600 dark:text-amber-400'
+                            : 'text-blue-600 dark:text-blue-400'
+                        }`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                            isExpirado || is15
+                              ? 'bg-rose-500'
+                              : is30
+                              ? 'bg-amber-500'
+                              : 'bg-blue-500'
+                          }`}
+                        />
+                        <span>{alerta.tiempoExpiracionTexto}</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={notificandoId === `PREVIEW-${alerta.id}`}
+                      onClick={() => handleEnviarCorreoAviso(alerta, true)}
+                      className="text-xs font-semibold h-7 px-2.5"
+                    >
+                      {notificandoId === `PREVIEW-${alerta.id}` ? 'Cargando...' : 'Vista Previa'}
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      disabled={notificandoId === alerta.id}
+                      onClick={() => handleEnviarCorreoAviso(alerta, false)}
+                      className="text-xs font-bold h-7 px-3 shadow-sm"
+                    >
+                      {notificandoId === alerta.id ? 'Enviando...' : 'Enviar Aviso'}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </Card>
       )}

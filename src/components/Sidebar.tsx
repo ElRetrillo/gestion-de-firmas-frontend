@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   Monitor,
   Users,
@@ -7,6 +7,7 @@ import {
   BarChart3,
   FileCheck2,
   PenTool,
+  X,
   LucideIcon,
 } from 'lucide-react';
 import { useTelemetriaStore } from '../store/useTelemetriaStore';
@@ -94,32 +95,62 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (onCloseMobile) onCloseMobile();
   };
 
+  useEffect(() => {
+    if (!isOpenMobile) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && onCloseMobile) {
+        onCloseMobile();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpenMobile, onCloseMobile]);
+
   return (
     <>
       {isOpenMobile && (
         <div
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs lg:hidden"
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
           onClick={onCloseMobile}
+          aria-hidden="true"
         />
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col border-r bg-sidebar text-sidebar-foreground transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 ${
-          isOpenMobile ? 'translate-x-0' : '-translate-x-full'
+        aria-label="Menú principal"
+        className={`fixed inset-y-0 left-0 z-50 flex h-screen h-[100dvh] w-[min(18rem,85vw)] shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground transition-transform duration-200 ease-in-out lg:sticky lg:top-0 lg:w-64 xl:w-72 lg:translate-x-0 ${
+          isOpenMobile ? 'translate-x-0 shadow-2xl' : '-translate-x-full'
         }`}
       >
-        <div className="flex h-14 items-center px-4 border-b border-sidebar-border">
-          <div className="flex items-center space-x-2.5">
+        <div className="flex h-14 items-center justify-between gap-2 px-4 border-b border-sidebar-border shrink-0">
+          <div className="flex items-center space-x-2.5 min-w-0">
             <LogoMunicipalidad variant="sidebar" className="h-8 w-8 shrink-0" />
-            <div className="flex flex-col text-left">
+            <div className="flex flex-col text-left min-w-0">
               <span className="font-bold text-xs tracking-tight text-sidebar-foreground truncate">
                 Municipalidad de Coquimbo
               </span>
-              <span className="text-[10px] text-muted-foreground font-mono">
-                Control de Tokens FEA
+              <span className="text-[10px] text-muted-foreground font-mono truncate">
+                Control de Tokens USB
               </span>
             </div>
           </div>
+          {onCloseMobile && (
+            <button
+              type="button"
+              onClick={onCloseMobile}
+              aria-label="Cerrar menú"
+              title="Cerrar menú"
+              className="lg:hidden inline-flex items-center justify-center rounded-md p-1.5 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors shrink-0"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
@@ -132,7 +163,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 onClick={() => handleNavClick(item.id)}
                 className={`group flex w-full items-center justify-between rounded-md px-3 py-2 text-xs font-medium transition-all ${
                   isSelected
-                    ? 'bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-xs'
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground font-semibold shadow-sm'
                     : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'
                 }`}
               >
@@ -156,7 +187,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
                 {item.badge && (
                   <span
-                    className={`shrink-0 ml-2 min-w-[22px] h-5 px-1.5 inline-flex items-center justify-center rounded-full text-[11px] font-bold tabular-nums shadow-xs ${
+                    className={`shrink-0 ml-2 min-w-[22px] h-5 px-1.5 inline-flex items-center justify-center rounded-full text-[11px] font-bold tabular-nums shadow-sm ${
                       item.badgeVariant === 'danger'
                         ? 'bg-rose-600 text-white'
                         : 'bg-amber-500 text-slate-950'

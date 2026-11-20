@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Download, FileSpreadsheet, FileJson, X } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './ui/card';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from './ui/table';
 import { Badge } from './ui/badge';
@@ -8,9 +9,10 @@ import { useTelemetriaStore } from '../store/useTelemetriaStore';
 import { formatRutVisual } from '../lib/rut';
 import { cleanIpVisual } from '../lib/ip';
 
-type SubseccionBitacora = 'GENERAL' | 'FIRMAS' | 'SESIONES';
+type SubseccionBitacora = 'GENERAL' | 'SESIONES';
 
 interface EventoAuditoria {
+  uid: string;
   id: string;
   tablaAfectada: string;
   registroId: string;
@@ -31,6 +33,7 @@ export const AuditoriaView: React.FC = () => {
   const [eventoSeleccionado, setEventoSeleccionado] = useState<EventoAuditoria | null>(null);
   const [eventos, setEventos] = useState<EventoAuditoria[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [modalExportOpen, setModalExportOpen] = useState(false);
 
   useEffect(() => {
     setCargando(true);
@@ -44,9 +47,16 @@ export const AuditoriaView: React.FC = () => {
         const lista = Array.isArray(data) ? data : data?.historialCambios;
         if (Array.isArray(lista)) {
           setEventos(
-            lista.map((item: any, idx: number) => ({
-              id: item.id?.substring(0, 8).toUpperCase() || `AUD-${8900 - idx}`,
-              tablaAfectada: item.tablaAfectada || 'historial_cambios',
+            lista.map((item: any, idx: number) => {
+              const rawId = String(item.id || `AUD-${8900 - idx}`);
+              const shortId =
+                rawId.toLowerCase().startsWith('aud-') && rawId.length > 12
+                  ? rawId.slice(-8).toUpperCase()
+                  : rawId.substring(0, 8).toUpperCase();
+              return {
+                uid: `${rawId}-${idx}`,
+                id: shortId,
+                tablaAfectada: item.tablaAfectada || 'historial_cambios',
               registroId: item.registroId || 'N/A',
               accion: item.accion || 'UPDATE',
               usuario: item.usuario || item.usuarioEmail || item.usuario?.email || 'sistema',
@@ -68,7 +78,8 @@ export const AuditoriaView: React.FC = () => {
                 ? new Date(item.createdAt).toLocaleString('es-CL')
                 : new Date().toLocaleString('es-CL'),
               diffJson: item.diffJson || item.diffJsonb || {},
-            })),
+              };
+            }),
           );
         }
       })
@@ -118,13 +129,10 @@ export const AuditoriaView: React.FC = () => {
     return 'Firma con Token';
   };
 
-  const eventosFirmas = eventos.filter((e) => esEventoFirma(e.accion));
   const eventosSesiones = eventos.filter((e) => esEventoSesion(e.accion));
 
   const eventosPorSubseccion =
-    subseccion === 'FIRMAS'
-      ? eventosFirmas
-      : subseccion === 'SESIONES'
+    subseccion === 'SESIONES'
       ? eventosSesiones
       : eventos;
 
@@ -146,18 +154,76 @@ export const AuditoriaView: React.FC = () => {
     const matchesAccion =
       filtroAccion === 'TODOS'
         ? true
-        : filtroAccion === 'FIRMA_EJECUTADA'
-        ? esEventoFirma(e.accion)
         : filtroAccion === 'SESIONES'
         ? esEventoSesion(e.accion)
         : filtroAccion === 'ACTA_CUSTODIA'
         ? e.accion.includes('ACTA') || e.accion.includes('TOKEN')
         : filtroAccion === 'CREACION'
-        ? !esEventoFirma(e.accion) && !esEventoSesion(e.accion) && !e.accion.includes('ACTA') && !e.accion.includes('TOKEN')
+        ? !esEventoSesion(e.accion) && !e.accion.includes('ACTA') && !e.accion.includes('TOKEN')
         : e.accion === filtroAccion;
 
     return matchesTexto && matchesAccion;
   });
+
+  const etiquetaFiltroActivo =
+    subseccion === 'SESIONES'
+      ? 'Logins y Sign Outs'
+      : filtroAccion === 'TODOS'
+      ? 'Todas las Actividades'
+      : filtroAccion === 'SESIONES'
+      ? 'Logins y Sign Outs'
+      : filtroAccion === 'ACTA_CUSTODIA'
+      ? 'Custodia de Dispositivos'
+      : 'Creación y Modificaciones';
+
+  const descargarCsvHistorial = () => {
+    const escapeCsv = (val: unknown) => {
+      const str = String(val ?? '');
+      return `"${str.replace(/"/g, '""')}"`;
+    };
+    const headers = ['ID', 'Registro', 'Persona', 'RUT Persona', 'Accion', 'Usuario', 'IP', 'Fecha y Hora', 'Modulo'];
+    const rows = eventosFiltrados.map((ev) => [
+      ev.id,
+      ev.registroId,
+      ev.personaNombre || ev.usuario,
+      formatRutVisual(ev.personaRut),
+      esEventoFirma(ev.accion) ? obtenerAccionFirmaSimplificada(ev) : ev.accion,
+      ev.usuario,
+      ev.ip,
+      ev.timestamp,
+      ev.tablaAfectada,
+    ]);
+    const csvContent =
+      '\uFEFF' +
+      [headers, ...rows].map((row) => row.map(escapeCsv).join(';')).join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const fecha = new Date().toISOString().slice(0, 10);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `bitacora-auditoria-${subseccion.toLowerCase()}-${filtroAccion.toLowerCase()}-${fecha}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const descargarJsonHistorial = () => {
+    const payload = {
+      generadoEn: new Date().toISOString(),
+      seccion: subseccion,
+      filtroActividad: etiquetaFiltroActivo,
+      busquedaTexto: filtro || null,
+      totalRegistros: eventosFiltrados.length,
+      registros: eventosFiltrados,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const fecha = new Date().toISOString().slice(0, 10);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `bitacora-auditoria-${subseccion.toLowerCase()}-${filtroAccion.toLowerCase()}-${fecha}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6">
@@ -165,7 +231,6 @@ export const AuditoriaView: React.FC = () => {
       <div className="flex flex-wrap items-center gap-2 border-b border-border/80 pb-3">
         {[
           { id: 'GENERAL' as SubseccionBitacora, label: 'Logs Generales', count: eventos.length },
-          { id: 'FIRMAS' as SubseccionBitacora, label: 'Logs de Firmas (Firmado)', count: eventosFirmas.length },
           { id: 'SESIONES' as SubseccionBitacora, label: 'Logins y Sign Outs', count: eventosSesiones.length },
         ].map((tab) => {
           const activo = subseccion === tab.id;
@@ -199,9 +264,9 @@ export const AuditoriaView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
         {/* Columna Izquierda: Monitor de Auditoría */}
         <Card className={`${subseccion === 'GENERAL' ? 'lg:col-span-8' : 'lg:col-span-12'} border-border/80 bg-card`}>
-          <CardHeader className="p-5 pb-3 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <CardHeader className="p-4 sm:p-5 pb-3 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className="text-[11px] font-mono font-bold text-primary">
                   Historial de Operaciones
                 </span>
@@ -211,24 +276,20 @@ export const AuditoriaView: React.FC = () => {
                 </span>
               </div>
               <CardTitle className="text-base font-bold text-foreground">
-                {subseccion === 'FIRMAS'
-                  ? 'Logs de Firmas (Firmado)'
-                  : subseccion === 'SESIONES'
+                {subseccion === 'SESIONES'
                   ? 'Bitácora de Logins y Sign Outs'
                   : 'Trazabilidad y Bitácora de Acciones'}
               </CardTitle>
               <CardDescription className="text-xs text-muted-foreground mt-0.5">
-                {subseccion === 'FIRMAS'
-                  ? 'Registro específico de documentos firmados, visaciones y ejecuciones de firma electrónica.'
-                  : subseccion === 'SESIONES'
+                {subseccion === 'SESIONES'
                   ? 'Registro conjunto de inicios de sesión (exitosos/fallidos) y cierres de sesión (Sign Out).'
-                  : 'Registro de actividades, firmas y cambios realizados en el sistema.'}
+                  : 'Registro de actividades, sesiones y cambios realizados en el sistema.'}
               </CardDescription>
             </div>
           </CardHeader>
 
-          <CardContent className="p-5 space-y-4">
-            <div className="grid grid-cols-3 gap-3">
+          <CardContent className="p-4 sm:p-5 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="p-3 rounded-lg border bg-muted/30 space-y-1">
                 <div className="text-[10px] text-muted-foreground uppercase font-semibold">
                   TOTAL ACTIVIDADES
@@ -247,16 +308,6 @@ export const AuditoriaView: React.FC = () => {
                   {eventosPorSubseccion.length > 0 ? 'CORRECTO' : '0 REGISTROS'}
                 </div>
                 <div className="text-[10px] text-muted-foreground">{eventosPorSubseccion.length > 0 ? 'Sin inconsistencias' : 'Sin eventos previos'}</div>
-              </div>
-
-              <div className="p-3 rounded-lg border bg-muted/30 space-y-1">
-                <div className="text-[10px] text-muted-foreground uppercase font-semibold">
-                  SEGURIDAD
-                </div>
-                <div className="font-bold text-xl text-primary">
-                  ACTIVA
-                </div>
-                <div className="text-[10px] text-muted-foreground">Respaldo inalterable</div>
               </div>
             </div>
 
@@ -280,7 +331,7 @@ export const AuditoriaView: React.FC = () => {
         {/* Columna Derecha: Filtros (solo en Logs Generales) */}
         {subseccion === 'GENERAL' && (
           <Card className="lg:col-span-4 border-border/80 bg-card flex flex-col justify-between">
-            <CardHeader className="p-5 pb-3 border-b">
+            <CardHeader className="p-4 sm:p-5 pb-3 border-b">
               <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
                 FILTRAR POR ACTIVIDAD
               </span>
@@ -289,14 +340,9 @@ export const AuditoriaView: React.FC = () => {
               </CardTitle>
             </CardHeader>
 
-            <CardContent className="p-5 space-y-2 text-xs">
+            <CardContent className="p-4 sm:p-5 space-y-2 text-xs">
               {[
                 { id: 'TODOS', label: 'Todas las Actividades', count: eventos.length },
-                {
-                  id: 'FIRMA_EJECUTADA',
-                  label: 'Firmas de Documentos',
-                  count: eventosFirmas.length,
-                },
                 {
                   id: 'SESIONES',
                   label: 'Logins y Sign Outs',
@@ -312,7 +358,6 @@ export const AuditoriaView: React.FC = () => {
                   label: 'Creación y Modificaciones',
                   count: eventos.filter(
                     (e) =>
-                      !esEventoFirma(e.accion) &&
                       !esEventoSesion(e.accion) &&
                       !e.accion.includes('ACTA') &&
                       !e.accion.includes('TOKEN'),
@@ -334,9 +379,18 @@ export const AuditoriaView: React.FC = () => {
               ))}
             </CardContent>
 
-            <CardFooter className="p-4 border-t bg-muted/20 text-[10px] text-muted-foreground flex justify-between">
+            <CardFooter className="p-3.5 sm:p-4 border-t bg-muted/20 text-[10px] text-muted-foreground flex flex-wrap items-center justify-between gap-2">
               <span>Registro oficial municipal</span>
-              <span>Exportar Historial</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => setModalExportOpen(true)}
+                className="h-7 px-2.5 text-xs font-semibold gap-1.5 text-foreground"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Exportar Historial</span>
+              </Button>
             </CardFooter>
           </Card>
         )}
@@ -344,17 +398,29 @@ export const AuditoriaView: React.FC = () => {
 
       {/* 2. Tabla de Auditoría Forense y Visor JSONB */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        <Card className={`${eventoSeleccionado ? 'lg:col-span-7' : 'lg:col-span-12'} border-border/80 bg-card`}>
-          <CardHeader className="p-4 border-b flex flex-row items-center justify-between">
-            <span className="text-xs font-bold text-foreground">
-              Registros Encontrados ({eventosFiltrados.length})
-            </span>
-            <span className="text-[10px] text-muted-foreground">
-              Haz clic en una fila para ver los detalles de la operación
-            </span>
+        <Card className={`${eventoSeleccionado ? 'lg:col-span-7' : 'lg:col-span-12'} border-border/80 bg-card overflow-hidden`}>
+          <CardHeader className="p-3.5 sm:p-4 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-foreground">
+                Registros Encontrados ({eventosFiltrados.length})
+              </span>
+              <span className="text-[10px] text-muted-foreground">
+                Haz clic en una fila para ver los detalles de la operación
+              </span>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setModalExportOpen(true)}
+              className="h-7 px-2.5 text-xs font-semibold gap-1.5 w-full sm:w-auto justify-center"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Exportar Historial</span>
+            </Button>
           </CardHeader>
 
-          <CardContent className="p-0 overflow-x-auto">
+          <CardContent className="p-0 hidden md:block overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="border-b">
@@ -382,7 +448,7 @@ export const AuditoriaView: React.FC = () => {
                   </TableRow>
                 ) : (
                   eventosFiltrados.map((ev) => {
-                    const isSelected = eventoSeleccionado?.id === ev.id;
+                    const isSelected = eventoSeleccionado?.uid === ev.uid;
                     const esFirma = esEventoFirma(ev.accion);
                     const accionSimple = esFirma ? obtenerAccionFirmaSimplificada(ev) : null;
                     const registroVisual =
@@ -392,7 +458,7 @@ export const AuditoriaView: React.FC = () => {
 
                     return (
                       <TableRow
-                        key={ev.id}
+                        key={ev.uid}
                         data-state={isSelected ? 'selected' : undefined}
                         onClick={() => setEventoSeleccionado(ev)}
                         className="cursor-pointer hover:bg-muted/40 transition-colors"
@@ -464,17 +530,69 @@ export const AuditoriaView: React.FC = () => {
               </TableBody>
             </Table>
           </CardContent>
+
+          {/* Vista en tarjetas para móviles */}
+          <div className="block md:hidden divide-y divide-border/70">
+            {cargando ? (
+              <div className="py-8 px-4 text-center text-xs text-muted-foreground">
+                Consultando historial de actividades...
+              </div>
+            ) : eventosFiltrados.length === 0 ? (
+              <div className="py-8 px-4 text-center text-xs text-muted-foreground">
+                No se encontraron registros con los criterios seleccionados.
+              </div>
+            ) : (
+              eventosFiltrados.map((ev) => {
+                const isSelected = eventoSeleccionado?.uid === ev.uid;
+                const esFirma = esEventoFirma(ev.accion);
+                const accionSimple = esFirma ? obtenerAccionFirmaSimplificada(ev) : null;
+                return (
+                  <button
+                    key={`mobile-${ev.uid}`}
+                    type="button"
+                    onClick={() => setEventoSeleccionado(ev)}
+                    className={`w-full text-left p-3.5 space-y-2 transition-colors ${
+                      isSelected ? 'bg-muted/70' : 'hover:bg-muted/30'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-mono text-xs font-bold text-foreground">{ev.id}</div>
+                        <div className="text-xs font-medium text-foreground break-words">
+                          {ev.personaNombre || ev.usuario}
+                        </div>
+                        <div className="text-[10px] font-mono text-muted-foreground">
+                          {formatRutVisual(ev.personaRut)}
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-mono text-muted-foreground shrink-0">
+                        {ev.timestamp}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                      <span className="font-mono font-semibold text-primary break-all">
+                        {esFirma && accionSimple ? accionSimple : ev.accion}
+                      </span>
+                      <span className="font-mono text-muted-foreground">
+                        {ev.usuario} • {ev.ip}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
         </Card>
 
         {/* Panel Inspector de Detalles */}
         {eventoSeleccionado && (
           <Card className="lg:col-span-5 border-border/80 bg-card flex flex-col justify-between">
-            <CardHeader className="p-4 border-b flex flex-row items-center justify-between">
-              <div>
+            <CardHeader className="p-4 border-b flex flex-wrap items-center justify-between gap-2">
+              <div className="min-w-0">
                 <span className="text-[10px] text-muted-foreground uppercase font-semibold">
                   DETALLES DE LA OPERACIÓN
                 </span>
-                <CardTitle className="text-sm font-bold text-foreground">
+                <CardTitle className="text-sm font-bold text-foreground break-all">
                   {eventoSeleccionado.id} • {eventoSeleccionado.registroId}
                 </CardTitle>
               </div>
@@ -483,7 +601,7 @@ export const AuditoriaView: React.FC = () => {
                 variant="outline"
                 size="sm"
                 onClick={() => setEventoSeleccionado(null)}
-                className="h-7 px-2 text-xs"
+                className="h-7 px-2 text-xs shrink-0"
               >
                 Cerrar
               </Button>
@@ -492,7 +610,7 @@ export const AuditoriaView: React.FC = () => {
             <CardContent className="p-4 space-y-3">
               <div className="p-3 bg-muted/40 rounded border text-[11px] space-y-1">
                 <div><strong>Módulo:</strong> {eventoSeleccionado.tablaAfectada}</div>
-                <div><strong>Usuario:</strong> {eventoSeleccionado.usuario}</div>
+                <div className="break-all"><strong>Usuario:</strong> {eventoSeleccionado.usuario}</div>
                 <div><strong>IP:</strong> {eventoSeleccionado.ip}</div>
                 <div><strong>Fecha y Hora:</strong> {eventoSeleccionado.timestamp}</div>
               </div>
@@ -521,6 +639,122 @@ export const AuditoriaView: React.FC = () => {
           </Card>
         )}
       </div>
+
+      {/* Modal de Vista Previa y Exportación del Historial Filtrado */}
+      {modalExportOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-3 sm:p-6">
+          <Card className="w-full max-w-4xl max-h-[90dvh] flex flex-col border-border/80 bg-card shadow-2xl overflow-hidden">
+            <CardHeader className="p-4 border-b bg-muted/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[11px] font-mono font-bold text-primary">
+                  Exportar Historial • {etiquetaFiltroActivo}
+                </div>
+                <CardTitle className="text-sm sm:text-base font-bold text-foreground mt-0.5">
+                  Vista Previa de Registros Filtrados ({eventosFiltrados.length})
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Revise el subconjunto filtrado antes de descargarlo en formato CSV (Excel) o JSON.
+                </CardDescription>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setModalExportOpen(false)}
+                className="h-8 px-2.5 text-xs shrink-0 self-end sm:self-center gap-1"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Cerrar</span>
+              </Button>
+            </CardHeader>
+
+            <CardContent className="p-3 sm:p-4 flex-1 min-h-0 overflow-y-auto space-y-3">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono bg-muted/30 p-2.5 rounded-md border">
+                <span><strong>Sección:</strong> {subseccion === 'SESIONES' ? 'Logins y Sign Outs' : 'Logs Generales'}</span>
+                <span className="text-muted-foreground">•</span>
+                <span><strong>Filtro actividad:</strong> {etiquetaFiltroActivo}</span>
+                {filtro.trim() && (
+                  <>
+                    <span className="text-muted-foreground">•</span>
+                    <span className="break-all"><strong>Búsqueda:</strong> "{filtro.trim()}"</span>
+                  </>
+                )}
+              </div>
+
+              {eventosFiltrados.length === 0 ? (
+                <div className="p-6 text-center text-xs text-muted-foreground border rounded-md border-dashed">
+                  No hay registros en el filtro actual para exportar.
+                </div>
+              ) : (
+                <div className="border rounded-md overflow-x-auto max-h-[45dvh] overflow-y-auto">
+                  <Table>
+                    <TableHeader className="bg-muted/40 text-[11px]">
+                      <TableRow>
+                        <TableHead>ID</TableHead>
+                        <TableHead>Persona / RUT</TableHead>
+                        <TableHead>Acción</TableHead>
+                        <TableHead>Usuario</TableHead>
+                        <TableHead>IP</TableHead>
+                        <TableHead>Fecha y Hora</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody className="text-xs">
+                      {eventosFiltrados.slice(0, 100).map((ev) => (
+                        <TableRow key={`exp-${ev.uid}`}>
+                          <TableCell className="font-mono font-bold">{ev.id}</TableCell>
+                          <TableCell>
+                            <div className="font-medium">{ev.personaNombre || ev.usuario}</div>
+                            <div className="text-[10px] font-mono text-muted-foreground">
+                              {formatRutVisual(ev.personaRut)}
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-mono text-[11px]">
+                            {esEventoFirma(ev.accion) ? obtenerAccionFirmaSimplificada(ev) : ev.accion}
+                          </TableCell>
+                          <TableCell className="font-mono text-[11px]">{ev.usuario}</TableCell>
+                          <TableCell className="font-mono text-[11px]">{ev.ip}</TableCell>
+                          <TableCell className="font-mono text-[11px] whitespace-nowrap">{ev.timestamp}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              {eventosFiltrados.length > 100 && (
+                <p className="text-[11px] text-muted-foreground">
+                  Mostrando los primeros 100 registros en la vista previa. La descarga incluirá los {eventosFiltrados.length} registros completos.
+                </p>
+              )}
+            </CardContent>
+
+            <CardFooter className="p-3 sm:p-4 border-t bg-muted/20 flex flex-wrap items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={eventosFiltrados.length === 0}
+                onClick={descargarJsonHistorial}
+                className="h-8 text-xs font-semibold gap-1.5 w-full sm:w-auto"
+              >
+                <FileJson className="w-3.5 h-3.5" />
+                <span>Descargar JSON</span>
+              </Button>
+              <Button
+                type="button"
+                variant="default"
+                size="sm"
+                disabled={eventosFiltrados.length === 0}
+                onClick={descargarCsvHistorial}
+                className="h-8 text-xs font-bold gap-1.5 w-full sm:w-auto"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Descargar CSV (Excel)</span>
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };
