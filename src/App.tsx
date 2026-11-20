@@ -6,6 +6,8 @@ import { LandingPage } from './components/LandingPage';
 import { DashboardSupervisores } from './components/DashboardSupervisores';
 import { AlertasCertificadosView } from './components/AlertasCertificadosView';
 import { MetricasTrazabilidadPanel } from './components/MetricasTrazabilidadPanel';
+import { ReporteHistoricoEsign } from './components/ReporteHistoricoEsign';
+import { GestionAdminsView } from './components/GestionAdminsView';
 import { AuditoriaView } from './components/AuditoriaView';
 import { GestionUsuariosEquipamientoView } from './components/GestionUsuariosEquipamientoView';
 import { RepositorioDocumentosView } from './components/RepositorioDocumentosView';
@@ -106,8 +108,14 @@ export const App: React.FC = () => {
           <div className="w-full max-w-7xl mx-auto space-y-4 sm:space-y-5 min-w-0">
             {tabActiva === 'DASHBOARD' && <DashboardSupervisores />}
             {tabActiva === 'ALERTAS' && <AlertasCertificadosView />}
-            {tabActiva === 'METRICAS' && <MetricasTrazabilidadPanel vistaCompleta />}
+            {tabActiva === 'METRICAS' && (
+              <>
+                <MetricasTrazabilidadPanel vistaCompleta />
+                <ReporteHistoricoEsign />
+              </>
+            )}
             {tabActiva === 'AUDITORIA' && <AuditoriaView />}
+            {tabActiva === 'ADMINS' && usuario?.rol === 'ADMIN' && <GestionAdminsView />}
           </div>
         </main>
       </div>

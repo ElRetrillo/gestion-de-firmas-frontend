@@ -22,6 +22,7 @@ const TAB_TITLES: Record<NavTab, string> = {
   METRICAS: 'Estadisticas de Trazabilidad',
   USUARIOS_CUSTODIA: 'Contratos de Obtención de Tokens y Asignación a Funcionarios',
   AUDITORIA: 'Bitácora de Acciones y Telemetría',
+  ADMINS: 'Gestión de Credenciales de Administrador',
 };
 
 export const TopHeader: React.FC<TopHeaderProps> = ({

@@ -122,3 +122,8 @@
   background-size: 16px 16px;
 }
 
+/* Validación tras interacción de usuario con :user-invalid */
+.form-field-control:is(:user-invalid) {
+  border-color: hsl(var(--destructive));
+}
+

@@ -7,6 +7,7 @@ import {
   BarChart3,
   FileCheck2,
   PenTool,
+  ShieldCheck,
   X,
   LucideIcon,
 } from 'lucide-react';
@@ -24,7 +25,8 @@ export type NavTab =
   | 'ALERTAS'
   | 'METRICAS'
   | 'USUARIOS_CUSTODIA'
-  | 'AUDITORIA';
+  | 'AUDITORIA'
+  | 'ADMINS';
 
 interface SidebarProps {
   tabActiva: NavTab;
@@ -88,6 +90,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: History,
       label: 'Bitácora de Acciones',
     },
+    ...(usuario?.rol === 'ADMIN'
+      ? [
+          {
+            id: 'ADMINS' as NavTab,
+            icon: ShieldCheck,
+            label: 'Accesos Admin',
+          },
+        ]
+      : []),
   ];
 
   const handleNavClick = (id: NavTab) => {
